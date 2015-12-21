@@ -1,0 +1,13 @@
+/**
+ * Lovingly borrowed from
+ * http://tobiasbayer.com/blog/2011/04/16/building-for-different-environments-with-gradle/
+ */
+task copyConfiguration << {
+    println "Target build environment: $buildEnvironment"
+
+    copy {
+        from "src/main/env/$buildEnvironment"
+        into "src/main/resources"
+        include "*/"
+    }
+}

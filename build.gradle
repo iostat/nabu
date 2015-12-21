@@ -1,0 +1,34 @@
+group 'com.socialrank.nabu'
+version '0.1-SNAPSHOT'
+
+
+allprojects {
+    project.ext.buildEnvironment = project.hasProperty('env') ? env : 'dev'
+
+    apply plugin: 'java'
+    apply plugin: 'application'
+
+    apply from: 'tasks.gradle'
+    processResources.dependsOn copyConfiguration
+
+
+    sourceCompatibility = 1.8
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+
+    }
+
+
+    dependencies {
+        testCompile group: 'junit', name: 'junit', version: '4.11'
+
+        compile 'org.projectlombok:lombok:1.16.6'
+
+        compile 'commons-configuration:commons-configuration:1.10'
+        compile 'org.elasticsearch:elasticsearch:2.1.0'
+    }
+}
+
+
