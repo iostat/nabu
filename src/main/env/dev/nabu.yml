@@ -1,0 +1,6 @@
+# This gets echoed out when the application starts
+# for the operator to ensure that they have the right configuration
+# set in their JARs.
+#
+# Furthermore, this affects certain aspects of Nabu's functionality
+nabu.env=dev
