@@ -6,5 +6,5 @@
 Put your relevant configurations into src/main/environment/(dev|prod)/ and watch the magic happen
 
 ## Testing
- ¯\(°_o)/¯
+ ¯\\(°_o)/¯
  
