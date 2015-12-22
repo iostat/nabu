@@ -6,7 +6,7 @@ allprojects {
     project.ext.buildEnvironment = project.hasProperty('env') ? env : 'dev'
 
     apply plugin: 'java'
-    //apply plugin: 'application'
+    apply plugin: 'application'
 
     apply from: 'tasks.gradle'
     processResources.dependsOn copyConfiguration
@@ -17,21 +17,24 @@ allprojects {
     repositories {
         mavenLocal()
         mavenCentral()
-
     }
-
 
     dependencies {
         testCompile group: 'junit', name: 'junit', version: '4.11'
     }
+
+    project.setProperty 'mainClassName', 'com.socialrank.nabu.bootstrap.Main'
 }
 
 dependencies {
     compile group: 'org.projectlombok', name: 'lombok', version: '1.16.6'
 
+    compile group: 'io.netty', name: 'netty-all', version: '4.0.33.Final'
+
     compile group: 'org.slf4j', name: 'slf4j-api', version:'1.7.13'
+    compile group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.5'
+    compile group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.5'
 
     compile group: 'commons-configuration', name: 'commons-configuration', version: '1.10'
     compile group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0'
 }
-
