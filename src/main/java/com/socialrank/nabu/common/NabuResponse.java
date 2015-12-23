@@ -20,7 +20,7 @@ public enum NabuResponse {
 
     public static final short MAGIC = 0x4E52;
     public static final String MAGIC_HEX_STRING = "0x"+Integer.toHexString(MAGIC);
-    static final Map<Byte, NabuResponse> _responseLUT;
+    private static final Map<Byte, NabuResponse> _responseLUT;
 
     static {
         Map<Byte, NabuResponse> lutBuilder = new HashMap<>();

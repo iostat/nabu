@@ -1,6 +1,5 @@
 package com.socialrank.nabu.common;
 
-import io.netty.buffer.ByteBuf;
 import lombok.Getter;
 
 /**
@@ -8,6 +7,7 @@ import lombok.Getter;
  */
 public abstract class NabuCommand {
     public static final short MAGIC = 0x4E43;
+    public static final String MAGIC_HEX_STRING = "0x" + Integer.toHexString(MAGIC);
 
     @Getter final String index;
     @Getter final String documentType;
@@ -17,20 +17,15 @@ public abstract class NabuCommand {
 
     public abstract NabuCommandType getType();
 
-    public NabuCommand(String index, String documentType) {
-        this(index, documentType, false);
-    }
-
     public NabuCommand(String index, String documentType, boolean shouldUpdate) {
         this.index = index;
         this.documentType = documentType;
         this.shouldUpdate = shouldUpdate;
     }
 
-    /**
-     * Descendants encode any data that's specific to them (i.e., not defined up top)
-     * into out.
-     * @param out the ByteBuf to encode into.
-     */
-    public abstract void encodeSpecificsInto(ByteBuf out);
+    public NabuCommand(NabuCommand base) {
+        this.index = base.index;
+        this.documentType = base.documentType;
+        this.shouldUpdate = base.shouldUpdate;
+    }
 }

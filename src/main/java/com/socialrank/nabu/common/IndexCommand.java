@@ -1,8 +1,7 @@
 package com.socialrank.nabu.common;
 
-import com.socialrank.nabu.protocol.ProtocolHelpers;
-import io.netty.buffer.ByteBuf;
 import lombok.Getter;
+import lombok.NonNull;
 
 /**
  * Created by io on 12/22/15. (929) 253-6977 $50/hr
@@ -10,21 +9,14 @@ import lombok.Getter;
 public class IndexCommand extends NabuCommand {
     @Getter String documentSource;
 
-    public IndexCommand(String index, String documentType) {
-        super(index, documentType);
+    public IndexCommand(NabuCommand base, @NonNull String documentSource) {
+        super(base);
+        this.documentSource = documentSource;
     }
 
-    public IndexCommand(String index, String documentType, boolean shouldUpdate) {
-        super(index, documentType, shouldUpdate);
-    }
 
     @Override
     public NabuCommandType getType() {
         return NabuCommandType.INDEX;
-    }
-
-    @Override
-    public void encodeSpecificsInto(ByteBuf out) {
-        ProtocolHelpers.writeStringToByteBuf(getDocumentSource(), out);
     }
 }

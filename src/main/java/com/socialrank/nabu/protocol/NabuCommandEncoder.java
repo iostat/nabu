@@ -12,17 +12,16 @@ import io.netty.handler.codec.MessageToByteEncoder;
 public class NabuCommandEncoder extends MessageToByteEncoder<NabuCommand> {
     @Override
     protected void encode(ChannelHandlerContext ctx, NabuCommand msg, ByteBuf out) throws Exception {
+        ByteBuf commandData = Unpooled.buffer();
+        commandData.writeByte(msg.shouldUpdateIndex() ? 1 : 0);
+        ProtocolHelpers.writeStringToByteBuf(msg.getIndex(), commandData);
+        ProtocolHelpers.writeStringToByteBuf(msg.getDocumentType(), commandData);
+
+        CommandSerializers.serialize(msg, commandData);
+
         out.writeShort(NabuCommand.MAGIC);
         out.writeByte(msg.getType().getCode());
-
-        ByteBuf restOfData = Unpooled.buffer();
-        out.writeByte(msg.shouldUpdateIndex() ? 1 : 0);
-        ProtocolHelpers.writeStringToByteBuf(msg.getIndex(), out);
-        ProtocolHelpers.writeStringToByteBuf(msg.getDocumentType(), out);
-
-        msg.encodeSpecificsInto(out);
-
-        out.writeInt(restOfData.readableBytes());
-        out.writeBytes(restOfData);
+        out.writeInt(commandData.readableBytes());
+        out.writeBytes(commandData);
     }
 }

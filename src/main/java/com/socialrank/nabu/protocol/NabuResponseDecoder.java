@@ -14,6 +14,9 @@ import java.util.List;
 public class NabuResponseDecoder extends ByteToMessageDecoder {
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        // a response is 3 bytes,
+        // 2 bytes MAGIC (short)
+        // and 1 byte response code (NabuResponse)
         if(in.readableBytes() < 3) {
             return;
         }
