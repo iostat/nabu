@@ -11,3 +11,12 @@ task copyConfiguration << {
         include "*/"
     }
 }
+
+/**
+ * Delete the stuff copied into src/main/resources per-env
+ */
+task cleanCopiedConfiguration {
+    println "Clearing src/main/resources/*"
+
+    delete fileTree(dir: "src/main/resources", exclude: ".keep")
+}
