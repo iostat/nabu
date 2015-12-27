@@ -26,12 +26,12 @@ public class NettyServerImpl extends NabuServer {
     private String bindAddress;
     private int bindPort;
 
-    private EventLoopGroup bossGroup;
+    private EventLoopGroup acceptorGroup;
     private EventLoopGroup workerGroup;
 
     @Inject
-    NettyServerImpl(ConfigurationProvider config) {
-        this.config = config;
+    NettyServerImpl(ConfigurationProvider configProvider) {
+        this.config = configProvider;
 
         this.bootstrap = new ServerBootstrap();
 
@@ -40,13 +40,13 @@ public class NettyServerImpl extends NabuServer {
         this.bindAddress     = config.getListenAddress();
         this.bindPort        = config.getListenPort();
 
-        this.bossGroup   = new NioEventLoopGroup(acceptorThreads);
+        this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
         this.workerGroup = new NioEventLoopGroup(workerThreads);
     }
 
     @Override
     public void start() throws ComponentException {
-        bootstrap.group(bossGroup, workerGroup)
+        bootstrap.group(acceptorGroup, workerGroup)
          .channel(NioServerSocketChannel.class)
          .handler(new LoggingHandler())
          .childHandler(new NabuChannelInitializer());
@@ -57,7 +57,7 @@ public class NettyServerImpl extends NabuServer {
         try {
             this.listenerChannel = bootstrap.bind(bindAddress, bindPort).sync().channel();
         } catch(InterruptedException e) {
-            this.bossGroup.shutdownGracefully();
+            this.acceptorGroup.shutdownGracefully();
             this.workerGroup.shutdownGracefully();
 
             logger.error("Failed to start NettyServer, {}", e);
@@ -70,7 +70,7 @@ public class NettyServerImpl extends NabuServer {
         logger.info("Shutting down NettyServer...");
         this.listenerChannel.close();
 
-        bossGroup.shutdownGracefully();
+        acceptorGroup.shutdownGracefully();
         workerGroup.shutdownGracefully();
     }
 }

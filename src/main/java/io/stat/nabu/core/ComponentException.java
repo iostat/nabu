@@ -6,7 +6,7 @@ import lombok.Getter;
  * Represents an exception that can be thrown at any point during a
  * {@link Component}'s lifecycle management operation.
  */
-public class ComponentException extends Exception {
+public class ComponentException extends RuntimeException {
     /**
      * Whether or not this Exception is "fatal" and warrants a full shutdown of Nabu.
      */

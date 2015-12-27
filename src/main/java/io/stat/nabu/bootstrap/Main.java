@@ -19,17 +19,17 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class Main {
-    private int pid;
     private Nabu nabu;
 
     private Main() throws ComponentException {
         registerSignalHandlers();
 
-        this.pid = JVMHackery.getPid();
+        int pid = JVMHackery.getPid();
+        String jvmName = System.getProperty("java.vm.name", "<java.vm.name not set>");
 
         logger.info("Starting Nabu v" + Version.VERSION);
         logger.info("PID {}", pid == -1 ? "<not available>" : pid);
-        logger.info("JVM: {}", System.getProperty("java.vm.name", "<java.vm.name not set>"));
+        logger.info("JVM: {}", jvmName);
 
         Injector injector = Guice.createInjector(
                 new CoreModule(),

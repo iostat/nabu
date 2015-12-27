@@ -23,24 +23,28 @@ class NodeClientImpl extends ESClient {
     private ConfigurationProvider config;
 
     @Inject
-    NodeClientImpl(ConfigurationProvider config) {
-        this.config = config;
+    NodeClientImpl(ConfigurationProvider configProvider) {
+        this.config = configProvider;
 
         nodeSettingsBuilder = Settings.settingsBuilder()
                 .put("path.home", config.getESHome())
-                .put("http.enabled", config.isESHTTPEnabled()) // don't serve HTTP requests!
-                .put("http.port", config.getESHTTPPort()); // don't serve HTTP requests!
+                .put("http.enabled", config.isESHTTPEnabled()) // maybe serve HTTP requests
+                .put("http.port", config.getESHTTPPort()) // maybe serve HTTP requests
+                .put("node.master", false);
+
         nodeBuilder = NodeBuilder.nodeBuilder()
                 .settings(nodeSettingsBuilder)
+                .clusterName(config.getESClusterName())
                 .data(false)
                 .local(false)
                 .client(true);
+
+        this.esNode = this.nodeBuilder.build();
     }
 
     @Override
     public void start() throws ComponentException {
         try {
-            this.esNode = this.nodeBuilder.build();
             this.esNode.start();
         } catch (Exception e) {
             logger.error("Could not create the Nabu ES node", e);

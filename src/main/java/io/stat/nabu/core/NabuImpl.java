@@ -4,6 +4,7 @@ import com.google.inject.Inject;
 import io.stat.nabu.config.ConfigurationProvider;
 import io.stat.nabu.elasticsearch.ESClient;
 import io.stat.nabu.server.NabuServer;
+import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -27,27 +28,28 @@ class NabuImpl extends Component implements Nabu {
 
         logger.info("nabu.env is set to: {}", config.getEnv());
         logger.info("nabu.es.path.home is set to: {}", config.getESHome());
+        logger.info("nabu.es.cluster.name is set to: {}", config.getESClusterName());
         logger.info("ES HTTP is {}", config.isESHTTPEnabled() ? "enabled" : "disabled");
         if(config.isESHTTPEnabled()) {
             logger.info("ES HTTP Port is set to: {}", config.getESHTTPPort());
         }
     }
 
-    @Override
+    @Override @Synchronized
     public void start() throws ComponentException {
-        config.start();
-        esClient.start();
+        ((Component)config)._dispatchStart();
+        ((Component)esClient)._dispatchStart();
 
-        nabuServer.start();
+        ((Component)nabuServer)._dispatchStart();
 
         logger.info("Nabu is up like Donald Trump!");
     }
 
-    @Override
+    @Override @Synchronized
     public void shutdown() throws ComponentException {
-        config.shutdown();
-        esClient.shutdown();
+        ((Component)config)._dispatchShutdown();
+        ((Component)esClient)._dispatchShutdown();
 
-        nabuServer.shutdown();
+        ((Component)nabuServer)._dispatchShutdown();
     }
 }

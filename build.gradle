@@ -61,8 +61,8 @@ dependencies {
     compile(group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.5')
     compile(group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.5')
 
-    // todo: probably getting ditched really soon for lack of yaml support
-    compile(group: 'commons-configuration', name: 'commons-configuration', version: '1.10')
+    // yaml support
+    compile(group: 'org.yaml', name: 'snakeyaml', version: '1.16')
 
     // duh
     compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0')

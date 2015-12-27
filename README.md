@@ -1,5 +1,6 @@
 # nabu
 (what do you think of "epiphron" as name?)
+
 or since it's being conservative w/r/t elasticsearch taxation we can just call it "reagan"
 
 ## Dependencies
@@ -29,11 +30,43 @@ There's also `/build-all-the-things.sh`, which just runs `gradle clean` followed
 part of the process will be the initial compile (for jar-dev, as gradle reuses classes for the others).
 It also generates javadocs.
 
+#### tl;dr
+`./build-all-the-things.sh && cd build/libs && java -jar nabu-dev-0.1-SNAPSHOT-all.jar`
+
+
+---
+
+
+## Running
+Something that is mentioned LITERALLY nowhere in the ES docs is that if there is any custom cluster-wide metadata, 
+a node won't be able to join the cluster and participate unless it knows what to do with it. 
+
+What you'll get is "no masters were discovered after 30s" (or whatever your zen disco timeout is).
+
+UNLESS, the node is running before the servers are started. In which case it'll pick those nodes up just fine, even
+if the node is a non-master eligible and the node with the custom metadata is.
+
+One very common plugin that edits cluster-wide metadata is the `license` plugin, which `marvel-agent` depends on.
+
+Yes this is as hilarious as it sounds.
+
+#### tl;dr 
+you'll probably need to copy the contents of `/your/server/es/path/home/plugins/license/*` into
+`/what/you/set/as/nabu.es.path.home/plugins/license/*`
+
+If you're using any other plugins that add custom cluster-wide metadata, you need to do the same for them as well.
+
+
+---
+
 
 ## Testing
  ¯\\(°_o)/¯
 
 This is a huge TODO. I know.
+
+#### tl;dr
+no.
 
 
  
