@@ -34,7 +34,7 @@ public class YamlConfigProvider implements ConfigurationProvider {
             String processedYaml = ConfigHelper.readStreamAndPreprocess(StreamHelper.findResource(NABU_YML_PATH));
             yamlAsMap = ImmutableMap.copyOf((Map<String, Object>)yaml.load(processedYaml));
 
-        } catch(IOException e) {
+        } catch(ConfigException | IOException e) {
             throw new ComponentException(true, e);
         }
     }

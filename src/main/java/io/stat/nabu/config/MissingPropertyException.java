@@ -1,8 +1,7 @@
 package io.stat.nabu.config;
 
 /**
- * An exception may be thrown by the configuration system when a required
- * property is not set.
+ * Thrown when a mandatory property is not set.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

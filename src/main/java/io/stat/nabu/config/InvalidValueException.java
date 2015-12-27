@@ -1,8 +1,8 @@
 package io.stat.nabu.config;
 
 /**
- * Created by io on 12/27/15. io is an asshole for
- * not giving writing documentation for his code.
+ * Thrown when the configuration contains a value that
+ * does not make sense.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

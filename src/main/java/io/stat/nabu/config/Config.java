@@ -19,55 +19,55 @@ import java.util.Map;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class Config extends Component {
+public final class Config extends Component {
     /**
      * Mapped to the nabu.env property
      */
-    private @Getter String env;
+    private final @Getter String env;
 
     /**
      * Mapped to the nabu.server.bind property
      */
-    private @Getter String listenAddress;
+    private final @Getter String listenAddress;
 
     /**
      * Mapped to the nabu.server.port property
      */
-    private @Getter int listenPort;
+    private final @Getter int listenPort;
 
     /**
      * Mapped to the nabu.server.threads.acceptor property
      */
-    private @Getter int acceptorThreads;
+    private final @Getter int acceptorThreads;
     /**
      * Mapped to the nabu.server.threads.worker property
      */
-    private @Getter int workerThreads;
+    private final @Getter int workerThreads;
 
     /**
      * Mapped to the nabu.es.path.home property
      */
-    private @Getter String eSHome;
+    private final @Getter String eSHome;
 
     /**
      * Mapped to the nabu.es.http.enabled property
      */
-    private @Getter boolean eSHTTPEnabled;
+    private final @Getter boolean eSHTTPEnabled;
 
     /**
      * Mapped to the nabu.es.http.port property
      */
-    private @Getter int eSHTTPPort;
+    private final @Getter int eSHTTPPort;
 
     /**
      * Mapped to the nabu.kafka.brokers property
      */
-    private @Getter List<String> kafkaBrokers;
+    private final @Getter List<String> kafkaBrokers;
 
     /**
      * Mapped to the nabu.es.cluster.name property
      */
-    private @Getter String eSClusterName;
+    private final @Getter String eSClusterName;
 
     private final ConfigurationProvider provider;
 
@@ -75,22 +75,22 @@ public class Config extends Component {
     public Config(ConfigurationProvider provider) {
         this.provider = provider;
 
-        this.env    = getRequiredProperty(KeyNames.NABU_ENV, String.class);
-        this.eSHome = getRequiredProperty(KeyNames.NABU_ES_PATH_HOME, String.class);
-        this.eSClusterName = getRequiredProperty(KeyNames.NABU_ES_CLUSTER_NAME, String.class);
-        this.kafkaBrokers  = getRequiredSequence(KeyNames.NABU_KAFKA_BROKERS, String.class);
+        this.env    = getRequiredProperty(Keys.NABU_ENV, String.class);
+        this.eSHome = getRequiredProperty(Keys.NABU_ES_PATH_HOME, String.class);
+        this.eSClusterName = getRequiredProperty(Keys.NABU_ES_CLUSTER_NAME, String.class);
+        this.kafkaBrokers  = getRequiredSequence(Keys.NABU_KAFKA_BROKERS, String.class);
 
-        this.eSHTTPEnabled = getOptionalProperty(KeyNames.NABU_ES_HTTP_ENABLED, OptionalDefaults.NABU_ES_HTTP_ENABLED, Boolean.class);
-        this.eSHTTPPort    = getOptionalProperty(KeyNames.NABU_ES_HTTP_PORT, OptionalDefaults.NABU_ES_HTTP_PORT, Integer.class);
+        this.eSHTTPEnabled = getOptionalProperty(Keys.NABU_ES_HTTP_ENABLED, Defaults.NABU_ES_HTTP_ENABLED, Boolean.class);
+        this.eSHTTPPort    = getOptionalProperty(Keys.NABU_ES_HTTP_PORT, Defaults.NABU_ES_HTTP_PORT, Integer.class);
 
-        this.listenAddress = getOptionalProperty(KeyNames.NABU_SERVER_BIND, OptionalDefaults.NABU_SERVER_BIND, String.class);
-        this.listenPort    = getOptionalProperty(KeyNames.NABU_SERVER_PORT, OptionalDefaults.NABU_SERVER_PORT, Integer.class);
+        this.listenAddress = getOptionalProperty(Keys.NABU_SERVER_BIND, Defaults.NABU_SERVER_BIND, String.class);
+        this.listenPort    = getOptionalProperty(Keys.NABU_SERVER_PORT, Defaults.NABU_SERVER_PORT, Integer.class);
 
-        this.acceptorThreads = getOptionalProperty(KeyNames.NABU_SERVER_THREADS_ACCEPTOR,
-                OptionalDefaults.NABU_SERVER_THREADS_ACCEPTOR,
+        this.acceptorThreads = getOptionalProperty(Keys.NABU_SERVER_THREADS_ACCEPTOR,
+                Defaults.NABU_SERVER_THREADS_ACCEPTOR,
                 Integer.class);
-        this.workerThreads   = getOptionalProperty(KeyNames.NABU_SERVER_THREADS_WORKER,
-                OptionalDefaults.NABU_SERVER_THREADS_WORKER,
+        this.workerThreads   = getOptionalProperty(Keys.NABU_SERVER_THREADS_WORKER,
+                Defaults.NABU_SERVER_THREADS_WORKER,
                 Integer.class);
     }
 
@@ -163,18 +163,18 @@ public class Config extends Component {
         try {
             ret = getRequiredProperty(key, klass);
         } catch(ComponentException e) {
-            logger.trace("Lookup for optional property " + key + " failed", e);
+            logger.debug("Lookup for optional property " + key + " failed", e);
         }
 
         if (ret == null) {
-            logger.warn("{} is not set and falling back to a default value of {}", key, def);
+            logger.info("{} is not set and falling back to a default value of {}", key, def);
             return def;
         }
 
         return ret;
     }
 
-    public static final class KeyNames {
+    private static final class Keys {
         public static final String NABU_ENV             = "nabu.env";
         public static final String NABU_ES_PATH_HOME    = "nabu.es.path.home";
         public static final String NABU_ES_CLUSTER_NAME = "nabu.es.cluster.name";
@@ -183,19 +183,19 @@ public class Config extends Component {
         public static final String NABU_ES_HTTP_ENABLED = "nabu.es.http.enabled";
         public static final String NABU_ES_HTTP_PORT    = "nabu.es.http.port";
 
-        public static final String NABU_SERVER_BIND = "nabu.server.bind";
-        public static final String NABU_SERVER_PORT = "nabu.server.port";
+        public static final String NABU_SERVER_BIND             = "nabu.server.bind";
+        public static final String NABU_SERVER_PORT             = "nabu.server.port";
         public static final String NABU_SERVER_THREADS_ACCEPTOR = "nabu.server.threads.acceptor";
         public static final String NABU_SERVER_THREADS_WORKER   = "nabu.server.threads.worker";
     }
 
-    public static final class OptionalDefaults {
+    private static final class Defaults {
         public static final boolean NABU_ES_HTTP_ENABLED = false;
         public static final int     NABU_ES_HTTP_PORT    = 19216;
 
-        public static final String NABU_SERVER_BIND = "127.0.0.1";
-        public static final int    NABU_SERVER_PORT = 6228;
-        public static final int    NABU_SERVER_THREADS_ACCEPTOR = 1;
-        public static final int    NABU_SERVER_THREADS_WORKER   = 10;
+        public static final String  NABU_SERVER_BIND             = "127.0.0.1";
+        public static final int     NABU_SERVER_PORT             = 6228;
+        public static final int     NABU_SERVER_THREADS_ACCEPTOR = 1;
+        public static final int     NABU_SERVER_THREADS_WORKER   = 10;
     }
 }
