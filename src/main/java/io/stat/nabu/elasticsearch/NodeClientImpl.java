@@ -1,7 +1,7 @@
 package io.stat.nabu.elasticsearch;
 
 import com.google.inject.Inject;
-import io.stat.nabu.config.ConfigurationProvider;
+import io.stat.nabu.config.Config;
 import io.stat.nabu.core.ComponentException;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.Client;
@@ -20,10 +20,10 @@ class NodeClientImpl extends ESClient {
     private Node esNode;
     private Client esNodeClient;
 
-    private ConfigurationProvider config;
+    private Config config;
 
     @Inject
-    NodeClientImpl(ConfigurationProvider configProvider) {
+    NodeClientImpl(Config configProvider) {
         this.config = configProvider;
 
         nodeSettingsBuilder = Settings.settingsBuilder()

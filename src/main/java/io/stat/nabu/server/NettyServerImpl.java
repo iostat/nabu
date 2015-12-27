@@ -7,7 +7,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LoggingHandler;
-import io.stat.nabu.config.ConfigurationProvider;
+import io.stat.nabu.config.Config;
 import io.stat.nabu.core.ComponentException;
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class NettyServerImpl extends NabuServer {
-    private ConfigurationProvider config;
+    private Config config;
 
     private ServerBootstrap bootstrap;
     private Channel listenerChannel;
@@ -30,7 +30,7 @@ public class NettyServerImpl extends NabuServer {
     private EventLoopGroup workerGroup;
 
     @Inject
-    NettyServerImpl(ConfigurationProvider configProvider) {
+    NettyServerImpl(Config configProvider) {
         this.config = configProvider;
 
         this.bootstrap = new ServerBootstrap();

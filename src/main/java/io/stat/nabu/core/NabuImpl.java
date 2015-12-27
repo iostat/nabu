@@ -1,7 +1,7 @@
 package io.stat.nabu.core;
 
 import com.google.inject.Inject;
-import io.stat.nabu.config.ConfigurationProvider;
+import io.stat.nabu.config.Config;
 import io.stat.nabu.elasticsearch.ESClient;
 import io.stat.nabu.server.NabuServer;
 import lombok.Synchronized;
@@ -14,12 +14,12 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 class NabuImpl extends Component implements Nabu {
-    private final ConfigurationProvider config;
+    private final Config config;
     private final ESClient esClient;
     private final NabuServer nabuServer;
 
     @Inject
-    NabuImpl(ConfigurationProvider config,
+    NabuImpl(Config config,
              ESClient esClient,
              NabuServer nabuServer) {
         this.config = config;

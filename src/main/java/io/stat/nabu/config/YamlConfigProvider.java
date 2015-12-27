@@ -2,7 +2,6 @@ package io.stat.nabu.config;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import io.stat.nabu.core.Component;
 import io.stat.nabu.core.ComponentException;
 import io.stat.nabu.util.StreamHelper;
 import lombok.Synchronized;
@@ -15,16 +14,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A {@link Component} which provides configuration to Nabu.
+ * A {@link ConfigurationProvider} that gets its data from a YAML file.
  *
- * Honestly this whole thing is a bit of a huge hack.
- * But I want it provided as a service so you can do shit like runtime configuration reloading
- * without having a heavy dependency like Archaius or something like that.
- *
- * Created by io on 12/21/15. (929) 253-6977 $50/hr
+ * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class YamlConfigProvider extends ConfigurationProvider {
+public class YamlConfigProvider implements ConfigurationProvider {
     private static final String NABU_YML_PATH = "nabu.yml";
 
     /**
@@ -42,12 +37,10 @@ public class YamlConfigProvider extends ConfigurationProvider {
         } catch(IOException e) {
             throw new ComponentException(true, e);
         }
-
-        setupComplete();
     }
 
     @Override
-    protected <T> T getProperty(String key, Class<T> klass) throws ConfigException {
+    public <T> T getProperty(String key, Class<T> klass) throws ConfigException {
         Object needle = getKey(key);
         T ret;
 
@@ -61,7 +54,7 @@ public class YamlConfigProvider extends ConfigurationProvider {
     }
 
     @Override @SuppressWarnings("unchecked")
-    protected <T> List<T> getSequence(String key, Class<T> klass) throws ConfigException {
+    public <T> List<T> getSequence(String key, Class<T> klass) throws ConfigException {
         Object needle = getKey(key);
         List<T> ret;
 
@@ -73,7 +66,7 @@ public class YamlConfigProvider extends ConfigurationProvider {
     }
 
     @Override @SuppressWarnings("unchecked")
-    protected Map<String, Object> getSubmap(String key) throws ConfigException {
+    public Map<String, Object> getSubmap(String key) throws ConfigException {
         Object needle = getKey(key);
 
         if(Map.class.isAssignableFrom(needle.getClass())) {
