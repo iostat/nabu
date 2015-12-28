@@ -1,4 +1,4 @@
-group 'io.stat.nabu'
+group 'io.stat.nabuproject'
 version '0.1-SNAPSHOT'
 
 buildscript {
@@ -11,17 +11,10 @@ buildscript {
     }
 }
 
+// need to put lombok here because IDEA doesn't have "module classpath" annotation processing
+// aka LAME
 allprojects {
     apply(plugin: 'java')
-    apply(plugin: 'application')
-    apply(plugin: 'com.github.johnrengelman.shadow')
-
-    // for per-environment config file packaging.
-    project.ext.buildEnvironment = project.hasProperty('env') ? env : 'dev'
-    apply(from: 'tasks.gradle')
-    processResources.dependsOn(copyConfiguration)
-    clean.dependsOn(cleanCopiedConfiguration)
-
     sourceCompatibility = 1.8
 
     repositories {
@@ -30,74 +23,98 @@ allprojects {
     }
 
     dependencies {
-        testCompile(group: 'junit', name: 'junit', version: '4.11')
+        // lombok :fire:
+        compile(group: 'org.projectlombok', name: 'lombok', version: '1.16.6')
     }
+}
 
-    project.setProperty('mainClassName', 'io.stat.nabu.bootstrap.Main')
-
+subprojects {
+    apply(plugin: 'application')
+    apply(plugin: 'com.github.johnrengelman.shadow')
     applicationDefaultJvmArgs = ["-server"]
-}
 
-dependencies {
-    // lombok :fire:
-    compile(group: 'org.projectlombok', name: 'lombok', version: '1.16.6')
+    // for per-environment config file packaging.
+    project.ext.buildEnvironment = project.hasProperty('env') ? env : 'dev'
+    project.ext.projectPath = project.file(".").absolutePath
 
-    // dependencies are like heroin, you only get the most out of it when you inject
-    compile(group: 'com.google.inject', name: 'guice', version: '4.0') {
-        // preemptive avoidance of jar hell due to multiple versions of guava in classpath
-        // guice depends on 18.0, but the latest is 19.0.
-        // we may end up using it anyway (see next dependency)
-        exclude group: 'com.google.guava', module: 'guava'
+    // Lovingly borrowed from
+    // http://tobiasbayer.com/blog/2011/04/16/building-for-different-environments-with-gradle/
+    task copyConfiguration << {
+        println "Target build environment: $buildEnvironment"
+
+        copy {
+
+            from "$projectPath/src/main/env/$buildEnvironment"
+            into "$projectPath/src/main/resources"
+            include "*/"
+        }
     }
 
-    // guice depends on guava anyway, and we might get some use of it.
-    compile(group: 'com.google.guava', name: 'guava', version: '19.0')
+    // Delete the stuff copied into src/main/resources per-env
+    task cleanCopiedConfiguration {
+        println "Clearing src/main/resources/*"
 
-    // async networking ftw
-    compile(group: 'io.netty', name: 'netty-all', version: '4.0.33.Final')
+        delete fileTree(dir: "$projectPath/src/main/resources", exclude: ".keep")
+    }
 
-    // slf4j logging.
-    compile(group: 'org.slf4j', name: 'slf4j-api', version:'1.7.13')
-    compile(group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.5')
-    compile(group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.5')
+    processResources.dependsOn(copyConfiguration)
+    clean.dependsOn(cleanCopiedConfiguration)
 
-    // yaml support
-    compile(group: 'org.yaml', name: 'snakeyaml', version: '1.16')
+    dependencies {
+        testCompile(group: 'junit', name: 'junit', version: '4.11')
 
-    // duh
-    compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0')
+        // dependencies are like heroin, you only get the most out of it when you inject
+        compile(group: 'com.google.inject', name: 'guice', version: '4.0') {
+            // preemptive avoidance of jar hell due to multiple versions of guava in classpath
+            // guice depends on 18.0, but the latest is 19.0.
+            // we may end up using it anyway (see next dependency)
+            exclude group: 'com.google.guava', module: 'guava'
+        }
 
-    // for ES's JNA sorcery
-    // actually serves no purpose other than shutting ES up on startup
-    compile(group: 'net.java.dev.jna', name: 'jna', version: '4.2.1')
+        // guice depends on guava anyway, and we might get some use of it.
+        compile(group: 'com.google.guava', name: 'guava', version: '19.0')
 
-    // also duh
-    compile(group:'org.apache.kafka', name: 'kafka-clients', version: '0.8.2.2')
-}
+        // async networking ftw
+        compile(group: 'io.netty', name: 'netty-all', version: '4.0.33.Final')
 
-javadoc {
-    // cause there are some sneaky throws, and weird lombok annotations
-    // and JDK8's doclint is suuuuuuper strict
-    failOnError = false
-}
+        // slf4j logging.
+        compile(group: 'org.slf4j', name: 'slf4j-api', version:'1.7.13')
+        compile(group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.5')
+        compile(group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.5')
 
-jar {
-    // when doing `gradle jar`, the output will be
-    // "build/libs/baseName-version-tag.jar
-    // this sets baseName to `nabu-dev` or `nabu-prod`
-    // depending on what -Penv= was passed when building
-    baseName = "${baseName}-${project.ext.buildEnvironment}"
+        // yaml support
+        compile(group: 'org.yaml', name: 'snakeyaml', version: '1.16')
 
-    manifest {
-        attributes('Main-Class': 'io.stat.nabu.bootstrap.Main')
+        // duh
+        compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0')
+
+        // for ES's JNA sorcery
+        // actually serves no purpose other than shutting ES up on startup
+        compile(group: 'net.java.dev.jna', name: 'jna', version: '4.2.1')
+
+        // also duh
+        compile(group:'org.apache.kafka', name: 'kafka-clients', version: '0.8.2.2')
+    }
+
+    javadoc {
+        // cause there are some sneaky throws, and weird lombok annotations
+        // and JDK8's doclint is suuuuuuper strict
+        failOnError = false
+    }
+
+    jar {
+        // when doing `gradle jar`, the output will be
+        // "build/libs/baseName-version-tag.jar
+        // this sets baseName to `nabuproject-dev` or `nabuproject-prod`
+        // depending on what -Penv= was passed when building
+        baseName = "${baseName}-${project.ext.buildEnvironment}"
+    }
+
+    shadowJar {
+        // when doing `gradle shadowJar`, the output will be
+        // "build/libs/baseName-version-tag-all.jar
+        // this sets baseName to `nabuproject-dev` or `nabuproject-prod`
+        // depending on what -Penv= was passed when building
+        baseName = "${baseName}-${project.ext.buildEnvironment}"
     }
 }
-
-shadowJar {
-    // when doing `gradle shadowJar`, the output will be
-    // "build/libs/baseName-version-tag-all.jar
-    // this sets baseName to `nabu-dev` or `nabu-prod`
-    // depending on what -Penv= was passed when building
-    baseName = "${baseName}-${project.ext.buildEnvironment}"
-}
-

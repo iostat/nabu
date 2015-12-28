@@ -1,0 +1,4 @@
+group 'io.stat.nabuproject'
+version '0.1-SNAPSHOT'
+
+mainClassName = 'io.stat.nabuproject.bootstrap.Main'

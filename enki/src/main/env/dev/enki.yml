@@ -1,0 +1,120 @@
+# Root nabu configuration map
+#
+# REQUIRED... very very required...
+nabu:
+  # This gets echoed out when the application starts
+  # for the operator to ensure that they have the right configuration
+  # set in their JARs.
+  #
+  # Furthermore, this may affect certain aspects of Nabu's
+  # functionality in the future to make development/debugging
+  # easier when running in dev/prod.
+  #
+  # REQUIRED
+  env: dev
+
+  # Elasticsearch-related configuration options. Generally keys that have names
+  # similar to ones ES uses itself get pass through when building the embedded node
+  # and supercede those inside any elasticsearch.yml which may be present.
+  #
+  # REQUIRED
+  es:
+    # Whether or not to use the "license" plugin.
+    #
+    # Basically, what will happen is, if any masters have the license plugin, the client node
+    # won't be able to discover them unless it also has it. However, if the masters join AFTER the client
+    # is listening for Zen discovery, everything will work.
+    #
+    # REQUIRED (because gg elastic)
+    use_license: true
+
+    # ES path.* keys.
+    #
+    # REQUIRED for at least path.home
+    path:
+      # Where the built-in ES node gets to play.
+      #
+      # Identical to ES's own es.path.home
+      #
+      # Needs to have an elasticsearch.yml file that you'd have in your cluster
+      # except with all the options relating to data and master disabled.
+      #
+      # See data/es-home/elasticsearch.yml for an example
+      #
+      # REQUIRED
+      home: '${env:PWD}/data/es-home'
+
+    # ES cluster.*
+    # Likewise identical to es.cluster.*
+    #
+    # REQUIRED
+    cluster:
+      # The Elasticsearch cluster that the embedded node will attempt to
+      # join. This option supercedes any cluster.name defined in elasticsearch.yml
+      #
+      # REQUIRED
+      name: elasticsearch_michaelschonfeld
+
+    # ES http.*, related to the REST server
+    # in the embedded node
+    #
+    # OPTIONAL
+    http:
+      # Whether or not to enable the embedded HTTP server
+      # Defaults to false
+      enabled: true
+      # What port to run the embedded HTTP server on
+      # Defaults to 19216
+      port: 19216
+
+  # Settings for the Kafka subsystem
+  #
+  # REQUIRED, at least for kafka.brokers
+  kafka:
+    # A sequence of addresses of Kafka brokers that Nabu will use for its backlog, etc.
+    brokers:
+    - localhost:9091
+    - localhost:9092
+
+  # Settings for the Nabu API server
+  #
+  # OPTIONAL
+  server:
+    # Address to bind the API server to
+    #
+    # OPTIONAL, defaults to 127.0.0.1
+    bind: '127.0.0.1'
+    # Port to bind the API server to
+    #
+    # OPTIONAL, defaults to 6228
+    port: 6228
+    # NIO threading parameters
+    #
+    # OPTIONAL
+    threads:
+      # How many threads in the acceptor EventLoopGroup
+      # (aka the "boss" group)
+      #
+      # OPTIONAL, defaults to 1
+      acceptor: 1
+      # How many threads in the worker EventLoopGroup
+      #
+      # OPTIONAL, defaults to 10
+      worker:   10
+
+  # Write throttling policies. By default, the Nabu will immediately attempt to write
+  # to Elasticsearch, and not read any more commands on the incoming pipe until that request
+  # finishes.
+  #
+  # OPTIONAL, defaults to what's set above
+  throttling:
+    # Really just an extension of the above. Currently "policies" is the only subkey of throttling
+    # A list of "ThrottlingPolicies which contain an index and
+    #
+    # OPTIONAL
+    policies:
+
+    - index: "index-1"
+      when: always
+    - index: "index-2"
+      when: always

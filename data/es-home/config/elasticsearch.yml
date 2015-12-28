@@ -1,5 +1,5 @@
 # A barebones elasticsearch configuration for using with Nabu
-# This can be totally empty (as most of the important stuff is in nabu.yml)
+# This can be totally empty (as most of the important stuff is in nabuproject.yml)
 # But if you'd like any extra options passed to the backed ES instance, this is the place to do so
 
 script.inline: on
