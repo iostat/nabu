@@ -1,7 +1,7 @@
 group 'io.stat.nabuproject'
 version '0.1-SNAPSHOT'
 
-mainClassName = 'io.stat.nabuproject.enki.Main'
+mainClassName = 'io.stat.nabuproject.nabu.Main'
 
 dependencies {
     compile(project(':core'))

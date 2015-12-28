@@ -1,4 +1,5 @@
 rootProject.name = 'nabuproject'
 include 'core'
 include 'enki'
+include 'nabu'
 
