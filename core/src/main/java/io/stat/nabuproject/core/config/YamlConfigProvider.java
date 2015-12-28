@@ -2,6 +2,8 @@ package io.stat.nabuproject.core.config;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.inject.Inject;
+import com.google.inject.name.Named;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.util.StreamHelper;
 import lombok.Synchronized;
@@ -20,7 +22,6 @@ import java.util.Map;
  */
 @Slf4j
 public class YamlConfigProvider implements ConfigurationProvider {
-    private static final String NABU_YML_PATH = "nabu.yml";
 
     /**
      * The Map generated from the configuration file.
@@ -28,10 +29,11 @@ public class YamlConfigProvider implements ConfigurationProvider {
     private Map<String, Object> yamlAsMap;
 
     @SuppressWarnings("unchecked")
-    YamlConfigProvider() {
+    @Inject
+    YamlConfigProvider(@Named("Configuration File Name") String configFileName) {
         try {
             Yaml yaml = new Yaml();
-            String processedYaml = ConfigHelper.readStreamAndPreprocess(StreamHelper.findResource(NABU_YML_PATH));
+            String processedYaml = ConfigHelper.readStreamAndPreprocess(StreamHelper.findResource(configFileName));
             yamlAsMap = ImmutableMap.copyOf((Map<String, Object>)yaml.load(processedYaml));
 
         } catch(ConfigException | IOException e) {

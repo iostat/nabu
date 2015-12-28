@@ -62,7 +62,7 @@ public class NabuConfig extends Config {
     List<String> kafkaBrokers;
 
     /**
-     * Mapped to the nabuproject.es.cluster.name property
+     * Mapped to the nabu.es.cluster.name property
      */
     private final @Getter String eSClusterName;
 

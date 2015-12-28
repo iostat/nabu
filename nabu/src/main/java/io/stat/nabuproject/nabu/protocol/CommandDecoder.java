@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.CorruptedFrameException;
+import io.stat.nabuproject.core.util.ProtocolHelper;
 import io.stat.nabuproject.nabu.common.NabuCommand;
 import io.stat.nabuproject.nabu.common.NabuCommandType;
 
@@ -56,8 +57,8 @@ public class CommandDecoder extends ByteToMessageDecoder {
         }
 
         boolean shouldUpdateIndex = (in.readByte() == 1);
-        String indexName = ProtocolHelpers.readStringFromByteBuf(in);
-        String documentType = ProtocolHelpers.readStringFromByteBuf(in);
+        String indexName = ProtocolHelper.readStringFromByteBuf(in);
+        String documentType = ProtocolHelper.readStringFromByteBuf(in);
 
         NabuBaseCommand base = new NabuBaseCommand(indexName, documentType, shouldUpdateIndex);
         NabuCommand fullCommand = CommandSerializers.deserialize(in, base, commandType);

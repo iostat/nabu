@@ -11,7 +11,6 @@ import com.google.inject.AbstractModule;
 public class KafkaModule extends AbstractModule {
     @Override
     protected void configure() {
-        bind(NabuConsumerCoordinator.class).to(ConsumerCoordinatorImpl.class).asEagerSingleton();
         bind(NabuKafkaProducer.class).to(KafkaProducerImpl.class).asEagerSingleton();
     }
 }

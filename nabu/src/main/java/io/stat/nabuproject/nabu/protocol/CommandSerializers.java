@@ -1,6 +1,7 @@
 package io.stat.nabuproject.nabu.protocol;
 
 import io.netty.buffer.ByteBuf;
+import io.stat.nabuproject.core.util.ProtocolHelper;
 import io.stat.nabuproject.nabu.common.IndexCommand;
 import io.stat.nabuproject.nabu.common.NabuCommand;
 import io.stat.nabuproject.nabu.common.NabuCommandType;
@@ -20,22 +21,22 @@ class CommandSerializers {
     private interface NabuCommandDeserializer<T extends NabuCommand> extends BiFunction<ByteBuf, NabuCommand, T> { }
 
     private static final NabuCommandSerializer<IndexCommand> INDEX_COMMAND_SERIALIZER = (ic, out) ->
-        ProtocolHelpers.writeStringToByteBuf(ic.getDocumentSource(), out);
+        ProtocolHelper.writeStringToByteBuf(ic.getDocumentSource(), out);
 
     private static final NabuCommandSerializer<UpdateCommand> UPDATE_COMMAND_SERIALIZER = (uc, out) -> {
-        ProtocolHelpers.writeStringToByteBuf(uc.getDocumentSource(), out);
-        ProtocolHelpers.writeStringToByteBuf(uc.getUpdateScript(), out);
+        ProtocolHelper.writeStringToByteBuf(uc.getDocumentSource(), out);
+        ProtocolHelper.writeStringToByteBuf(uc.getUpdateScript(), out);
     };
 
     private static final NabuCommandDeserializer<IndexCommand> INDEX_COMMAND_DESERIALIZER = (in, base) -> {
-        String documentSource = ProtocolHelpers.readStringFromByteBuf(in);
+        String documentSource = ProtocolHelper.readStringFromByteBuf(in);
 
         return new IndexCommand(base, documentSource);
     };
 
     private static final NabuCommandDeserializer<UpdateCommand> UPDATE_COMMAND_DESERIALIZER = (in, base) -> {
-        String documentSource = ProtocolHelpers.readStringFromByteBuf(in);
-        String updateScript   = ProtocolHelpers.readStringFromByteBuf(in);
+        String documentSource = ProtocolHelper.readStringFromByteBuf(in);
+        String updateScript   = ProtocolHelper.readStringFromByteBuf(in);
 
         return new UpdateCommand(base, documentSource, updateScript);
     };

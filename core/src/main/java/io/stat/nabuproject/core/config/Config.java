@@ -3,6 +3,7 @@ package io.stat.nabuproject.core.config;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.elasticsearch.ESConfigProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,7 +21,7 @@ import java.util.Map;
  */
 @RequiredArgsConstructor(onConstructor = @__(@Inject))
 @Slf4j
-public abstract class Config extends Component {
+public abstract class Config extends Component implements ESConfigProvider {
     private final ConfigurationProvider provider;
 
     protected <T> T getRequiredProperty(String key, Class<T> klass) throws ComponentException {
