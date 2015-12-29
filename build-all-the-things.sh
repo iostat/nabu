@@ -2,18 +2,18 @@
 echo Running in `pwd`
 
 echo clean
-gradle -q clean
+./gradlew -q clean
 echo jar-dev
-gradle -q jar -Penv=dev
+./gradlew -q jar -Penv=dev
 echo jar-prod
-gradle -q jar -Penv=prod
+./gradlew -q jar -Penv=prod
 echo shadowjar-dev
-gradle -q shadowJar -Penv=dev
+./gradlew -q shadowJar -Penv=dev
 echo shadowjar-prod
-gradle -q shadowJar -Penv=prod
+./gradlew -q shadowJar -Penv=prod
 
 echo generating javadocs.
-gradle -q javadoc
+./gradlew -q javadoc
 
 echo build complete. find jars in `pwd`/build/libs
 ls -lh build/libs/
