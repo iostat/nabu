@@ -1,2 +1,14 @@
 group 'io.stat.nabuproject'
 version '0.1-SNAPSHOT'
+
+// lololololololololol (for JVMHackery)
+compileJava {
+    options.compilerArgs << '-XDignore.symbol.file'
+    options.fork = true
+    options.forkOptions.executable = "javac"
+}
+
+// ditto
+javadoc {
+    options.addStringOption('XDignore.symbol.file')
+}

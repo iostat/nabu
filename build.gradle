@@ -60,6 +60,14 @@ subprojects {
     processResources.dependsOn(copyConfiguration)
     clean.dependsOn(cleanCopiedConfiguration)
 
+    configurations {
+        // a transitive dependency of kafka depends on this shitty ancient library
+        // which makes ElasticSearch detect a jar hell
+        // which makes everyone sad.
+        all*.exclude(group: 'org.slf4j', module: 'slf4j-log4j12')
+        all*.exclude(group: 'log4j', module:'log4j')
+    }
+
     dependencies {
         testCompile(group: 'junit', name: 'junit', version: '4.11')
 
@@ -81,6 +89,9 @@ subprojects {
         compile(group: 'org.slf4j', name: 'slf4j-api', version:'1.7.13')
         compile(group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.5')
         compile(group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.5')
+        // Log4J 1.x bridge since theres a subdependency of Kafka that wants it
+        // (bet it doesnt even use it...)
+        compile(group: 'org.apache.logging.log4j', name: 'log4j-1.2-api', version: '2.5')
 
         // yaml support
         compile(group: 'org.yaml', name: 'snakeyaml', version: '1.16')
@@ -93,7 +104,8 @@ subprojects {
         compile(group: 'net.java.dev.jna', name: 'jna', version: '4.2.1')
 
         // also duh
-        compile(group:'org.apache.kafka', name: 'kafka-clients', version: '0.8.2.2')
+        compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.8.2.2')
+        compile(group: 'org.apache.kafka', name: 'kafka_2.10', version: '0.8.2.2')
     }
 
     javadoc {

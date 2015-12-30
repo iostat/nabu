@@ -10,5 +10,5 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class EnkiUnassign extends EnkiAssign {
     public EnkiPacketType getType() { return EnkiPacketType.UNASSIGN; }
-    EnkiUnassign(String index, int partition) { super(index, partition); }
+    EnkiUnassign(long sequenceNumber, String index, int partition) { super(sequenceNumber, index, partition); }
 }

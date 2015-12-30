@@ -5,6 +5,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.enki.server.EnkiServer;
+import io.stat.nabuproject.enki.state.IntegrationSanityChecker;
 import lombok.AllArgsConstructor;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
@@ -21,18 +22,25 @@ class EnkiImpl implements Enki {
     private final EnkiConfig config;
     private final ESClient esClient;
     private final EnkiServer enkiServer;
+    private final IntegrationSanityChecker sanityChecker;
 
     private final ComponentStarter componentStarter;
 
     @Override @Synchronized
     public void start() throws ComponentException {
-        componentStarter.start();
         componentStarter.registerComponents(
                 this.config,
                 this.esClient,
+                this.sanityChecker,
                 this.enkiServer);
 
-        logger.info("Enki is ready.");
+        try {
+            componentStarter.start();
+            logger.info("Enki is ready.");
+        } catch (ComponentException e) {
+            logger.error("Failed to start!", e);
+            shutdown();
+        }
     }
 
     @Override @Synchronized

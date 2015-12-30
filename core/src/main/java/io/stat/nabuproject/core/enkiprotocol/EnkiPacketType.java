@@ -18,7 +18,9 @@ import java.util.Map;
 public enum EnkiPacketType {
     HEARTBEAT(0),
     ASSIGN(1),
-    UNASSIGN(2);
+    UNASSIGN(2),
+    CONFIGURE(3),
+    ACK(100); // keepin in 100
 
     private final @Getter int code;
 

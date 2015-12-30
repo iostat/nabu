@@ -8,6 +8,7 @@ import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.enki.server.EnkiServerModule;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -15,7 +16,8 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class Main {
-    private Enki enki;
+    private @Getter Enki enki;
+    private @Getter Injector injector;
 
     private Main() throws ComponentException {
         registerSignalHandlers();
@@ -23,11 +25,12 @@ public class Main {
         int pid = JVMHackery.getPid();
         String jvmName = System.getProperty("java.vm.name", "<java.vm.name not set>");
 
-        logger.info("Starting Nabu v" + Version.VERSION);
+        logger.info("Starting Enki v" + Version.VERSION);
         logger.info("PID {}", pid == -1 ? "<not available>" : pid);
         logger.info("JVM: {}", jvmName);
+        logger.info("$PWD: {}", System.getenv("PWD"));
 
-        Injector injector = Guice.createInjector(
+        this.injector = Guice.createInjector(
                 new EnkiModule(),
                 new ConfigModule(),
                 new ESModule(),
@@ -53,7 +56,24 @@ public class Main {
         JVMHackery.addJvmSignalHandler("INT", signal -> {
             logger.info("Received a SIGINT. Shutting down Nabu.");
             try {
-                enki.shutdown();
+                if(enki == null) {
+                    int spins = 1;
+                    while(spins <= 5) {
+                        logger.warn ("Enki not fully initialized yet. Sleeping for 5 seconds (Spin {} of 5)", spins);
+                        try {
+                            Thread.sleep(5000);
+                        } catch (InterruptedException e) {
+                            logger.error("Received a {} while spinning for Enki to initialize!");
+                        }
+                        if(enki != null) { break; }
+                        spins++;
+                    }
+                }
+                if(enki == null) {
+                    logger.error("Enki not initialized after 5 spins of 5 seconds. God help us all.");
+                } else {
+                    enki.shutdown();
+                }
             } catch(ComponentException e) {
                 logger.warn("ComponentException thrown during shutdown!", e);
             }

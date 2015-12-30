@@ -8,8 +8,8 @@ import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.nabu.kafka.KafkaModule;
-import io.stat.nabuproject.nabu.server.ServerModule;
 import io.stat.nabuproject.nabu.router.RouterModule;
+import io.stat.nabuproject.nabu.server.ServerModule;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -28,6 +28,7 @@ public class Main {
         logger.info("Starting Nabu v" + Version.VERSION);
         logger.info("PID {}", pid == -1 ? "<not available>" : pid);
         logger.info("JVM: {}", jvmName);
+        logger.info("$PWD: {}", System.getenv("PWD"));
 
         Injector injector = Guice.createInjector(
                 new NabuModule(),
@@ -38,7 +39,7 @@ public class Main {
                 new ServerModule()
         );
 
-        this.nabu = injector.getInstance(Nabu.class);
+        nabu = injector.getInstance(Nabu.class);
         nabu.start();
     }
 
@@ -57,7 +58,24 @@ public class Main {
         JVMHackery.addJvmSignalHandler("INT", signal -> {
             logger.info("Received a SIGINT. Shutting down Nabu.");
             try {
-                nabu.shutdown();
+                if(nabu == null) {
+                    int spins = 1;
+                    while(spins <= 5) {
+                        logger.warn ("Nabu not fully initialized yet. Sleeping for 5 seconds (Spin {} of 5)");
+                        try {
+                            Thread.sleep(5000);
+                        } catch (InterruptedException e) {
+                            logger.error("Received a {} while spinning for Nabu to initialize!");
+                        }
+                        if(nabu != null) { break; }
+                        spins++;
+                    }
+                }
+                if(nabu == null) {
+                    logger.warn("Nabu not initialized after 5 spins of 5 seconds. God help us all.");
+                } else {
+                    nabu.shutdown();
+                }
             } catch(ComponentException e) {
                 logger.warn("ComponentException thrown during shutdown!", e);
             }

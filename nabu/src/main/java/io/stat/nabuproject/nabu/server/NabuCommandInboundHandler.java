@@ -10,7 +10,7 @@ import io.stat.nabuproject.nabu.common.NabuCommand;
 public class NabuCommandInboundHandler extends SimpleChannelInboundHandler<NabuCommand> {
 
     public NabuCommandInboundHandler() {
-        //this.commandRouter = Nabu.g
+
     }
 
     @Override

@@ -1,22 +1,33 @@
 # nabu
-(what do you think of "epiphron" as name?)
+[![oss af](https://img.shields.io/badge/build-beyond%20passing-663399.svg?style=plastic)](https://github.com/iostat/nabu)
+[![such coverage](https://img.shields.io/badge/tests-0%20%2F%200-brightgreen.svg?style=plastic)](https://github.com/iostat/nabu)
+[![VW AG af](https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1)](https://github.com/auchenberg/volkswagen)
+[![so leet](https://img.shields.io/badge/npm-v1.3.37-blue.svg?style=plastic)](https://github.com/iostat/nabu)
 
-or since it's being conservative w/r/t elasticsearch taxation we can just call it "reagan"
+
+*fancy netflix style open source project logo here*
+ 
+An intelligent ElasticSearch throttling and load distribution system.
+
+[Nabu on Wikipedia](https://en.wikipedia.org/wiki/Nabu)
 
 ## Dependencies
 * Java 8 and up
 * An Oracle JVM
-* An Elasticsearch cluster (duh)
-* A Kafka cluster (see KAFKA-TOPICS.md)
+* Gradle (we use the wrapper set to 2.10)
+* An Elasticsearch cluster (single instance is fine)
+* A Kafka cluster (single instance also fine)
+* `$PWD` environment variable set. If you're running from shell it's fine, if you're running from IDEA, the bundled
+example configuration files will now work.
 
 ## Building
 Most important thing to remember really is that the config ends up being bundled into the jar as you build it.
-You'll notice that under `src/main/` there's an `env` directory. This corresponds to a project variable you can 
-pass into `gradle` via the `-Penv=<whatever>` flag. 
+You'll notice that under each `src/main/` there's an `env` directory. This corresponds to a project variable you can 
+pass into `./gradlew` via the `-Penv=<whatever>` flag. 
 
 Put your relevant configurations into src/main/env/(dev|prod)/
 
-Now run `gradle -Penv=dev shadowJar` or `gradle -Penv=prod shadowJar` and watch the magic happen.
+Now run `./gradlew -Penv=dev shadowJar` or `./gradlew -Penv=prod shadowJar` and watch the magic happen.
 
 Do note that you don't really need the `shadowJar`, and a regular `jar` will suffice. But the `shadowJar` has the
 lovely bonus of being super easy to run. The `shadowJar` can be ran with
@@ -25,13 +36,13 @@ lovely bonus of being super easy to run. The `shadowJar` can be ran with
  
 Whereas the regular `jar` will need a gigantor classpath that nobody really knows except gradle.
 
-There's also `/build-all-the-things.sh`, which just runs `gradle clean` followed by 
-`gradle jar` and `shadowJar` for each environment. Make sure you run it from the root of the repo, and the longest
+There's also `/build-all-the-things.sh`, which just runs `./gradlew clean` followed by 
+`./gradlew jar` and `shadowJar` for each environment. Make sure you run it from the root of the repo, and the longest
 part of the process will be the initial compile (for jar-dev, as gradle reuses classes for the others).
 It also generates javadocs.
 
 #### tl;dr
-`./build-all-the-things.sh && cd build/libs && java -jar nabu-dev-0.1-SNAPSHOT-all.jar`
+`./build-all-the-things.sh && cd {nabu,enki}build/libs && java -jar {nabu,enki}-dev-0.1-SNAPSHOT-all.jar`
 
 
 ---

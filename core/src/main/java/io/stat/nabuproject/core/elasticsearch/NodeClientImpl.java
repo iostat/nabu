@@ -3,6 +3,7 @@ package io.stat.nabuproject.core.elasticsearch;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import io.stat.nabuproject.core.ComponentException;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.settings.Settings;
@@ -20,7 +21,7 @@ class NodeClientImpl extends ESClient {
     private NodeBuilder nodeBuilder;
 
     private Node esNode;
-    private Client esNodeClient;
+    private @Getter Client eSClient;
 
     private ESConfigProvider config;
 
@@ -34,7 +35,7 @@ class NodeClientImpl extends ESClient {
                 .put("http.port", config.getESHTTPPort()) // maybe serve HTTP requests
                 .put("node.master", false);
 
-        extraConfigs.forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
+        //extraConfigs.forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
 
         nodeBuilder = NodeBuilder.nodeBuilder()
                 .settings(nodeSettingsBuilder)
@@ -55,7 +56,7 @@ class NodeClientImpl extends ESClient {
             throw new ComponentException(true, e);
         }
 
-        this.esNodeClient = this.esNode.client();
+        this.eSClient = this.esNode.client();
     }
 
     @Override

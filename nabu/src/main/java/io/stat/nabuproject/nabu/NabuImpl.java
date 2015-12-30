@@ -26,9 +26,9 @@ class NabuImpl extends Component implements Nabu {
 
     @Override @Synchronized
     public void start() throws ComponentException {
-        logger.info("nabuproject.env is set to: {}", config.getEnv());
-        logger.info("nabuproject.es.path.home is set to: {}", config.getESHome());
-        logger.info("nabuproject.es.cluster.name is set to: {}", config.getESClusterName());
+        logger.info("nabu.env is set to: {}", config.getEnv());
+        logger.info("nabu.es.path.home is set to: {}", config.getESHome());
+        logger.info("nabu.es.cluster.name is set to: {}", config.getESClusterName());
         logger.info("ES HTTP is {}", config.isESHTTPEnabled() ? "enabled" : "disabled");
         if(config.isESHTTPEnabled()) {
             logger.info("ES HTTP Port is set to: {}", config.getESHTTPPort());

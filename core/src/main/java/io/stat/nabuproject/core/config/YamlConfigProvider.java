@@ -102,6 +102,12 @@ public class YamlConfigProvider implements ConfigurationProvider {
             return thisNode.get(thisKey);
         } else {
             Object nextNode = thisNode.get(thisKey);
+
+            // edge case: you could have a submap defined, but it's blank, or empty. In which case,
+            // SnakeYAML *WILL* deserialize it, but as a null. Thus you'd have the key, but it'd be null.
+            if(nextNode == null) {
+                throw new MissingPropertyException(thisKey + " is a null-ish value!");
+            }
             if(!Map.class.isAssignableFrom(nextNode.getClass())) {
                 throw new InvalidValueException(thisChain + " is supposed to be a Map but is a "
                         + nextNode.getClass().getCanonicalName() + " instead");

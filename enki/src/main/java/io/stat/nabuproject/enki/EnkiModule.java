@@ -2,7 +2,10 @@ package io.stat.nabuproject.enki;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.AbstractModule;
+import com.google.inject.Singleton;
+import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
+import io.stat.nabuproject.core.config.Config;
 import io.stat.nabuproject.core.elasticsearch.ESConfigProvider;
 
 import java.util.Map;
@@ -20,10 +23,13 @@ public class EnkiModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(EnkiConfig.class).asEagerSingleton();
-        bind(Enki.class).to(EnkiImpl.class);
-        bind(ESConfigProvider.class).to(EnkiConfig.class).asEagerSingleton();
+        bind(EnkiConfig.class).in(Singleton.class);
+        bind(Config.class).to(EnkiConfig.class);
+        bind(ESConfigProvider.class).to(EnkiConfig.class);
+
         bind(String.class).annotatedWith(Names.named("Configuration File Name")).toInstance(CONFIG_FILE_NAME);
-        bind(Map.class).annotatedWith(Names.named("ES Extra Configs")).toInstance(EXTRA_ES_OPTIONS);
+        bind(new TypeLiteral<Map<String, Object>>() {}).annotatedWith(Names.named("ES Extra Configs")).toInstance(EXTRA_ES_OPTIONS);
+
+        bind(Enki.class).to(EnkiImpl.class).asEagerSingleton();
     }
 }

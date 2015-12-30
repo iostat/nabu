@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import sun.management.VMManagement;
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
+import sun.misc.Unsafe;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
@@ -25,6 +26,7 @@ import java.util.Hashtable;
 public final class JVMHackery {
     private static Hashtable<Integer, Signal> _jvmSignals;
     private static int _jvmPid = 0; // cause nothing can be PID 0 except the kernel... right?
+    private static Unsafe _theUnsafe; // mother of god...
 
     /**
      * Gets the system PID that this JVM is running on.
@@ -61,6 +63,34 @@ public final class JVMHackery {
         }
 
         logger.warn("Could not register a handler for SIG{}. Some sorcery might not be available...", name);
+    }
+
+    private static Unsafe getTheUnsafe() {
+        if(_theUnsafe == null) {
+            try {
+                Field theRealUnsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+                boolean wasAccessible = theRealUnsafeField.isAccessible();
+
+                theRealUnsafeField.setAccessible(true);
+                _theUnsafe = (Unsafe)theRealUnsafeField.get(null);
+                theRealUnsafeField.setAccessible(wasAccessible);
+
+            } catch(NoSuchFieldException | IllegalAccessException e) {
+                logger.error("Couldn't access sun.misc.Unsafe.theUnsafe. Config system may not work...", e);
+            }
+        }
+
+        return _theUnsafe;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T createUnsafeInstance(Class<T> klazz) {
+        try {
+            return (T) getTheUnsafe().allocateInstance(klazz);
+        } catch(InstantiationException e) {
+            logger.error("InstantiationException was thrown when trying to unsafely allocate an instance of {}. Enjoy your NPE!", klazz.getCanonicalName(), e);
+            return null;
+        }
     }
 
     private static Hashtable<Integer, Signal> getJvmSignals() {

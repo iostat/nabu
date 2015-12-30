@@ -1,12 +1,12 @@
-# Root nabu configuration map
+# Root enki configuration map
 #
 # REQUIRED... very very required...
-nabu:
+enki:
   # This gets echoed out when the application starts
   # for the operator to ensure that they have the right configuration
   # set in their JARs.
   #
-  # Furthermore, this may affect certain aspects of Nabu's
+  # Furthermore, this may affect certain aspects of Enki's
   # functionality in the future to make development/debugging
   # easier when running in dev/prod.
   #
@@ -59,48 +59,77 @@ nabu:
     # in the embedded node
     #
     # OPTIONAL
-    http:
+    # http:
       # Whether or not to enable the embedded HTTP server
       # Defaults to false
-      enabled: true
+      #
+      # OPTIONAL
+      # enabled: false
+
       # What port to run the embedded HTTP server on
       # Defaults to 19216
-      port: 19216
+      #
+      # OPTIONAL
+      # port: 19216
 
   # Settings for the Kafka subsystem
   #
-  # REQUIRED, at least for kafka.brokers
+  # REQUIRED
   kafka:
     # A sequence of addresses of Kafka brokers that Nabu will use for its backlog, etc.
     brokers:
-    - localhost:9091
     - localhost:9092
+
+    # Zookeeper instances backing the above Kafka instance
+    #
+    # REQUIRED
+    zk:
+      # Addresses of Zk instances that Kafka uses
+      #
+      # REQUIRED
+      servers:
+      - localhost:2181
+
+      # The chroot, if Kafka is chrooted
+      #
+      # OPTIONAL, defaults to '/'
+      chroot: '/kafka-prod'
+
+      # Connection timeout
+      #
+      # OPTIONAL, defaults to 500
+      # timeout: 500
+
+      # Session timeout
+      #
+      # OPTIONAL, defaults to 1000000000
+      # session: 1000000000
 
   # Settings for the Nabu API server
   #
   # OPTIONAL
-  server:
+  # server:
     # Address to bind the API server to
     #
     # OPTIONAL, defaults to 127.0.0.1
-    bind: '127.0.0.1'
+    # bind: '127.0.0.1'
     # Port to bind the API server to
     #
     # OPTIONAL, defaults to 6228
-    port: 6228
+    # port: 6228
     # NIO threading parameters
     #
     # OPTIONAL
-    threads:
+    # threads:
       # How many threads in the acceptor EventLoopGroup
       # (aka the "boss" group)
       #
       # OPTIONAL, defaults to 1
-      acceptor: 1
+      # acceptor: 1
       # How many threads in the worker EventLoopGroup
       #
-      # OPTIONAL, defaults to 10
-      worker:   10
+      # OPTIONAL, defaults to 50
+      # worker:   50
 
   # Write throttling policies. By default, the Nabu will immediately attempt to write
   # to Elasticsearch, and not read any more commands on the incoming pipe until that request
@@ -113,8 +142,8 @@ nabu:
     #
     # OPTIONAL
     policies:
+    - index: "people-v5"
+      when: always
+    - index: "instagram-users-v1"
 
-    - index: "index-1"
-      when: always
-    - index: "index-2"
-      when: always
+

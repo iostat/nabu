@@ -35,10 +35,10 @@ class ServerImpl extends NabuServer {
 
         this.bootstrap = new ServerBootstrap();
 
-        this.acceptorThreads = config.getAcceptorThreads();
-        this.workerThreads   = config.getWorkerThreads();
-        this.bindAddress     = config.getListenAddress();
-        this.bindPort        = config.getListenPort();
+        this.acceptorThreads = this.config.getAcceptorThreads();
+        this.workerThreads   = this.config.getWorkerThreads();
+        this.bindAddress     = this.config.getListenAddress();
+        this.bindPort        = this.config.getListenPort();
 
         this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
         this.workerGroup = new NioEventLoopGroup(workerThreads);
@@ -67,7 +67,8 @@ class ServerImpl extends NabuServer {
 
     @Override
     public void shutdown() throws ComponentException {
-        logger.info("Shutting down NettyServer...");
+        // TODO: fixes for shutdown() called on failed initialization (not critical)
+        logger.info("Shutting down NabuServer (over Netty)...");
         this.listenerChannel.close();
 
         acceptorGroup.shutdownGracefully();
