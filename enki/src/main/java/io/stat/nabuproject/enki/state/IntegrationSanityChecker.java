@@ -9,6 +9,7 @@ import io.stat.nabuproject.core.config.ThrottlePolicy;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.enki.EnkiConfig;
 import io.stat.nabuproject.enki.kafka.KafkaMetadataClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.common.settings.Settings;
@@ -24,27 +25,12 @@ import org.elasticsearch.index.IndexNotFoundException;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
+@RequiredArgsConstructor(onConstructor=@__(@Inject))
 @Slf4j
 public class IntegrationSanityChecker extends Component {
     private final ESClient esClient;
     private final EnkiConfig config;
-    /**
-     * There's no "metadata client" or anything like that, and it's really simple to set up
-     * a producer. Then we can just try to get partition info
-     *
-     * Since we're not actually putting anything into Kafka, an <tt>&lt;Object, Object&gt;</tt>
-     * type suffices.
-     */
     private final KafkaMetadataClient kafkaClient;
-
-    @Inject
-    public IntegrationSanityChecker(EnkiConfig config,
-                                    ESClient esClient,
-                                    KafkaMetadataClient metadataClient) {
-        this.esClient = esClient;
-        this.config   = config;
-        this.kafkaClient = metadataClient;
-    }
 
     @Override
     public void start() throws ComponentException {
