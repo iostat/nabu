@@ -1,7 +1,7 @@
 # nabu
 [![oss af](https://img.shields.io/badge/build-beyond%20passing-663399.svg?style=flat)](https://github.com/iostat/nabu)
 [![such coverage](https://img.shields.io/badge/tests-0%20%2F%200-brightgreen.svg?style=flat)](https://github.com/iostat/nabu)
-[![VW AG af](https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1)](https://github.com/auchenberg/volkswagen)
+[![$VOW3 af](https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1)](https://github.com/auchenberg/volkswagen)
 [![so leet](https://img.shields.io/badge/npm-v1.3.37-blue.svg?style=flat)](https://github.com/iostat/nabu)
 
 
@@ -11,6 +11,10 @@ An intelligent ElasticSearch throttling and load distribution system.
 
 [Nabu on Wikipedia](https://en.wikipedia.org/wiki/Nabu)
 
+
+---
+
+
 ## Dependencies
 * Java 8 and up
 * An Oracle JVM
@@ -19,6 +23,10 @@ An intelligent ElasticSearch throttling and load distribution system.
 * A Kafka cluster (single instance also fine)
 * `$PWD` environment variable set. If you're running from shell it's fine, if you're running from IDEA, the bundled
 example configuration files will now work.
+
+
+---
+
 
 ## Building
 Most important thing to remember really is that the config ends up being bundled into the jar as you build it.
@@ -66,6 +74,13 @@ you'll probably need to copy the contents of `/your/server/es/path/home/plugins/
 `/what/you/set/as/nabu.es.path.home/plugins/license/*`
 
 If you're using any other plugins that add custom cluster-wide metadata, you need to do the same for them as well.
+
+
+---
+
+
+## Development
+See the helper scripts in `dev/`. Please read them before running them.
 
 
 ---

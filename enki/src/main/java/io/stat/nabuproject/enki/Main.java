@@ -7,6 +7,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.util.JVMHackery;
+import io.stat.nabuproject.enki.kafka.EnkiKafkaModule;
 import io.stat.nabuproject.enki.server.EnkiServerModule;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class Main {
                 new EnkiModule(),
                 new ConfigModule(),
                 new ESModule(),
+                new EnkiKafkaModule(),
                 new EnkiServerModule()
         );
 

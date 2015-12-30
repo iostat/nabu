@@ -4,6 +4,7 @@ import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
+import io.stat.nabuproject.enki.kafka.KafkaMetadataClient;
 import io.stat.nabuproject.enki.server.EnkiServer;
 import io.stat.nabuproject.enki.state.IntegrationSanityChecker;
 import lombok.AllArgsConstructor;
@@ -22,6 +23,7 @@ class EnkiImpl implements Enki {
     private final EnkiConfig config;
     private final ESClient esClient;
     private final EnkiServer enkiServer;
+    private final KafkaMetadataClient metadataClient;
     private final IntegrationSanityChecker sanityChecker;
 
     private final ComponentStarter componentStarter;
@@ -31,6 +33,7 @@ class EnkiImpl implements Enki {
         componentStarter.registerComponents(
                 this.config,
                 this.esClient,
+                this.metadataClient,
                 this.sanityChecker,
                 this.enkiServer);
 

@@ -10,6 +10,8 @@ import kafka.api.TopicMetadata;
 import lombok.extern.slf4j.Slf4j;
 import org.I0Itec.zkclient.ZkClient;
 
+import java.util.Iterator;
+
 /**
  * Provides a method of querying Kafka metadata using Zookeeper.
  * (The Kafka client APIs all have the chance of creating the topic if
@@ -31,9 +33,17 @@ public final class KafkaMetadataClient extends Component {
 
     @Override
     public void start() throws ComponentException {
+        Iterator<String> chrootedZookeepersIterator =
+                config.getKafkaZookeepers()
+                      .stream()
+                      .map(zk -> zk + config.getKafkaZkChroot())
+                      .iterator();
+
         this.zkClient = new ZkClient(
-                Joiner.on(',').join(config.getKafkaZookeepers()),
+                Joiner.on(',').join(chrootedZookeepersIterator),
                 config.getKafkaZkTimeout());
+
+        this.zkClient.setZkSerializer(new KafkaZKStringSerializerProxy());
     }
 
     public void stop() throws ComponentException {

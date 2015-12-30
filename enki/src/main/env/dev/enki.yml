@@ -142,8 +142,11 @@ enki:
     #
     # OPTIONAL
     policies:
-    - index: "people-v5"
-      when: always
-    - index: "instagram-users-v1"
-
-
+    - index: "test-1-shard"
+    - index: "test-5-shards"
+    - index: "test-10-shards"
+    - index: "test-20-shards"
+    # - index: "test-mismatched-shards"
+    # - index: "test-only-exists-in-kafka"
+    # - index: "test-only-exists-in-es"
+    # - index: "test-doesnt-exist-anywhere"

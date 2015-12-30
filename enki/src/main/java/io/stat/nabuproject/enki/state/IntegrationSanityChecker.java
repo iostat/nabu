@@ -18,7 +18,7 @@ import org.elasticsearch.index.IndexNotFoundException;
 /**
  * A component which will query ElasticSearch and Kafka and
  * ensure that topics exist for indices that should be throttled
- * and the count of partitions and shards match up.
+ * and that the count of partitions and shards match up.
  *
  * If there's a failure, it throws a fatal ComponentException
  * which will cause Enki to shut down.
@@ -101,9 +101,9 @@ public class IntegrationSanityChecker extends Component {
 
             if(actualPartitions != expectedPartitions) {
                 throw new ComponentException(true,
-                        String.format("Mismatch between shard count (%d) for index %s" +
-                                "and partitions (%d) for topic %s",
-                                expectedPartitions, indexName, actualPartitions, topicName));
+                        String.format("Mismatch between shard count for index %s (%d shards) " +
+                                "and partition count for topic %s (%d partitions)",
+                                indexName, expectedPartitions, topicName, actualPartitions));
             }
 
             logger.info("Integration check passed: es:{}[{}] <-> kafka:{}[{}]", indexName, expectedPartitions, topicName, actualPartitions);

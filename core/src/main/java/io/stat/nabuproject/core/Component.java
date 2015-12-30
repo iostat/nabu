@@ -28,7 +28,6 @@ public abstract class Component {
      */
     public void shutdown() throws ComponentException { }
 
-
     /**
      * (internal) validates that this component is in a valid state to start and dispatches
      * a call to {@link Component#start()}

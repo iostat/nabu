@@ -4,6 +4,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.config.Config;
 import io.stat.nabuproject.core.config.ConfigurationProvider;
 import io.stat.nabuproject.core.config.ThrottlePolicy;
@@ -130,16 +131,20 @@ public class EnkiConfig extends Config {
                 Integer.class);
 
         this.throttlePolicies = getOptionalSequence(Keys.ENKI_THROTTLING_POLICIES, Defaults.ENKI_THROTTLING_POLICIES, ThrottlePolicy.class);
+    }
 
+    @Override
+    public void start() throws ComponentException {
         StringBuilder prettyPolicies = new StringBuilder("The following throttling policies have been configured:\n");
-        prettyPolicies.append("                INDEX MAXBATCH   TARGETMS\n");
+        prettyPolicies.append(Strings.padStart("INDEX", 50, ' '));
+        prettyPolicies.append(" MAXBATCH   TARGETMS\n");
         throttlePolicies.forEach(
-                policy -> prettyPolicies.append(Strings.padStart(policy.getIndexName(), 21, ' '))
-                                        .append(' ')
-                                        .append(Strings.padEnd(Integer.toString(policy.getMaxBatchSize()), 10, ' '))
-                                        .append(' ')
-                                        .append(Strings.padEnd(Long.toString(policy.getWriteTimeTarget()), 10, ' '))
-                                        .append('\n')
+                policy -> prettyPolicies.append(Strings.padStart(policy.getIndexName(), 50, ' '))
+                        .append("    ")
+                        .append(Strings.padEnd(Integer.toString(policy.getMaxBatchSize()), 7, ' '))
+                        .append("    ")
+                        .append(Strings.padEnd(Long.toString(policy.getWriteTimeTarget()), 7, ' '))
+                        .append('\n')
         );
         logger.info(prettyPolicies.toString());
     }
