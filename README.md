@@ -1,8 +1,8 @@
 # nabu
-[![oss af](https://img.shields.io/badge/build-beyond%20passing-663399.svg?style=plastic)](https://github.com/iostat/nabu)
-[![such coverage](https://img.shields.io/badge/tests-0%20%2F%200-brightgreen.svg?style=plastic)](https://github.com/iostat/nabu)
+[![oss af](https://img.shields.io/badge/build-beyond%20passing-663399.svg?style=flat)](https://github.com/iostat/nabu)
+[![such coverage](https://img.shields.io/badge/tests-0%20%2F%200-brightgreen.svg?style=flat)](https://github.com/iostat/nabu)
 [![VW AG af](https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1)](https://github.com/auchenberg/volkswagen)
-[![so leet](https://img.shields.io/badge/npm-v1.3.37-blue.svg?style=plastic)](https://github.com/iostat/nabu)
+[![so leet](https://img.shields.io/badge/npm-v1.3.37-blue.svg?style=flat)](https://github.com/iostat/nabu)
 
 
 *fancy netflix style open source project logo here*
