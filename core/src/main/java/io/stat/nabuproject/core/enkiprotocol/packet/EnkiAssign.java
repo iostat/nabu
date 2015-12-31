@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.packet;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

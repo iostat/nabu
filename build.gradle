@@ -97,7 +97,11 @@ subprojects {
         compile(group: 'org.yaml', name: 'snakeyaml', version: '1.16')
 
         // duh
-        compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0')
+        compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0') {
+            // ElasticSearch has a vendored version of Guice, which, like the one we're using, also has
+            // a dependency on Guava.
+            exclude group: 'com.google.guava', module: 'guava'
+        }
 
         // for ES's JNA sorcery
         // actually serves no purpose other than shutting ES up on startup

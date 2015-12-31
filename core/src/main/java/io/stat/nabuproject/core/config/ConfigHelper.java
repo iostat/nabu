@@ -11,7 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Contains helper methods related to the Config system
+ * Contains helper methods related to the AbstractConfig system
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

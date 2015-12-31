@@ -16,12 +16,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A {@link ConfigurationProvider} that gets its data from a YAML file.
+ * A {@link ConfigStore} that gets its data from a YAML file.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class YamlConfigProvider implements ConfigurationProvider {
+public class YamlConfigStore implements ConfigStore {
 
     /**
      * The Map generated from the configuration file.
@@ -30,7 +30,7 @@ public class YamlConfigProvider implements ConfigurationProvider {
 
     @SuppressWarnings("unchecked")
     @Inject
-    YamlConfigProvider(@Named("Configuration File Name") String configFileName) {
+    YamlConfigStore(@Named("Configuration File Name") String configFileName) {
         try {
             Yaml yaml = new Yaml();
             String processedYaml = ConfigHelper.readStreamAndPreprocess(StreamHelper.findResource(configFileName));

@@ -15,6 +15,9 @@ public class ComponentException extends RuntimeException {
     public ComponentException() {
         super();
     }
+    public ComponentException(ComponentException base) {
+        this(base.fatal, base);
+    }
     public ComponentException(String message) {
         super(message);
     }

@@ -4,9 +4,10 @@ import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
-import io.stat.nabuproject.enki.kafka.KafkaMetadataClient;
+import io.stat.nabuproject.core.kafka.KafkaMetadataClient;
+import io.stat.nabuproject.enki.integration.IntegrationSanityChecker;
+import io.stat.nabuproject.enki.integration.WorkerCoordinator;
 import io.stat.nabuproject.enki.server.EnkiServer;
-import io.stat.nabuproject.enki.state.IntegrationSanityChecker;
 import lombok.AllArgsConstructor;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ class EnkiImpl implements Enki {
     private final EnkiServer enkiServer;
     private final KafkaMetadataClient metadataClient;
     private final IntegrationSanityChecker sanityChecker;
+    private final WorkerCoordinator workerCoordinator;
 
     private final ComponentStarter componentStarter;
 
@@ -35,6 +37,7 @@ class EnkiImpl implements Enki {
                 this.esClient,
                 this.metadataClient,
                 this.sanityChecker,
+                this.workerCoordinator,
                 this.enkiServer);
 
         try {

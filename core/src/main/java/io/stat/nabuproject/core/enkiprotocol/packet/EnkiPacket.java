@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.packet;
 
 import com.google.common.collect.ImmutableMap;
 import io.netty.buffer.ByteBuf;
@@ -43,6 +43,13 @@ public abstract class EnkiPacket {
                 encode(c, o, out);
             }
         }
+
+        private final ObjectEncoderExposer exposer;
+
+        public Encoder() {
+            this.exposer = new ObjectEncoderExposer();
+        }
+
         @Override
         protected void encode(ChannelHandlerContext ctx, EnkiPacket msg, ByteBuf out) throws Exception {
             EnkiPacketType packetType = msg.getType();
@@ -73,7 +80,6 @@ public abstract class EnkiPacket {
                     break;
                 case CONFIGURE:
                     ImmutableMap<String, Serializable> configure = ((EnkiConfigure) msg).getOptions();
-                    ObjectEncoderExposer exposer = new ObjectEncoderExposer();
 
                     exposer.exposeEncode(ctx, configure, restOfPacket);
 
@@ -99,6 +105,13 @@ public abstract class EnkiPacket {
                 decode(c, in, out);
             }
         }
+
+        private final ObjectDecoderExposer exposer;
+
+        public Decoder() {
+            this.exposer = new ObjectDecoderExposer();
+        }
+
 
         // for EnkiConfigures it has to decode what should be a Map<String, Serializable>
         // but alas ObjectEncoder isn't exactly generic.
@@ -163,7 +176,6 @@ public abstract class EnkiPacket {
                         return;
                     case CONFIGURE:
                         List<Object> decodedList = new ArrayList<>(1);
-                        ObjectDecoderExposer exposer = new ObjectDecoderExposer();
                         exposer.exposeDecode(ctx, in, decodedList);
 
                         out.add(new EnkiConfigure(sequenceNumber, (Map)(decodedList.get(0))));

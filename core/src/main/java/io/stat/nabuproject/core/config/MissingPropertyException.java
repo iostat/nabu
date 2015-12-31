@@ -6,19 +6,19 @@ package io.stat.nabuproject.core.config;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 public class MissingPropertyException extends ConfigException {
-    MissingPropertyException() {
+    public MissingPropertyException() {
         super();
     }
 
-    MissingPropertyException(String message) {
+    public MissingPropertyException(String message) {
         super(message);
     }
 
-    MissingPropertyException(Throwable cause) {
+    public MissingPropertyException(Throwable cause) {
         super(cause);
     }
 
-    MissingPropertyException(String message, Throwable cause) {
+    public MissingPropertyException(String message, Throwable cause) {
         super(message, cause);
     }
 }

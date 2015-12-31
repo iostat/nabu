@@ -3,30 +3,43 @@ package io.stat.nabuproject.core.elasticsearch;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.cluster.ClusterChangedEvent;
+import org.elasticsearch.cluster.ClusterService;
+import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
 
+import java.util.List;
 import java.util.Map;
 
 /**
- * Created by io on 12/25/15. (929) 253-6977 $50/hr
+ * An implementation of {@link ESClient} which is backed by an ElasticSearch NodeClient
  */
-@Slf4j
+@Slf4j @EqualsAndHashCode(callSuper=true)
 class NodeClientImpl extends ESClient {
     private Settings.Builder nodeSettingsBuilder;
     private NodeBuilder nodeBuilder;
 
     private Node esNode;
     private @Getter Client eSClient;
+    private ClusterService esNodeClusterService;
+    private ClusterState clusterState;
+    private final ClusterStateListener clusterStateListener;
 
     private ESConfigProvider config;
 
     @Inject
-    NodeClientImpl(ESConfigProvider configProvider, @Named("ES Extra Configs") Map<String, Object> extraConfigs) {
+    NodeClientImpl(ESConfigProvider configProvider,
+                   @Named("ES Extra Configs") Map<String, Object> extraConfigs) {
+
         this.config = configProvider;
 
         nodeSettingsBuilder = Settings.settingsBuilder()
@@ -35,7 +48,7 @@ class NodeClientImpl extends ESClient {
                 .put("http.port", config.getESHTTPPort()) // maybe serve HTTP requests
                 .put("node.master", false);
 
-        //extraConfigs.forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
+        extraConfigs.forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
 
         nodeBuilder = NodeBuilder.nodeBuilder()
                 .settings(nodeSettingsBuilder)
@@ -45,6 +58,7 @@ class NodeClientImpl extends ESClient {
                 .client(true);
 
         this.esNode = this.nodeBuilder.build();
+        this.clusterStateListener = this.new ClusterStateListener();
     }
 
     @Override
@@ -56,11 +70,80 @@ class NodeClientImpl extends ESClient {
             throw new ComponentException(true, e);
         }
 
+        this.esNodeClusterService = this.esNode.injector().getInstance(ClusterService.class);
+        this.clusterState = esNodeClusterService.state();
         this.eSClient = this.esNode.client();
+        this.esNodeClusterService.add(clusterStateListener);
     }
 
     @Override
     public void shutdown() throws ComponentException {
+        this.esNodeClusterService.remove(clusterStateListener);
         this.esNode.close();
+    }
+
+    @Synchronized
+    private void updateClusterState(ClusterState newState) {
+        this.clusterState = newState;
+    }
+
+    /**
+     * Here so we can register with the node's cluster state listener API
+     * and dispatch our own events.
+     */
+    @EqualsAndHashCode
+    private final class ClusterStateListener implements org.elasticsearch.cluster.ClusterStateListener {
+        /**
+         * @param event the event that ElasticSearch sent us
+         */
+        @Override
+        public void clusterChanged(ClusterChangedEvent event) {
+            List<DiscoveryNode> addedNodes   = event.nodesDelta().addedNodes();
+            List<DiscoveryNode> removedNodes = event.nodesDelta().removedNodes();
+
+            addedNodes.forEach(node -> {
+                boolean isNabu = node.attributes().getOrDefault("nabu", "false").equals("true");
+                boolean isEnki = node.attributes().getOrDefault("enki", "false").equals("true");
+
+                if(isEnki && isNabu) {
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    logger.warn("!!!!! a node claiming to be both an Enki and a Nabu has joined the cluster. !!!!!");
+                    logger.warn("!!!!!         please review your system, as this should never happen        !!!!!");
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                } else if (isEnki) {
+                    logger.info("An Enki has joined the cluster: {}", node);
+                    NodeClientImpl.this.dispatchNabuEsEvent(new NabuESEvent(NabuESEvent.Type.ENKI_JOINED, node));
+                } else if(isNabu) {
+                    logger.info("A Nabu has joined the cluster: {}", node);
+                    NodeClientImpl.this.dispatchNabuEsEvent(new NabuESEvent(NabuESEvent.Type.NABU_JOINED, node));
+                } else {
+                    logger.info("Non Enki/Nabu node...: {}", node);
+                }
+            });
+
+            removedNodes.forEach(node -> {
+                boolean isNabu = node.attributes().getOrDefault("nabu", "false").equals("true");
+                boolean isEnki = node.attributes().getOrDefault("enki", "false").equals("true");
+
+                if(isEnki && isNabu) {
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    logger.warn("!!!!!      a node claiming to be both an Enki and a Nabu has left the cluster.      !!!!!");
+                    logger.warn("!!!!! this should never happen (although since it left thats probably a good thing) !!!!!");
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                } else if (isEnki) {
+                    logger.info("An Enki has left the cluster: {}", node);
+                    NodeClientImpl.this.dispatchNabuEsEvent(new NabuESEvent(NabuESEvent.Type.ENKI_PARTED, node));
+                } else if(isNabu) {
+                    logger.info("A Nabu has left the cluster: {}", node);
+                    NodeClientImpl.this.dispatchNabuEsEvent(new NabuESEvent(NabuESEvent.Type.NABU_PARTED, node));
+                } else {
+                    logger.info("Non Enki/Nabu node...: {}", node);
+                }
+            });
+        }
     }
 }

@@ -1,6 +1,7 @@
 package io.stat.nabuproject.core.config;
 
 import com.google.inject.AbstractModule;
+import io.stat.nabuproject.core.elasticsearch.ESConfigProvider;
 
 /**
  * Guice module for the Config subsystem.
@@ -10,6 +11,8 @@ import com.google.inject.AbstractModule;
 public class ConfigModule extends AbstractModule {
     @Override
     protected void configure() {
-        bind(ConfigurationProvider.class).to(YamlConfigProvider.class);
+        bind(ConfigStore.class).to(YamlConfigStore.class);
+
+        bind(ESConfigProvider.class).to(AbstractConfig.class);
     }
 }

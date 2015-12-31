@@ -4,10 +4,10 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 
 /**
- * Created by io on 12/28/15. io is an asshole because
- * he doesn't write documentation for his code.
+ * A Netty ChannelInitializer that speaks in EnkiPackets
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

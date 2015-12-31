@@ -1,8 +1,9 @@
 package io.stat.nabuproject.core.config;
 
 /**
- * Created by io on 12/29/15. io is an asshole because
- * he doesn't write documentation for his code.
+ * Thrown when there is a problem reifying a config submap to a
+ * class. Specifically, it means that the class does not implement
+ * #{link MappedConfigObject}
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

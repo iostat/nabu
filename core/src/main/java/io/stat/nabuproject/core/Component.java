@@ -1,5 +1,6 @@
 package io.stat.nabuproject.core;
 
+import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -12,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
  * Note that all the lifecycle management methods are called synchronously. This means that
  * if your component blocks anywhere, you may very well hang the whole application.
  */
-@Slf4j
+@Slf4j @EqualsAndHashCode
 public abstract class Component {
     /**
      * Called *synchronously* when the component is started.

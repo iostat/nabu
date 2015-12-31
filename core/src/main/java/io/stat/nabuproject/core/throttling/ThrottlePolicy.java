@@ -1,5 +1,9 @@
-package io.stat.nabuproject.core.config;
+package io.stat.nabuproject.core.throttling;
 
+import io.stat.nabuproject.core.config.ConfigMapper;
+import io.stat.nabuproject.core.config.InvalidValueException;
+import io.stat.nabuproject.core.config.MappedConfigObject;
+import io.stat.nabuproject.core.config.MissingPropertyException;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;

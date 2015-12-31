@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.packet;
 
 import com.google.common.collect.ImmutableMap;
 import lombok.AccessLevel;

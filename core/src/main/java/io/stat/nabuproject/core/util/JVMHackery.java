@@ -76,7 +76,7 @@ public final class JVMHackery {
                 theRealUnsafeField.setAccessible(wasAccessible);
 
             } catch(NoSuchFieldException | IllegalAccessException e) {
-                logger.error("Couldn't access sun.misc.Unsafe.theUnsafe. Config system may not work...", e);
+                logger.error("Couldn't access sun.misc.Unsafe.theUnsafe. AbstractConfig system may not work...", e);
             }
         }
 

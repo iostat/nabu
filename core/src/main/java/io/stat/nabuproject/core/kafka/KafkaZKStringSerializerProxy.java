@@ -1,4 +1,4 @@
-package io.stat.nabuproject.enki.kafka;
+package io.stat.nabuproject.core.kafka;
 
 import kafka.utils.ZKStringSerializer;
 import org.I0Itec.zkclient.exception.ZkMarshallingError;

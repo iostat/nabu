@@ -1,8 +1,8 @@
 package io.stat.nabuproject.nabu;
 
 import com.google.inject.Inject;
-import io.stat.nabuproject.core.config.Config;
-import io.stat.nabuproject.core.config.ConfigurationProvider;
+import io.stat.nabuproject.core.config.AbstractConfig;
+import io.stat.nabuproject.core.config.ConfigStore;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -15,7 +15,7 @@ import java.util.List;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class NabuConfig extends Config {
+public class NabuConfig extends AbstractConfig {
     /**
      * Mapped to the nabu.env property
      */
@@ -66,8 +66,9 @@ public class NabuConfig extends Config {
      */
     private final @Getter String eSClusterName;
 
+
     @Inject
-    public NabuConfig(ConfigurationProvider provider) {
+    public NabuConfig(ConfigStore provider) {
         super(provider);
 
         this.env    = getRequiredProperty(Keys.NABU_ENV, String.class);

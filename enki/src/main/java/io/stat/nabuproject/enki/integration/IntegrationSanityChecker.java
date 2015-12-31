@@ -1,14 +1,14 @@
-package io.stat.nabuproject.enki.state;
+package io.stat.nabuproject.enki.integration;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.core.config.ThrottlePolicy;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
+import io.stat.nabuproject.core.kafka.KafkaMetadataClient;
+import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.enki.EnkiConfig;
-import io.stat.nabuproject.enki.kafka.KafkaMetadataClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;

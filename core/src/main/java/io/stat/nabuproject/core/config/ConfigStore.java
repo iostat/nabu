@@ -5,13 +5,13 @@ import java.util.Map;
 
 /**
  * Specification for something which can provide configuration
- * options that the Nabu application depends on. An implementation must simply
- * provide {@link ConfigurationProvider#getProperty(String, Class)},
- * {@link ConfigurationProvider#getSequence(String, Class)}, and {@link ConfigurationProvider#getSubmap(String)}.
+ * options that the Nabu/Enki applications depend on. An implementation must simply
+ * provide {@link ConfigStore#getProperty(String, Class)},
+ * {@link ConfigStore#getSequence(String, Class)}, and {@link ConfigStore#getSubmap(String)}.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public interface ConfigurationProvider {
+public interface ConfigStore {
     /**
      * Get a scalar property from the configuration store. The key
      * will be a flattened representation (e.g. for <tt>nabuproject.env</tt>,
@@ -31,7 +31,7 @@ public interface ConfigurationProvider {
 
     /**
      * Get a sequence property from the configuration store. Just like with
-     * {@link ConfigurationProvider#getProperty(String, Class)}, the key will given in a flattened
+     * {@link ConfigStore#getProperty(String, Class)}, the key will given in a flattened
      * representation. If there is a scalar value assigned to the the key, you may treat it as
      * a single-element sequence.
      *
@@ -45,8 +45,8 @@ public interface ConfigurationProvider {
 
     /**
      * Get a submap from the configuration store. Much like with
-     * {@link ConfigurationProvider#getProperty(String, Class)}
-     * and {@link ConfigurationProvider#getSequence(String, Class)} the key passed in
+     * {@link ConfigStore#getProperty(String, Class)}
+     * and {@link ConfigStore#getSequence(String, Class)} the key passed in
      * will be given as a flattened representation. The expected output is a
      * Map&lt;String, Object&gt;, which means that if your backing store is
      * not in a structured format, you will be expect to emulate that.

@@ -1,10 +1,9 @@
-package io.stat.nabuproject.enki.kafka;
+package io.stat.nabuproject.core.kafka;
 
 import com.google.common.base.Joiner;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.enki.EnkiConfig;
 import kafka.admin.AdminUtils;
 import kafka.api.TopicMetadata;
 import lombok.extern.slf4j.Slf4j;
@@ -21,12 +20,12 @@ import java.util.Iterator;
  */
 @Slf4j
 public final class KafkaMetadataClient extends Component {
-    private final EnkiConfig config;
+    private final KafkaZkConfigProvider config;
     private ZkClient zkClient;
     private final Object[] $zkClientLock;
 
     @Inject
-    public KafkaMetadataClient(EnkiConfig config) {
+    public KafkaMetadataClient(KafkaZkConfigProvider config) {
         this.config = config;
         this.$zkClientLock = new Object[0];
     }
@@ -41,7 +40,7 @@ public final class KafkaMetadataClient extends Component {
 
         this.zkClient = new ZkClient(
                 Joiner.on(',').join(chrootedZookeepersIterator),
-                config.getKafkaZkTimeout());
+                config.getKafkaZkConnTimeout());
 
         this.zkClient.setZkSerializer(new KafkaZKStringSerializerProxy());
     }

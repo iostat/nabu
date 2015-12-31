@@ -1,4 +1,4 @@
-package io.stat.nabuproject.enki.kafka;
+package io.stat.nabuproject.core.kafka;
 
 import com.google.inject.AbstractModule;
 
@@ -8,7 +8,7 @@ import com.google.inject.AbstractModule;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public class EnkiKafkaModule extends AbstractModule {
+public class KafkaModule extends AbstractModule {
     @Override
     protected void configure() {
         bind(KafkaMetadataClient.class).asEagerSingleton();

@@ -13,19 +13,33 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Configuration options that Nabu depends on.
+ * Represents a system-wide configuration, generally loaded from a file.
+ * By default, it is required to implement {@link ESConfigProvider}
+ * since both Nabu and Enki depend on ES to get bootstrapped.
  *
- * Note how there are concrete getters for basically every option that Nabu depends on.
- * They are the preferred form of accessing fields, as it ensures that there will always be
- * a valid configuration loaded.
+ * Nabu and Enki extend this class in their own modules (see NabuConfig and EnkiConfig in their respective javadoc trees)
+ *
+ * Generally, a module has its own interface for ConfigProvider which gets dependency injected. The nabu-/enki-specific dependency
+ * bindings are specified at the start of each application in their Guice injector.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @RequiredArgsConstructor(onConstructor = @__(@Inject))
 @Slf4j
-public abstract class Config extends Component implements ESConfigProvider {
-    private final ConfigurationProvider provider;
+public abstract class AbstractConfig extends Component implements ESConfigProvider {
+    private final ConfigStore provider;
 
+    /**
+     * Can be used by children to read a property, and ensure it exists and is valid.
+     * A property can be any Java primitive type, or any type that implements {@link MappedConfigObject}.
+     * To get a property which is supposed to be a List of the above, see {@link AbstractConfig#getRequiredSequence(String, Class)}
+     *
+     * @param key The key under which the property is found
+     * @param klass the Class of <tt>&lt;T&gt;</tt> since reified generics are too un-enterprise for Java
+     * @param <T> the type that <tt>klass</tt> represents.
+     * @return the value that the ConfigStore returned from its backing store.
+     * @throws ComponentException if there was a problem reading the requested property
+     */
     protected final <T> T getRequiredProperty(String key, Class<T> klass) throws ComponentException {
         ensureClassIsConfigurable(klass);
         if(MappedConfigObject.class.isAssignableFrom(klass)) {
@@ -58,6 +72,16 @@ public abstract class Config extends Component implements ESConfigProvider {
         return ret;
     }
 
+    /**
+     * Similar to {@link AbstractConfig#getRequiredProperty(String, Class)}, except it is for getting
+     * Lists of properties.
+     *
+     * @param key The key under which the property is found
+     * @param klass the Class of <tt>&lt;T&gt;</tt> since reified generics are too un-enterprise for Java
+     * @param <T> the type that <tt>klass</tt> represents.
+     * @return the value that the ConfigStore returned from its backing store.
+     * @throws ComponentException if there was a problem reading the requested property
+     */
     protected final <T> List<T> getRequiredSequence(String key, Class<T> klass) throws ComponentException {
         ensureClassIsConfigurable(klass);
         if(MappedConfigObject.class.isAssignableFrom(klass)) {
@@ -99,13 +123,21 @@ public abstract class Config extends Component implements ESConfigProvider {
         return (T) mco.getMapper().buildFromMap(theMap);
     }
 
+    /**
+     * Returns a raw Map of all subproperties of a key. This is used when reifying non-primitive subtypes, but is also
+     * left in here for the convenience of implementors.
+     *
+     * @param key the key under which to get a submap
+     * @return a <tt>Map&lt;String, Object&gt;</tt> of the submap
+     * @throws ComponentException if there was a problem reading the requested property
+     */
     protected final Map<String, Object> getRequiredSubmap(String key) throws ComponentException {
         Map<String, Object> ret;
 
         try {
             ret = provider.getSubmap(key);
         } catch (ConfigException ce) {
-            String message = "Could not get the value of required sequence " + key;
+            String message = "Could not get the value of required submap " + key;
             logger.error(message, ce);
             throw new ComponentException(true, message, ce);
         }
@@ -119,28 +151,52 @@ public abstract class Config extends Component implements ESConfigProvider {
         return ret;
     }
 
-    protected final <T> T getOptionalProperty(String key, T def, Class<T> klass) {
+    /**
+     * Similar to {@link AbstractConfig#getRequiredProperty(String, Class)}, except that if a {@link MissingPropertyException}
+     * is thrown, a warning is printed and the value of <tt>fallback</tt> is returned. Any other exceptions get bubbled up.
+     *
+     * @param key The key under which the property is found
+     * @param fallback the value to default to if the requested property is not set.
+     * @param klass the Class of <tt>&lt;T&gt;</tt> since reified generics are too un-enterprise for Java
+     * @param <T> the type that <tt>klass</tt> represents.
+     * @throws ComponentException if the cause of the exception was not a {@link MissingPropertyException}
+     * @return the value which was set if it was set, or <tt>fallback</tt> if it wasn't
+     */
+    protected final <T> T getOptionalProperty(String key, T fallback, Class<T> klass) throws ComponentException {
         try {
             return getRequiredProperty(key, klass);
         } catch(ComponentException e) {
             if(e.getCause() instanceof MissingPropertyException) {
-                logger.info("{} is not set and falling back to a default value of {}", key, def);
-                return def;
+                logger.info("{} is not set and falling back to a default value of {}", key, fallback);
+                return fallback;
             } else {
-                throw e;
+                // wrap in another ComponentException so that it's clear that this got thrown in getOptionalProperty.
+                throw new ComponentException(e);
             }
         }
     }
 
-    protected final <T> List<T> getOptionalSequence(String key, List<T> def, Class<T> klass) {
+    /**
+     * {@link AbstractConfig#getOptionalSequence(String, List, Class)} is to {@link AbstractConfig#getRequiredSequence(String, Class)}
+     * as {@link AbstractConfig#getOptionalProperty(String, Object, Class)} is to {@link AbstractConfig#getRequiredProperty(String, Class)}
+     *
+     * @param key The key under which the property is found
+     * @param fallback a List of <tt>&lt;T&gt;s</tt> to default to if a property is missing.
+     * @param klass the Class of <tt>&lt;T&gt;</tt> since reified generics are too un-enterprise for Java
+     * @param <T> the type that <tt>klass</tt> represents.* @return
+     * @throws ComponentException
+     * @return the list of values which was set if it was set, or <tt>fallback</tt> if it wasn't
+     */
+    protected final <T> List<T> getOptionalSequence(String key, List<T> fallback, Class<T> klass) throws ComponentException {
         try {
             return getRequiredSequence(key, klass);
         } catch(ComponentException e) {
             if(e.getCause() instanceof MissingPropertyException) {
-                logger.info("{} is not set and falling back to a default value of {}", key, def);
-                return def;
+                logger.info("{} is not set and falling back to a default value of {}", key, fallback);
+                return fallback;
             } else {
-                throw e;
+                // wrap in another ComponentException so that it's clear that this got thrown in getOptionalSequence
+                throw new ComponentException(e);
             }
         }
     }

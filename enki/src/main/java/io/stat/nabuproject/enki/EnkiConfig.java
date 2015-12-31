@@ -5,9 +5,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.core.config.Config;
-import io.stat.nabuproject.core.config.ConfigurationProvider;
-import io.stat.nabuproject.core.config.ThrottlePolicy;
+import io.stat.nabuproject.core.config.AbstractConfig;
+import io.stat.nabuproject.core.config.ConfigStore;
+import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
+import io.stat.nabuproject.core.throttling.ThrottlePolicy;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,7 +22,7 @@ import java.util.List;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Singleton @Slf4j
-public class EnkiConfig extends Config {
+public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider, ThrottlePolicyProvider {
     /**
      * Mapped to the enki.env property
      */
@@ -89,12 +91,12 @@ public class EnkiConfig extends Config {
     /**
      * How long to wait before a Zk connection attempt is considered a timeout.
      */
-    private final @Getter int kafkaZkTimeout;
+    private final @Getter int kafkaZkConnTimeout;
 
     /**
      * How long can a Zk session be active before it times out.
      */
-    private final @Getter long kafkaZkSession;
+    private final @Getter long kafkaZkSessTimeout;
 
     /**
      * Mapped to the enki.throttle.policies property.
@@ -102,7 +104,7 @@ public class EnkiConfig extends Config {
     private final @Getter List<ThrottlePolicy> throttlePolicies;
 
     @Inject
-    public EnkiConfig(ConfigurationProvider provider) {
+    public EnkiConfig(ConfigStore provider) {
         super(provider);
 
         this.env    = getRequiredProperty(Keys.ENKI_ENV, String.class);
@@ -117,8 +119,8 @@ public class EnkiConfig extends Config {
 
         this.kafkaZookeepers = getRequiredSequence(Keys.ENKI_KAFKA_ZK_SERVERS, String.class);
         this.kafkaZkChroot   = getOptionalProperty(Keys.ENKI_KAFKA_ZK_CHROOT, Defaults.ENKI_KAFKA_ZK_CHROOT, String.class);
-        this.kafkaZkTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_TIMEOUT, Defaults.ENKI_KAFKA_ZK_TIMEOUT, Integer.class);
-        this.kafkaZkSession  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_SESSION, Defaults.ENKI_KAFKA_ZK_SESSION, Long.class);
+        this.kafkaZkConnTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_TIMEOUT, Defaults.ENKI_KAFKA_ZK_TIMEOUT, Integer.class);
+        this.kafkaZkSessTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_SESSION, Defaults.ENKI_KAFKA_ZK_SESSION, Long.class);
 
         this.listenAddress = getOptionalProperty(Keys.ENKI_SERVER_BIND, Defaults.ENKI_SERVER_BIND, String.class);
         this.listenPort    = getOptionalProperty(Keys.ENKI_SERVER_PORT, Defaults.ENKI_SERVER_PORT, Integer.class);
