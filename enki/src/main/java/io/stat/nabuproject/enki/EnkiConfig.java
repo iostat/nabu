@@ -2,6 +2,7 @@ package io.stat.nabuproject.enki;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.stat.nabuproject.core.ComponentException;
@@ -14,6 +15,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by io on 12/28/15. io is an asshole because
@@ -149,6 +151,11 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
                         .append('\n')
         );
         logger.info(prettyPolicies.toString());
+    }
+
+    @Override
+    public Map<String, String> getESNodeAttributes() {
+        return ImmutableMap.of("enki", getListenAddress() + ":" + getListenPort());
     }
 
     public static final class Keys {

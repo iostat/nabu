@@ -67,14 +67,14 @@ public abstract class Component {
     /**
      * @return Whether or not this {@link Component} was started.
      */
-    public boolean wasStarted() {
+    public final boolean wasStarted() {
         return _started;
     }
 
     /**
      * @return Whether or not this {@link Component} was stopped.
      */
-    public boolean wasStopped() {
+    public final boolean wasStopped() {
         return _stopped;
     }
 

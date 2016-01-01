@@ -1,5 +1,6 @@
 package io.stat.nabuproject.nabu;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.config.ConfigStore;
@@ -7,6 +8,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by io on 12/28/15. io is an asshole because
@@ -36,7 +38,7 @@ public class NabuConfig extends AbstractConfig {
      */
     private final @Getter int acceptorThreads;
     /**
-     * Mapped to the nabup.server.threads.worker property
+     * Mapped to the nabu.server.threads.worker property
      */
     private final @Getter int workerThreads;
 
@@ -58,8 +60,7 @@ public class NabuConfig extends AbstractConfig {
     /**
      * Mapped to the nabu.kafka.brokers property
      */
-    private final @Getter
-    List<String> kafkaBrokers;
+    private final @Getter List<String> kafkaBrokers;
 
     /**
      * Mapped to the nabu.es.cluster.name property
@@ -88,6 +89,11 @@ public class NabuConfig extends AbstractConfig {
         this.workerThreads   = getOptionalProperty(Keys.NABU_SERVER_THREADS_WORKER,
                 Defaults.NABU_SERVER_THREADS_WORKER,
                 Integer.class);
+    }
+
+    @Override
+    public Map<String, String> getESNodeAttributes() {
+        return ImmutableMap.of("nabu", "true");
     }
 
     private static final class Keys {

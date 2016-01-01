@@ -3,12 +3,18 @@ package io.stat.nabuproject.enki.server;
 import com.google.inject.Inject;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LoggingHandler;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.enkiprotocol.EnkiChannelInitializer;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiHeartbeat;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacketType;
 import io.stat.nabuproject.enki.EnkiConfig;
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,8 +23,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 class ServerImpl extends EnkiServer {
-    private final EnkiConfig config;
-
     private ServerBootstrap bootstrap;
     private Channel listenerChannel;
 
@@ -32,14 +36,12 @@ class ServerImpl extends EnkiServer {
 
     @Inject
     ServerImpl(EnkiConfig config) {
-        this.config = config;
-
         this.bootstrap = new ServerBootstrap();
 
-        this.acceptorThreads = this.config.getAcceptorThreads();
-        this.workerThreads   = this.config.getWorkerThreads();
-        this.bindAddress     = this.config.getListenAddress();
-        this.bindPort        = this.config.getListenPort();
+        this.acceptorThreads = config.getAcceptorThreads();
+        this.workerThreads   = config.getWorkerThreads();
+        this.bindAddress     = config.getListenAddress();
+        this.bindPort        = config.getListenPort();
 
         this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
         this.workerGroup = new NioEventLoopGroup(workerThreads);
@@ -49,8 +51,9 @@ class ServerImpl extends EnkiServer {
     public void start() throws ComponentException {
         bootstrap.group(acceptorGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
+                .option(ChannelOption.TCP_NODELAY, true) // the enki protocol is really tiny. john nagle is not our friend.
                 .handler(new LoggingHandler())
-                .childHandler(new EnkiChannelInitializer());
+                .childHandler(new EnkiChannelInitializer(EnkiServerHandler.class));
 
         logger.info("Binding NettyServer on {}:{}, with {} acceptor thread(s) and {} worker thread(s)",
                 bindAddress, bindPort, acceptorThreads, workerThreads);
@@ -74,5 +77,40 @@ class ServerImpl extends EnkiServer {
 
         acceptorGroup.shutdownGracefully();
         workerGroup.shutdownGracefully();
+    }
+
+    /**
+     * The name is a bit misleading, as this <i>technically</i> handles a client (meaning, it
+     * responds to packets sent by the client.)
+     */
+    public static class EnkiServerHandler extends SimpleChannelInboundHandler<EnkiPacket> {
+        public EnkiServerHandler() { super(); }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+            logger.info("CHANNEL_ACTIVE: {}", ctx);
+            ctx.writeAndFlush(new EnkiHeartbeat(0));
+            super.channelActive(ctx);
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            logger.error("CHANNEL_INACTIVE");
+            super.channelInactive(ctx);
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+            logger.error("EXCEPTION_CAUGHT: {}", cause);
+            super.exceptionCaught(ctx, cause);
+        }
+
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, EnkiPacket msg) throws Exception {
+            logger.info("channelRead0: {}", msg);
+            if(msg.getType() == EnkiPacketType.ACK) {
+                logger.info("ack!");
+            }
+        }
     }
 }

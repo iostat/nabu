@@ -75,8 +75,8 @@ public class IntegrationSanityChecker extends Component {
         for(String indexName : topicPartitionCounts.keySet()) {
             String topicName = "nabu-"+indexName;
             int expectedPartitions = topicPartitionCounts.get(indexName);
-            int actualPartitions = -1;
-            boolean topicExists = false;
+            int actualPartitions;
+            boolean topicExists;
 
             try {
                 topicExists = kafkaClient.topicExists(topicName);

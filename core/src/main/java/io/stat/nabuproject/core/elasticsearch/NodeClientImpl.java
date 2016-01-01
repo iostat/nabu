@@ -1,13 +1,13 @@
 package io.stat.nabuproject.core.elasticsearch;
 
 import com.google.inject.Inject;
-import com.google.inject.name.Named;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.util.Strings;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterService;
@@ -18,7 +18,6 @@ import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * An implementation of {@link ESClient} which is backed by an ElasticSearch NodeClient
@@ -37,8 +36,7 @@ class NodeClientImpl extends ESClient {
     private ESConfigProvider config;
 
     @Inject
-    NodeClientImpl(ESConfigProvider configProvider,
-                   @Named("ES Extra Configs") Map<String, Object> extraConfigs) {
+    NodeClientImpl(ESConfigProvider configProvider) {
 
         this.config = configProvider;
 
@@ -48,7 +46,7 @@ class NodeClientImpl extends ESClient {
                 .put("http.port", config.getESHTTPPort()) // maybe serve HTTP requests
                 .put("node.master", false);
 
-        extraConfigs.forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
+        configProvider.getESNodeAttributes().forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
 
         nodeBuilder = NodeBuilder.nodeBuilder()
                 .settings(nodeSettingsBuilder)
@@ -82,9 +80,76 @@ class NodeClientImpl extends ESClient {
         this.esNode.close();
     }
 
+
+    @Override @Synchronized
+    public boolean isEnkiDiscovered() {
+        return findEnkiMasterNode() != null;
+
+    }
+
+    @Override @Synchronized
+    public String getEnkiHost() {
+        DiscoveryNode master = findEnkiMasterNode();
+        String addr = null;
+
+        if(master != null) {
+            addr = master.getAttributes().getOrDefault("enki", null);
+        }
+
+        if (addr != null) {
+            String ipOrHost = addr.split(":")[0];
+            if (ipOrHost.equals("0.0.0.0")) {
+                return master.getHostAddress();
+            }
+
+            return ipOrHost;
+        }
+
+        return super.getEnkiHost();
+
+    }
+
+    @Override @Synchronized
+    public int getEnkiPort() {
+        DiscoveryNode master = findEnkiMasterNode();
+        String addr = null;
+
+        if(master != null) {
+            addr = master.getAttributes().getOrDefault("enki", null);
+        }
+
+        if(addr != null) {
+            try {
+                return Integer.parseInt(addr.split(":")[1]);
+            } catch(NumberFormatException | ArrayIndexOutOfBoundsException n) {
+                logger.error("getEnkiPort(): Could not parse {}", addr, n);
+            }
+        }
+
+        return super.getEnkiPort();
+    }
+
     @Synchronized
-    private void updateClusterState(ClusterState newState) {
-        this.clusterState = newState;
+    private DiscoveryNode findEnkiMasterNode() {
+        for(DiscoveryNode n : this.clusterState.getNodes()) {
+            if(nodeIsEnkiNode(n)) {
+                // TODO: need to identify master. kinda important...
+                // todo: like really important
+                // ToDo: important enough to warrant four todos
+                // tODo: in four different case styles
+                return n;
+            }
+        }
+
+        return null;
+    }
+
+    private static boolean nodeIsEnkiNode(DiscoveryNode n) {
+        return !Strings.isEmpty(n.attributes().get("enki"));
+    }
+
+    private static boolean nodeIsNabuNode(DiscoveryNode n) {
+        return n.attributes().getOrDefault("nabu", "false").equals("true");
     }
 
     /**
@@ -102,8 +167,8 @@ class NodeClientImpl extends ESClient {
             List<DiscoveryNode> removedNodes = event.nodesDelta().removedNodes();
 
             addedNodes.forEach(node -> {
-                boolean isNabu = node.attributes().getOrDefault("nabu", "false").equals("true");
-                boolean isEnki = node.attributes().getOrDefault("enki", "false").equals("true");
+                boolean isNabu = nodeIsNabuNode(node);
+                boolean isEnki = nodeIsEnkiNode(node);
 
                 if(isEnki && isNabu) {
                     logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
@@ -124,8 +189,8 @@ class NodeClientImpl extends ESClient {
             });
 
             removedNodes.forEach(node -> {
-                boolean isNabu = node.attributes().getOrDefault("nabu", "false").equals("true");
-                boolean isEnki = node.attributes().getOrDefault("enki", "false").equals("true");
+                boolean isNabu = nodeIsNabuNode(node);
+                boolean isEnki = nodeIsEnkiNode(node);
 
                 if(isEnki && isNabu) {
                     logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
@@ -145,5 +210,6 @@ class NodeClientImpl extends ESClient {
                 }
             });
         }
+
     }
 }

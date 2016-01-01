@@ -4,6 +4,7 @@ import com.google.common.collect.Sets;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
+import io.stat.nabuproject.core.enkiprotocol.EnkiAddressProvider;
 import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -16,10 +17,13 @@ import java.util.Set;
  * This includes getting a client to query ES, as well as being able to provide events
  * that can be listened to. An ESClient is expected to dispatch events to listeners.
  *
+ * Furthermore, since Enki discovery is performed against the ES cluster, an ESClient must
+ * implement EnkiAddressProvider
+ *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @EqualsAndHashCode(callSuper=true)
-public abstract class ESClient extends Component {
+public abstract class ESClient extends Component implements EnkiAddressProvider {
     /**
      * The Set of {@link NabuESEventListener}s registered to this ESClient.
      */

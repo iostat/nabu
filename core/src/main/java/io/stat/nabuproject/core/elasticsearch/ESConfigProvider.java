@@ -1,5 +1,7 @@
 package io.stat.nabuproject.core.elasticsearch;
 
+import java.util.Map;
+
 /**
  * Provides configuration to the Elasticsearch module
  *
@@ -10,4 +12,6 @@ public interface ESConfigProvider {
     String getESClusterName();
     boolean isESHTTPEnabled();
     int getESHTTPPort();
+
+    Map<String, String> getESNodeAttributes();
 }

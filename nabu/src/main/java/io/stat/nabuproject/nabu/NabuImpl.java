@@ -5,6 +5,7 @@ import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
+import io.stat.nabuproject.core.enkiprotocol.EnkiClient;
 import io.stat.nabuproject.nabu.server.NabuServer;
 import lombok.AllArgsConstructor;
 import lombok.Synchronized;
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 class NabuImpl extends Component implements Nabu {
     private final NabuConfig config;
     private final ESClient esClient;
+    private final EnkiClient enkiClient;
     private final NabuServer nabuServer;
 
     private final ComponentStarter componentStarter;
@@ -34,7 +36,11 @@ class NabuImpl extends Component implements Nabu {
             logger.info("ES HTTP Port is set to: {}", config.getESHTTPPort());
         }
 
-        componentStarter.registerComponents(config, esClient, nabuServer);
+        componentStarter.registerComponents(
+                config,
+                esClient,
+                enkiClient,
+                nabuServer);
 
         componentStarter.start();
 
