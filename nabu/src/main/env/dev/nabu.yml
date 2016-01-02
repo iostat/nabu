@@ -62,7 +62,7 @@ nabu:
     http:
       # Whether or not to enable the embedded HTTP server
       # Defaults to false
-      enabled: true
+      enabled: false
       # What port to run the embedded HTTP server on
       # Defaults to 19216
       port: 19216

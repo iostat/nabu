@@ -1,9 +1,14 @@
-group 'io.stat.nabuproject'
-version '0.1-SNAPSHOT'
 
-mainClassName = 'io.stat.nabuproject.nabu.Main'
+project(":nabu") {
+    group 'io.stat.nabuproject'
+    version '0.1-SNAPSHOT'
 
-dependencies {
-    compile(project(':core'))
+    apply(plugin: 'application')
+    applicationDefaultJvmArgs = ["-server"]
+    mainClassName = 'io.stat.nabuproject.nabu.Main'
+
+    dependencies {
+        compile(project(':core'))
+    }
 }
 

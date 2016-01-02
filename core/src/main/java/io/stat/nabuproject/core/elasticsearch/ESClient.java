@@ -8,6 +8,7 @@ import io.stat.nabuproject.core.enkiprotocol.EnkiAddressProvider;
 import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.Client;
 
 import java.util.Set;
@@ -23,14 +24,15 @@ import java.util.Set;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @EqualsAndHashCode(callSuper=true)
+@Slf4j
 public abstract class ESClient extends Component implements EnkiAddressProvider {
     /**
      * The Set of {@link NabuESEventListener}s registered to this ESClient.
      */
-    private @Getter(AccessLevel.PROTECTED) Set<NabuESEventListener> nabuESEventListeners;
+    private @Getter(AccessLevel.PROTECTED) Set<NabuESEventListener> eSEventListeners;
 
     public ESClient() {
-        this.nabuESEventListeners = Sets.newConcurrentHashSet();
+        this.eSEventListeners = Sets.newConcurrentHashSet();
     }
 
     /**
@@ -43,8 +45,14 @@ public abstract class ESClient extends Component implements EnkiAddressProvider 
      * Register a {@link NabuESEventListener} to receive Nabu-related elasticsearch cluster events.
      * @param listener a {@link NabuESEventListener}
      */
-    public void registerNabuEventListener(NabuESEventListener listener) {
-        nabuESEventListeners.add(listener);
+    public void registerESEventListener(NabuESEventListener listener) {
+        logger.info("Registered NabuESEventListener {}", listener);
+        eSEventListeners.add(listener);
+    }
+
+    public void unregisterESEventListener(NabuESEventListener listener) {
+        eSEventListeners.remove(listener);
+        logger.info("Unregistered NabuESEventListener {}", listener);
     }
 
     /**
@@ -52,6 +60,6 @@ public abstract class ESClient extends Component implements EnkiAddressProvider 
      * @param event the event to dispatch.
      */
     protected void dispatchNabuEsEvent(NabuESEvent event) {
-        nabuESEventListeners.forEach(listener -> listener.onNabuESEvent(event));
+        eSEventListeners.forEach(listener -> listener.onNabuESEvent(event));
     }
 }

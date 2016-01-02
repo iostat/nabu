@@ -62,7 +62,7 @@ public final class ConfigHelper {
         }
 
         source = subSplit[0];
-        key      = subSplit[1];
+        key    = subSplit[1];
 
         if(subSplit.length == 3) {
             defaultValue = subSplit[2];
@@ -88,6 +88,8 @@ public final class ConfigHelper {
                             key,
                             subMatch));
                 }
+
+                return property;
             default:
                 throw new SubstitutionException(String.format("Unsupported substitution source %s (in %s)", source, subMatch));
         }

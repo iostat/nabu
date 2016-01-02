@@ -4,13 +4,14 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
- * A command that tells a Nabu instance to start consuming a Kafka topic + partition.
+ * A command sent by Enki to Nabu that tells the instance to
+ * start consuming a Kafka topic + partition.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @EqualsAndHashCode(callSuper = true)
 public class EnkiAssign extends EnkiPacket {
-    public EnkiPacketType getType() { return EnkiPacketType.ASSIGN; }
+    public Type getType() { return Type.ASSIGN; }
     private final @Getter String indexName;
     private final @Getter int partitionNumber;
 

@@ -8,6 +8,7 @@ import com.google.inject.Singleton;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.config.ConfigStore;
+import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
@@ -24,7 +25,7 @@ import java.util.Map;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Singleton @Slf4j
-public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider, ThrottlePolicyProvider {
+public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider, ThrottlePolicyProvider, KafkaBrokerConfigProvider {
     /**
      * Mapped to the enki.env property
      */
@@ -117,7 +118,7 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
         this.eSHTTPPort    = getOptionalProperty(Keys.ENKI_ES_HTTP_PORT, Defaults.ENKI_ES_HTTP_PORT, Integer.class);
 
         this.kafkaBrokers  = getRequiredSequence(Keys.ENKI_KAFKA_BROKERS, String.class);
-        this.kafkaGroup    = getOptionalProperty(Keys.ENKI_KAFKA_GROUP, "enki_" + this.eSClusterName, String.class);
+        this.kafkaGroup    = getOptionalProperty(Keys.ENKI_KAFKA_GROUP, "nabu_" + this.eSClusterName, String.class);
 
         this.kafkaZookeepers = getRequiredSequence(Keys.ENKI_KAFKA_ZK_SERVERS, String.class);
         this.kafkaZkChroot   = getOptionalProperty(Keys.ENKI_KAFKA_ZK_CHROOT, Defaults.ENKI_KAFKA_ZK_CHROOT, String.class);
@@ -158,6 +159,18 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
         return ImmutableMap.of("enki", getListenAddress() + ":" + getListenPort());
     }
 
+    @Override
+    public boolean isKafkaBrokerConfigAvailable() {
+        // always... always true...
+        // it's only source from here, #nbd
+        return true;
+    }
+
+    @Override
+    public void setKafkaBrokerConfig(List<String> brokers, String group) {
+        logger.error("somebody tried to call EnkiConfig::setKafkaBrokerConfig. This is considered high treason.");
+    }
+
     public static final class Keys {
         public static final String ENKI_ENV             = "enki.env";
         public static final String ENKI_ES_PATH_HOME    = "enki.es.path.home";
@@ -171,7 +184,7 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
         public static final String ENKI_KAFKA_ZK_TIMEOUT = "enki.kafka.zk.timeout";
         public static final String ENKI_KAFKA_ZK_SESSION = "enki.kafka.zk.session";
 
-        public static final String ENKI_KAFKA_GROUP     = "enki.kafka.group";
+        public static final String ENKI_KAFKA_GROUP      = "enki.kafka.group";
 
         public static final String ENKI_SERVER_BIND             = "enki.server.bind";
         public static final String ENKI_SERVER_PORT             = "enki.server.port";

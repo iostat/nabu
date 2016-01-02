@@ -4,14 +4,16 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
- * A heartbeat request OR response.
- * Just needs to be sent back within a reasonable time.
+ * A heartbeat packet. These are sent fairly frequently
+ * by the server to the client to ensure that it is still alive.
+ *
+ * It is responded to by an ACK with the same sequence number.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @EqualsAndHashCode(callSuper = true)
 public final class EnkiHeartbeat extends EnkiPacket {
-    public EnkiPacketType getType() { return EnkiPacketType.HEARTBEAT; }
+    public Type getType() { return Type.HEARTBEAT; }
     private final @Getter long timestamp;
 
     public EnkiHeartbeat(long sequenceNumber) {

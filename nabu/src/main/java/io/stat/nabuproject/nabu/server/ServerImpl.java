@@ -60,7 +60,7 @@ class ServerImpl extends NabuServer {
             this.acceptorGroup.shutdownGracefully();
             this.workerGroup.shutdownGracefully();
 
-            logger.error("Failed to start NettyServer, {}", e);
+            logger.error("Failed to start Nabu server, {}", e);
             throw new ComponentException(true, e);
         }
     }

@@ -10,6 +10,8 @@ import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.nabu.kafka.KafkaModule;
 import io.stat.nabuproject.nabu.router.RouterModule;
 import io.stat.nabuproject.nabu.server.ServerModule;
+import lombok.Getter;
+import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -17,7 +19,8 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class Main {
-    private Nabu nabu;
+    private @Getter @Delegate Nabu nabu;
+    private @Getter Injector injector;
 
     private Main() throws ComponentException {
         registerSignalHandlers();
@@ -30,7 +33,7 @@ public class Main {
         logger.info("JVM: {}", jvmName);
         logger.info("$PWD: {}", System.getenv("PWD"));
 
-        Injector injector = Guice.createInjector(
+        this.injector = Guice.createInjector(
                 new NabuModule(),
                 new ConfigModule(),
                 new ESModule(),
@@ -40,7 +43,6 @@ public class Main {
         );
 
         nabu = injector.getInstance(Nabu.class);
-        nabu.start();
     }
 
     /**
@@ -51,7 +53,7 @@ public class Main {
      * @throws Throwable because lets be honest... who cares...
      */
     public static void main(String[] args) throws Throwable {
-        new Main();
+        new Main().start();
     }
 
     private void registerSignalHandlers() {
@@ -74,7 +76,7 @@ public class Main {
                 if(nabu == null) {
                     logger.warn("Nabu not initialized after 5 spins of 5 seconds. God help us all.");
                 } else {
-                    nabu.shutdown();
+                    this.shutdown();
                 }
             } catch(ComponentException e) {
                 logger.warn("ComponentException thrown during shutdown!", e);

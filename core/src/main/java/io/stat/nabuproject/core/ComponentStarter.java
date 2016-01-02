@@ -46,12 +46,16 @@ public final class ComponentStarter extends Component {
 
     @Override
     public void start() throws ComponentException {
-        deque.forEach(Component::_dispatchStart);
+        // don't use deque.forEach unless you want terrible exception bubbling.
+        for (Component c : deque) {
+            c._dispatchStart();
+        }
     }
 
     @Override
     public void shutdown() throws ComponentException {
-        for(Iterator<Component> rit = deque.descendingIterator(); rit.hasNext();) {
+        Iterator<Component> rit = deque.descendingIterator();
+        while(rit.hasNext()) {
             rit.next()._dispatchShutdown();
         }
     }

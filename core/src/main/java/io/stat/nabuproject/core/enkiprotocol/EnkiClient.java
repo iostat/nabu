@@ -3,17 +3,14 @@ package io.stat.nabuproject.core.enkiprotocol;
 import com.google.inject.Inject;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
-import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacketType;
+import io.stat.nabuproject.core.net.FluentChannelInitializer;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -24,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class EnkiClient extends Component {
 
+    private final FluentChannelInitializer channelInitializer;
     private EnkiAddressProvider config;
     private Bootstrap bootstrap;
     private EventLoopGroup eventLoopGroup;
@@ -33,6 +31,10 @@ public class EnkiClient extends Component {
     public EnkiClient(EnkiAddressProvider provider) {
         this.config = provider;
         this.eventLoopGroup = new NioEventLoopGroup();
+        this.channelInitializer = new FluentChannelInitializer();
+        this.channelInitializer.addHandler(EnkiPacket.Encoder.class);
+        this.channelInitializer.addHandler(EnkiPacket.Decoder.class);
+        this.channelInitializer.addHandler(EnkiClientIO.class);
     }
 
     @Override
@@ -45,7 +47,7 @@ public class EnkiClient extends Component {
         this.bootstrap.group(eventLoopGroup)
                       .channel(NioSocketChannel.class)
                       .option(ChannelOption.TCP_NODELAY, true) // the enki protocol is really tiny. john nagle is not our friend.
-                      .handler(new EnkiChannelInitializer(EnkiClientHandler.class));
+                      .handler(channelInitializer);
 
         try {
             this.clientChannel = this.bootstrap
@@ -64,21 +66,5 @@ public class EnkiClient extends Component {
     public void shutdown() throws ComponentException {
         this.clientChannel.close();
         this.eventLoopGroup.shutdownGracefully();
-    }
-
-    /**
-     * The name is a bit misleading, as this <i>technically</i> handles a server (meaning, it
-     * responds to packets sent BY the server.)
-     */
-    public static class EnkiClientHandler extends SimpleChannelInboundHandler<EnkiPacket> {
-        public EnkiClientHandler() { super(); }
-        @Override
-        protected void channelRead0(ChannelHandlerContext ctx, EnkiPacket msg) throws Exception {
-            logger.info("channelRead0: {}", msg);
-            if(msg.getType() == EnkiPacketType.HEARTBEAT) {
-                logger.info("heartbeat!!!");
-                ctx.writeAndFlush(new EnkiAck(msg.getSequenceNumber()));
-            }
-        }
     }
 }

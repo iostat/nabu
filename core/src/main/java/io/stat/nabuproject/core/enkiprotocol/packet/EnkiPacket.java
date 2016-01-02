@@ -11,11 +11,15 @@ import io.netty.handler.codec.serialization.ClassResolvers;
 import io.netty.handler.codec.serialization.ObjectDecoder;
 import io.netty.handler.codec.serialization.ObjectEncoder;
 import io.stat.nabuproject.core.util.ProtocolHelper;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 
@@ -30,13 +34,14 @@ public abstract class EnkiPacket {
     public static final int MAGIC = 0x454E4B49;
     public static final String MAGIC_HEX_STRING = "0x" + Integer.toHexString(MAGIC);
 
-    public abstract EnkiPacketType getType();
+    public abstract Type getType();
     public final @Getter long sequenceNumber;
 
     protected EnkiPacket(long sequenceNumber) {
         this.sequenceNumber = sequenceNumber;
     }
 
+    @Slf4j
     public static final class Encoder extends MessageToByteEncoder<EnkiPacket> {
         private static final class ObjectEncoderExposer extends ObjectEncoder {
             void exposeEncode(ChannelHandlerContext c, Serializable o, ByteBuf out) throws Exception {
@@ -47,21 +52,22 @@ public abstract class EnkiPacket {
         private final ObjectEncoderExposer exposer;
 
         public Encoder() {
+            logger.info("new EnkiPacket.Encoder()");
             this.exposer = new ObjectEncoderExposer();
         }
 
         @Override
         protected void encode(ChannelHandlerContext ctx, EnkiPacket msg, ByteBuf out) throws Exception {
-            EnkiPacketType packetType = msg.getType();
+            Type packetType = msg.getType();
 
-            if(packetType == EnkiPacketType.ACK) {
+            if(packetType == Type.ACK || packetType == Type.LEAVE) {
                 out.writeInt(MAGIC);
                 out.writeInt(packetType.getCode());
                 out.writeLong(msg.getSequenceNumber());
                 return;
             }
 
-            if(packetType == EnkiPacketType.HEARTBEAT) {
+            if(packetType == Type.HEARTBEAT) {
                 out.writeInt(MAGIC);
                 out.writeInt(packetType.getCode());
                 out.writeLong(msg.getSequenceNumber());
@@ -96,6 +102,7 @@ public abstract class EnkiPacket {
         }
     }
 
+    @Slf4j
     public static final class Decoder extends ByteToMessageDecoder {
         private static final class ObjectDecoderExposer extends ObjectDecoder {
             ObjectDecoderExposer() {
@@ -109,6 +116,7 @@ public abstract class EnkiPacket {
         private final ObjectDecoderExposer exposer;
 
         public Decoder() {
+            logger.info("new EnkiPacket.Decoder()");
             this.exposer = new ObjectDecoderExposer();
         }
 
@@ -135,9 +143,9 @@ public abstract class EnkiPacket {
             }
 
             int packetTypeCode = in.readInt();
-            EnkiPacketType packetType;
+            Type packetType;
             try {
-                packetType = EnkiPacketType.ofCode(packetTypeCode);
+                packetType = Type.ofCode(packetTypeCode);
             } catch(IllegalArgumentException e) {
                 in.resetReaderIndex();
                 throw new CorruptedFrameException(e);
@@ -147,9 +155,11 @@ public abstract class EnkiPacket {
             // if the type is an ACK, it has no other data attached to it.
             // otherwise, it's followed by at least a long for timestamp if its a HEARTBEAT
             // or REST_OF_PACKET_SIZE and PARTITION_NUMBER (2x int)
-            if(packetType == EnkiPacketType.ACK) {
+            if(packetType == Type.ACK) {
                 out.add(new EnkiAck(sequenceNumber));
-            } else if(packetType == EnkiPacketType.HEARTBEAT) {
+            } else if (packetType == Type.LEAVE) {
+                out.add(new EnkiLeave(sequenceNumber));
+            } else if(packetType == Type.HEARTBEAT) {
                 if(in.readableBytes() < 8) {
                     in.resetReaderIndex();
                     return;
@@ -169,7 +179,7 @@ public abstract class EnkiPacket {
                         String indexName = ProtocolHelper.readStringFromByteBuf(in);
 
                         out.add(
-                                (packetType == EnkiPacketType.ASSIGN)                                ?
+                                (packetType == Type.ASSIGN)                                ?
                                         new EnkiAssign(sequenceNumber, indexName, partitionNumber)   :
                                         new EnkiUnassign(sequenceNumber, indexName, partitionNumber)
                         );
@@ -185,7 +195,60 @@ public abstract class EnkiPacket {
                         throw new CorruptedFrameException("Don't know how to handle EnkiPacket of type " + packetType);
                 }
             }
+        }
+    }
 
+    /**
+     * An enum of all possible {@link EnkiPacket} types. Used
+     * in conjunction with {@link EnkiPacket#getType()}
+     *
+     * @author Ilya Ostrovskiy (https://github.com/iostat/)
+     */
+    @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
+    public enum Type {
+        /**
+         * @see EnkiHeartbeat
+         */
+        HEARTBEAT(0),
+        /**
+         * @see EnkiAssign
+         */
+        ASSIGN(1),
+        /**
+         * @see EnkiUnassign
+         */
+        UNASSIGN(2),
+        /**
+         * @see EnkiConfigure
+         */
+        CONFIGURE(3),
+        /**
+         * @see EnkiLeave
+         */
+        LEAVE(5),
+        /**
+         * @see EnkiAck
+         */
+        ACK(100);
+
+        private final @Getter int code;
+
+        private static final Map<Integer, Type> _LUT;
+
+        static {
+            ImmutableMap.Builder<Integer, Type> lutBuilder = ImmutableMap.builder();
+            EnumSet.allOf(Type.class).forEach(type -> lutBuilder.put(type.getCode(), type));
+            _LUT = lutBuilder.build();
+        }
+
+        public static Type ofCode(int value) throws IllegalArgumentException {
+            Type ret = _LUT.get(value);
+
+            if(ret == null) {
+                throw new IllegalArgumentException("Unknown EnkiPacketType code " + value);
+            }
+
+            return ret;
         }
     }
 }

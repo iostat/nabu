@@ -21,17 +21,10 @@ allprojects {
         mavenLocal()
         mavenCentral()
     }
-
-    dependencies {
-        // lombok :fire:
-        compile(group: 'org.projectlombok', name: 'lombok', version: '1.16.6')
-    }
 }
 
 subprojects {
-    apply(plugin: 'application')
     apply(plugin: 'com.github.johnrengelman.shadow')
-    applicationDefaultJvmArgs = ["-server"]
 
     // for per-environment config file packaging.
     project.ext.buildEnvironment = project.hasProperty('env') ? env : 'dev'
@@ -59,58 +52,6 @@ subprojects {
 
     processResources.dependsOn(copyConfiguration)
     clean.dependsOn(cleanCopiedConfiguration)
-
-    configurations {
-        // a transitive dependency of kafka depends on this shitty ancient library
-        // which makes ElasticSearch detect a jar hell
-        // which makes everyone sad.
-        all*.exclude(group: 'org.slf4j', module: 'slf4j-log4j12')
-        all*.exclude(group: 'log4j', module:'log4j')
-    }
-
-    dependencies {
-        testCompile(group: 'junit', name: 'junit', version: '4.11')
-
-        // dependencies are like heroin, you only get the most out of it when you inject
-        compile(group: 'com.google.inject', name: 'guice', version: '4.0') {
-            // preemptive avoidance of jar hell due to multiple versions of guava in classpath
-            // guice depends on 18.0, but the latest is 19.0.
-            // we may end up using it anyway (see next dependency)
-            exclude group: 'com.google.guava', module: 'guava'
-        }
-
-        // guice depends on guava anyway, and we might get some use of it.
-        compile(group: 'com.google.guava', name: 'guava', version: '19.0')
-
-        // async networking ftw
-        compile(group: 'io.netty', name: 'netty-all', version: '4.0.33.Final')
-
-        // slf4j logging.
-        compile(group: 'org.slf4j', name: 'slf4j-api', version:'1.7.13')
-        compile(group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.5')
-        compile(group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: '2.5')
-        // Log4J 1.x bridge since theres a subdependency of Kafka that wants it
-        // (bet it doesnt even use it...)
-        compile(group: 'org.apache.logging.log4j', name: 'log4j-1.2-api', version: '2.5')
-
-        // yaml support
-        compile(group: 'org.yaml', name: 'snakeyaml', version: '1.16')
-
-        // duh
-        compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0') {
-            // ElasticSearch has a vendored version of Guice, which, like the one we're using, also has
-            // a dependency on Guava.
-            exclude group: 'com.google.guava', module: 'guava'
-        }
-
-        // for ES's JNA sorcery
-        // actually serves no purpose other than shutting ES up on startup
-        compile(group: 'net.java.dev.jna', name: 'jna', version: '4.2.1')
-
-        // also duh
-        compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.8.2.2')
-        compile(group: 'org.apache.kafka', name: 'kafka_2.10', version: '0.8.2.2')
-    }
 
     javadoc {
         // cause there are some sneaky throws, and weird lombok annotations

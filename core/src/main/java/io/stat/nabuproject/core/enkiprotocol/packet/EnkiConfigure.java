@@ -19,8 +19,8 @@ public class EnkiConfigure extends EnkiPacket {
     }
 
     @Override
-    public EnkiPacketType getType() {
-        return EnkiPacketType.CONFIGURE;
+    public Type getType() {
+        return Type.CONFIGURE;
     }
 
     private final @Getter ImmutableMap<String, Serializable> options;

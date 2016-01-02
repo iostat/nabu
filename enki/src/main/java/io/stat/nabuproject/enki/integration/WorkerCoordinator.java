@@ -7,6 +7,7 @@ import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.server.EnkiServer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,11 +21,17 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class WorkerCoordinator extends Component implements NabuESEventListener {
     private final ThrottlePolicyProvider config;
-    private final ESClient client;
+    private final ESClient esClient;
+    private final EnkiServer enkiServer;
 
     @Override
     public void start() throws ComponentException {
-        client.registerNabuEventListener(this);
+        esClient.registerESEventListener(this);
+    }
+
+    @Override
+    public void shutdown() throws ComponentException {
+        esClient.unregisterESEventListener(this);
     }
 
     @Override

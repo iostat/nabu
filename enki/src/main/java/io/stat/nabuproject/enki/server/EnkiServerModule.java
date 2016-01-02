@@ -13,6 +13,7 @@ public class EnkiServerModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(EnkiServer.class).to(ServerImpl.class).in(Singleton.class);
+        bind(ServerImpl.class).in(Singleton.class);
+        bind(EnkiServer.class).to(ServerImpl.class);
     }
 }

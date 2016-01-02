@@ -145,7 +145,7 @@ class NodeClientImpl extends ESClient {
     }
 
     private static boolean nodeIsEnkiNode(DiscoveryNode n) {
-        return !Strings.isEmpty(n.attributes().get("enki"));
+        return !Strings.isEmpty(n.attributes().getOrDefault("enki", ""));
     }
 
     private static boolean nodeIsNabuNode(DiscoveryNode n) {

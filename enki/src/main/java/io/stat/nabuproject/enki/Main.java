@@ -10,6 +10,7 @@ import io.stat.nabuproject.core.kafka.KafkaModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.enki.server.EnkiServerModule;
 import lombok.Getter;
+import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -17,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class Main {
-    private @Getter Enki enki;
+    private @Getter @Delegate Enki enki;
     private @Getter Injector injector;
 
     private Main() throws ComponentException {
@@ -40,7 +41,6 @@ public class Main {
         );
 
         this.enki = injector.getInstance(Enki.class);
-        enki.start();
     }
 
     /**
@@ -51,7 +51,7 @@ public class Main {
      * @throws Throwable because lets be honest... who cares...
      */
     public static void main(String[] args) throws Throwable {
-        new Main();
+        new Main().start();
     }
 
     private void registerSignalHandlers() {
@@ -74,7 +74,7 @@ public class Main {
                 if(enki == null) {
                     logger.error("Enki not initialized after 5 spins of 5 seconds. God help us all.");
                 } else {
-                    enki.shutdown();
+                    this.shutdown();
                 }
             } catch(ComponentException e) {
                 logger.warn("ComponentException thrown during shutdown!", e);

@@ -1,9 +1,16 @@
-group 'io.stat.nabuproject'
-version '0.1-SNAPSHOT'
 
-mainClassName = 'io.stat.nabuproject.enki.Main'
+project(":enki") {
+    group 'io.stat.nabuproject'
+    version '0.1-SNAPSHOT'
 
-dependencies {
-    compile(project(':core'))
+    apply(plugin: 'application')
+    applicationDefaultJvmArgs = ["-server"]
+
+    mainClassName = 'io.stat.nabuproject.enki.Main'
+
+    dependencies {
+        compile(project(':core'))
+    }
 }
+
 

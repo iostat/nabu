@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.config.ConfigStore;
+import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,7 +18,7 @@ import java.util.Map;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class NabuConfig extends AbstractConfig {
+public class NabuConfig extends AbstractConfig implements KafkaBrokerConfigProvider {
     /**
      * Mapped to the nabu.env property
      */
@@ -63,6 +64,11 @@ public class NabuConfig extends AbstractConfig {
     private final @Getter List<String> kafkaBrokers;
 
     /**
+     * Mapped to the nabu.kafka.group property.
+     */
+    private final @Getter String kafkaGroup;
+
+    /**
      * Mapped to the nabu.es.cluster.name property
      */
     private final @Getter String eSClusterName;
@@ -75,7 +81,9 @@ public class NabuConfig extends AbstractConfig {
         this.env    = getRequiredProperty(Keys.NABU_ENV, String.class);
         this.eSHome = getRequiredProperty(Keys.NABU_ES_PATH_HOME, String.class);
         this.eSClusterName = getRequiredProperty(Keys.NABU_ES_CLUSTER_NAME, String.class);
+
         this.kafkaBrokers  = getRequiredSequence(Keys.NABU_KAFKA_BROKERS, String.class);
+        this.kafkaGroup    = getOptionalProperty(Keys.NABU_KAFKA_GROUP, "nabu_"+getESClusterName(), String.class);
 
         this.eSHTTPEnabled = getOptionalProperty(Keys.NABU_ES_HTTP_ENABLED, Defaults.NABU_ES_HTTP_ENABLED, Boolean.class);
         this.eSHTTPPort    = getOptionalProperty(Keys.NABU_ES_HTTP_PORT, Defaults.NABU_ES_HTTP_PORT, Integer.class);
@@ -96,11 +104,25 @@ public class NabuConfig extends AbstractConfig {
         return ImmutableMap.of("nabu", "true");
     }
 
+    @Override
+    public boolean isKafkaBrokerConfigAvailable() {
+        return true;
+    }
+
+    @Override
+    public void setKafkaBrokerConfig(List<String> brokers, String group) {
+        logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        logger.info("SOMEBODY tried to just setKafkaBrokerConfig({}, {})", brokers, group);
+        logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    }
+
     private static final class Keys {
         public static final String NABU_ENV             = "nabu.env";
         public static final String NABU_ES_PATH_HOME    = "nabu.es.path.home";
         public static final String NABU_ES_CLUSTER_NAME = "nabu.es.cluster.name";
+
         public static final String NABU_KAFKA_BROKERS   = "nabu.kafka.brokers";
+        public static final String NABU_KAFKA_GROUP     = "nabu.kafka.group";
 
         public static final String NABU_ES_HTTP_ENABLED = "nabu.es.http.enabled";
         public static final String NABU_ES_HTTP_PORT    = "nabu.es.http.port";
