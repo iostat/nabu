@@ -28,6 +28,14 @@ example configuration files will now work.
 ---
 
 
+## Documentation
+The code is extensively commented with Javadocs. To generate an aggregate of Javadocs across all modules,
+run `./gradlew :aggregateJavadocs` and check `./build/docs/javadocs`
+
+
+---
+
+
 ## Building
 Most important thing to remember really is that the config ends up being bundled into the jar as you build it.
 You'll notice that under each `src/main/` there's an `env` directory. This corresponds to a project variable you can 

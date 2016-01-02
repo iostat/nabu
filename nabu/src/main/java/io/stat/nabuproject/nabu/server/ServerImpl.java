@@ -46,12 +46,13 @@ class ServerImpl extends NabuServer {
         this.bindPort        = this.config.getListenPort();
 
         this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
-        this.workerGroup = new NioEventLoopGroup(workerThreads);
+        this.workerGroup   = new NioEventLoopGroup(workerThreads);
 
-        this.channelInitializer = new FluentChannelInitializer();
-        channelInitializer.addHandler(ResponseEncoder.class);
-        channelInitializer.addHandler(CommandDecoder.class);
-        channelInitializer.addHandler(NabuCommandInboundHandler.class);
+        this.channelInitializer =
+                new FluentChannelInitializer()
+                        .addHandler(ResponseEncoder.class)
+                        .addHandler(CommandDecoder.class)
+                        .addHandler(NabuCommandInboundHandler.class);
     }
 
     @Override

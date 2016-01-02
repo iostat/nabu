@@ -13,8 +13,7 @@ import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Created by io on 12/28/15. io is an asshole because
- * he doesn't write documentation for his code.
+ * A Guice injectable implementation of Enki.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

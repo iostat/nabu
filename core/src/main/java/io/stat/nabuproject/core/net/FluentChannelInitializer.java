@@ -43,18 +43,21 @@ public class FluentChannelInitializer extends ChannelInitializer<SocketChannel> 
      * to the channel pipeline when a channel is initialized. This instance will be reused
      * across all channels that this initializer initializes.
      * @param ch the channel handler to append.
+     * @return this
      */
-    public final void addHandler(ChannelHandler ch) {
+    public final FluentChannelInitializer addHandler(ChannelHandler ch) {
         handlers.add(new FluentHandlerWrapper(ch));
+        return this;
     }
 
     /**
      * Adds a Class which will be instantiated once for each channel that this initializer
      * initializes. The constructor that will be used is the default nullary constructor.
      * @param chc the Class of ChannelHandler to instantiate for each channel that gets initialized.
+     * @return this
      */
-    public final void addHandler(Class<? extends ChannelHandler> chc) {
-        addHandler(chc, null, null);
+    public final FluentChannelInitializer addHandler(Class<? extends ChannelHandler> chc) {
+        return addHandler(chc, null, null);
     }
 
     /**
@@ -68,9 +71,11 @@ public class FluentChannelInitializer extends ChannelInitializer<SocketChannel> 
      *                   qualified exactly the same way as the constructor is, (i.e., if the constructor
      *                   expects a Number argument, you can't put Integer.class as the argClass, even if
      *                   the same argument in <tt>args</tt> is an Integer.
+     * @return this
      */
-    public final void addHandler(Class<? extends ChannelHandler> chc, Object[] args, Class<?>[] argClasses) {
+    public final FluentChannelInitializer addHandler(Class<? extends ChannelHandler> chc, Object[] args, Class<?>[] argClasses) {
         handlers.add(new FluentHandlerWrapper(chc, args, argClasses));
+        return this;
     }
 
     @Override

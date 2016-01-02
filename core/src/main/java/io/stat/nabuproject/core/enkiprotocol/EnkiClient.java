@@ -31,10 +31,11 @@ public class EnkiClient extends Component {
     public EnkiClient(EnkiAddressProvider provider) {
         this.config = provider;
         this.eventLoopGroup = new NioEventLoopGroup();
-        this.channelInitializer = new FluentChannelInitializer();
-        this.channelInitializer.addHandler(EnkiPacket.Encoder.class);
-        this.channelInitializer.addHandler(EnkiPacket.Decoder.class);
-        this.channelInitializer.addHandler(EnkiClientIO.class);
+        this.channelInitializer =
+                new FluentChannelInitializer()
+                        .addHandler(EnkiPacket.Encoder.class)
+                        .addHandler(EnkiPacket.Decoder.class)
+                        .addHandler(EnkiClientIO.class);
     }
 
     @Override
