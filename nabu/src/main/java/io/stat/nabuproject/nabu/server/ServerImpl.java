@@ -8,7 +8,10 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LoggingHandler;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.net.FluentChannelInitializer;
 import io.stat.nabuproject.nabu.NabuConfig;
+import io.stat.nabuproject.nabu.protocol.CommandDecoder;
+import io.stat.nabuproject.nabu.protocol.ResponseEncoder;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -29,6 +32,8 @@ class ServerImpl extends NabuServer {
     private EventLoopGroup acceptorGroup;
     private EventLoopGroup workerGroup;
 
+    private final FluentChannelInitializer channelInitializer;
+
     @Inject
     ServerImpl(NabuConfig config) {
         this.config = config;
@@ -42,6 +47,11 @@ class ServerImpl extends NabuServer {
 
         this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
         this.workerGroup = new NioEventLoopGroup(workerThreads);
+
+        this.channelInitializer = new FluentChannelInitializer();
+        channelInitializer.addHandler(ResponseEncoder.class);
+        channelInitializer.addHandler(CommandDecoder.class);
+        channelInitializer.addHandler(NabuCommandInboundHandler.class);
     }
 
     @Override
@@ -49,7 +59,7 @@ class ServerImpl extends NabuServer {
         bootstrap.group(acceptorGroup, workerGroup)
          .channel(NioServerSocketChannel.class)
          .handler(new LoggingHandler())
-         .childHandler(new NabuChannelInitializer());
+         .childHandler(channelInitializer);
 
         logger.info("Binding NettyServer on {}:{}, with {} acceptor thread(s) and {} worker thread(s)",
                 bindAddress, bindPort, acceptorThreads, workerThreads);

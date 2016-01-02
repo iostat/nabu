@@ -54,7 +54,7 @@ public final class JVMHackery {
      * @param name the name of the signal to listen to. case sensitive and platform dependent. drop the "SIG" part
      * @param handler a {@link sun.misc.SignalHandler} to handle this signal.
      */
-    public static void addJvmSignalHandler(String name, SignalHandler handler) {
+    public static void addJvmSignalHandler(String name, JVMSignalHandler handler) {
         for(Signal s : getJvmSignals().values()) {
             if(s.getName().equals(name)) {
                 Signal.handle(new Signal(name), handler);
@@ -147,4 +147,10 @@ public final class JVMHackery {
 
         _jvmPid = -1;
     }
+
+    /**
+     * A wrapper around sun.misc.SignalHandler so that the compiler only bitches about using
+     * sun.misc.* when building :core
+     */
+    public interface JVMSignalHandler extends SignalHandler { }
 }
