@@ -1,13 +1,14 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.dispatch;
 
 import io.stat.nabuproject.core.Component;
+import io.stat.nabuproject.core.enkiprotocol.EnkiClient;
+import io.stat.nabuproject.core.enkiprotocol.EnkiConnection;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
 import lombok.experimental.Delegate;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -17,16 +18,15 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Created by io on 1/3/16. io is an asshole because
- * he doesn't write documentation for his code.
+ * An adapter for dispatching {@link EnkiClientEventListener} events asynchronously.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-final class EnkiClientEventDispatcher implements EnkiClientEventListener, EnkiClientEventSource {
+@Slf4j
+public final class EnkiClientEventDispatcher implements EnkiClientEventListener, EnkiClientEventSource {
     @Delegate(types = Component.class)
     private final AsyncListenerDispatcher<EnkiClientEventListener> dispatcher;
     private final CallbackReducerCallback CALLBACK_FAILED_SHUTDOWNER;
-    private final Logger logger;
 
     public EnkiClientEventDispatcher(EnkiClient enkiClient) {
         // todo: figure out optimal thread pool sized because
@@ -76,8 +76,6 @@ final class EnkiClientEventDispatcher implements EnkiClientEventListener, EnkiCl
             @Override
             public void success() {/* no-op */ }
         };
-
-        this.logger = LoggerFactory.getLogger(EnkiClientEventDispatcher.class);
         this.dispatcher = new AsyncListenerDispatcher<>(dispatchWorkerExecutor, collectorWorkerExecutor);
     }
 

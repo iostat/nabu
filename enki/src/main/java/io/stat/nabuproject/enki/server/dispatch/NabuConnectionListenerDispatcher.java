@@ -1,14 +1,15 @@
-package io.stat.nabuproject.enki.server;
+package io.stat.nabuproject.enki.server.dispatch;
 
 import io.stat.nabuproject.core.Component;
-import io.stat.nabuproject.core.enkiprotocol.AckOnSuccessCRC;
+import io.stat.nabuproject.core.enkiprotocol.dispatch.AckOnSuccessCRC;
+import io.stat.nabuproject.core.enkiprotocol.dispatch.KillCnxnOnFailCRC;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
-import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
 import io.stat.nabuproject.core.util.functional.PentaFunction;
 import io.stat.nabuproject.core.util.functional.QuadFunction;
 import io.stat.nabuproject.core.util.functional.TriFunction;
+import io.stat.nabuproject.enki.server.NabuConnection;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,11 +25,11 @@ import java.util.function.Function;
  * Dispatches callbacks to any {@link NabuConnectionListener}s registered to it asynchronously.
  */
 @Slf4j
-final class NabuConnectionListenerDispatcher implements NabuConnectionListener, NabuConnectionEventSource {
+public final class NabuConnectionListenerDispatcher implements NabuConnectionListener, NabuConnectionEventSource {
     @Delegate(types=Component.class)
     private final AsyncListenerDispatcher<NabuConnectionListener> dispatcher;
 
-    NabuConnectionListenerDispatcher() {
+    public NabuConnectionListenerDispatcher() {
         // todo: figure out optimal thread pool sized because
         // honestly these thread pool sizes are beyond overkill
         // ditto for the timeouts
@@ -126,6 +127,9 @@ final class NabuConnectionListenerDispatcher implements NabuConnectionListener, 
         dispatcher.removeListener(listener);
     }
 
+    // todo: let's be honest i'm basically flexing with all this FP shit. Could probably reduce the code to 1 or 2 less stack frames :P
+    // even if it's a little repetitive.
+
     private <T extends NabuConnection, U extends EnkiPacket> void dispatchBinaryAckerTask(String callbackName,
                                                                                           TriFunction<
                                                                                                   NabuConnectionListener,
@@ -139,7 +143,7 @@ final class NabuConnectionListenerDispatcher implements NabuConnectionListener, 
     }
 
     private void dispatchKillerTask(String callbackName, NabuConnection cnxn, Function<NabuConnectionListener, Boolean> listenerConsumer) {
-        dispatcher.dispatchListenerCallbacks(listenerConsumer, new KillCnxnOnFail(callbackName, cnxn));
+        dispatcher.dispatchListenerCallbacks(listenerConsumer, new KillCnxnOnFailCRC(callbackName, cnxn));
     }
 
     private <T extends NabuConnection> void dispatchBinaryKillerTask(String callbackName,
@@ -178,29 +182,4 @@ final class NabuConnectionListenerDispatcher implements NabuConnectionListener, 
     }
 
 
-    private static final class KillCnxnOnFail extends CallbackReducerCallback {
-        private final String name;
-        private final NabuConnection cnxn;
-
-        KillCnxnOnFail(String collectionType,
-                       NabuConnection cnxn) {
-            this.name = String.format("%s-%s", cnxn.prettyName(), collectionType);
-            this.cnxn = cnxn;
-        }
-
-        @Override
-        public void failedWithThrowable(Throwable t) {
-            logger.error("Received an Exception while collecting " + name, t);
-            cnxn.kick();
-        }
-
-        @Override
-        public void failed() {
-            logger.error("Some dispatch tasks failed for {}", name);
-            cnxn.kick();
-        }
-
-        @Override
-        public void success() { /* no-op */ }
-    }
 }

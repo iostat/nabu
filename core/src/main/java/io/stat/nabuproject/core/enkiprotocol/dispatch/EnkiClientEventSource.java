@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.dispatch;
 
 /**
  * Something which can call the callbacks of {@link EnkiClientEventListener}

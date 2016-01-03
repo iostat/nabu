@@ -6,6 +6,7 @@ import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -52,7 +53,7 @@ public class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         // todo: no comment....
         logger.error("EXCEPTION_CAUGHT: {}", cause);
-        getNabu(ctx).kick();
+        getNabu(ctx).kill();
         super.exceptionCaught(ctx, cause);
     }
 

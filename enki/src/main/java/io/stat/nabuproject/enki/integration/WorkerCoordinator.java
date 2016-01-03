@@ -9,7 +9,7 @@ import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.enki.server.EnkiServer;
-import io.stat.nabuproject.enki.server.NabuConnectionEventSource;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 

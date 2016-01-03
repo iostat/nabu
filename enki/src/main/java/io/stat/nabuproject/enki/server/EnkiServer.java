@@ -1,6 +1,7 @@
 package io.stat.nabuproject.enki.server;
 
 import io.stat.nabuproject.core.Component;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
 
 /**
  * Created by io on 12/28/15. io is an asshole because

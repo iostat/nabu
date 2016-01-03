@@ -1,6 +1,7 @@
-package io.stat.nabuproject.enki.server;
+package io.stat.nabuproject.enki.server.dispatch;
 
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
+import io.stat.nabuproject.enki.server.NabuConnection;
 
 import java.util.concurrent.CompletableFuture;
 

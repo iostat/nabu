@@ -18,6 +18,7 @@ import io.stat.nabuproject.core.net.ConnectionLostException;
 import io.stat.nabuproject.core.net.NodeLeavingException;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
@@ -181,8 +182,8 @@ class NabuConnectionImpl implements NabuConnection {
 
     @Override
     @Synchronized
-    public void kick() {
-        logger.info("kick called on {}", this);
+    public void kill() {
+        logger.info("kill called on {}", this);
 
         nabuLeaving(true);
 
@@ -191,7 +192,7 @@ class NabuConnectionImpl implements NabuConnection {
 
         dispatchKick().whenCompleteAsync((packet, exception) -> {
             if(exception != null && !(exception instanceof ConnectionLostException)) {
-                logger.error("Dispatch kick promise fulfilled with unexpected exception: ", exception);
+                logger.error("Dispatch kill promise fulfilled with unexpected exception: ", exception);
             } else if (exception != null && exception instanceof ConnectionLostException) {
                 logger.info("The connection to Nabu was terminated while waiting for a response to a LEAVE.");
             } else {
@@ -202,9 +203,9 @@ class NabuConnectionImpl implements NabuConnection {
     }
 
     /**
-     * common functionality for when kick() is called vs. client notifies that
+     * common functionality for when kill() is called vs. client notifies that
      * it's leaving.
-     * @param serverInitiated true for kick(), false for client-initiated
+     * @param serverInitiated true for kill(), false for client-initiated
      */
     private void nabuLeaving(boolean serverInitiated) {
         isDisconnecting.set(true);
@@ -265,7 +266,7 @@ class NabuConnectionImpl implements NabuConnection {
                 }
             } else {
                 logger.error("RECEIVED AN UNEXPECTED PACKET (sequence out of order) :: {}", packet);
-                // todo: kick the client?
+                // todo: kill the client?
             }
         }
     }
@@ -316,8 +317,8 @@ class NabuConnectionImpl implements NabuConnection {
                 // todo: this should be configurable.
                 if(missedHeartbeats >= 5) {
                     logger.error("Nabu node has missed {} heartbeats now!", missedHeartbeats);
-                    // todo: force deallocate and kick from cluster.
-                    NabuConnectionImpl.this.kick();
+                    // todo: force deallocate and kill from cluster.
+                    NabuConnectionImpl.this.kill();
                 }
             } else {
                 waitingForHeartbeat.set(true);

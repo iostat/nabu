@@ -1,6 +1,7 @@
 package io.stat.nabuproject.core.enkiprotocol;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventListener;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAssign;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
@@ -121,6 +122,12 @@ public class EnkiConnectionImpl implements EnkiConnection {
                 }
                 break;
         }
+    }
+
+    @Override
+    public void kill() {
+        logger.warn("kill() called. This will not be pretty...");
+        ctx.close();
     }
 
     private void dispatchPacket(EnkiPacket p) {

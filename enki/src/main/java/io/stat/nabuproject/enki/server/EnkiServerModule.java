@@ -2,6 +2,7 @@ package io.stat.nabuproject.enki.server;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
 
 /**
  * Created by io on 12/28/15. io is an asshole because

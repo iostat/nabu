@@ -3,6 +3,7 @@ package io.stat.nabuproject.core.enkiprotocol;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.AttributeKey;
+import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventListener;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import lombok.extern.slf4j.Slf4j;
 

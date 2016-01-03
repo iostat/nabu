@@ -1,4 +1,4 @@
-package io.stat.nabuproject.enki.server;
+package io.stat.nabuproject.enki.server.dispatch;
 
 /**
  * Something which can call the callbacks of {@link NabuConnectionListener}

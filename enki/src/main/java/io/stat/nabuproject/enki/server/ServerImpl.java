@@ -14,6 +14,9 @@ import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.net.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.enki.EnkiConfig;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
+import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListenerDispatcher;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 

@@ -1,5 +1,7 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.dispatch;
 
+import io.stat.nabuproject.core.enkiprotocol.EnkiConnection;
+import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
