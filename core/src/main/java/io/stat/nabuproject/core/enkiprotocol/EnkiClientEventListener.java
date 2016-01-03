@@ -11,8 +11,8 @@ import java.util.Map;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 public interface EnkiClientEventListener {
-    void onConfigurationReceived(Map<String, Serializable> config);
-    void onTaskAssigned(TopicPartition topicPartition);
-    void onTaskUnassigned(TopicPartition topicPartition);
-    void onConnectionLost(boolean wasLeaving, boolean serverInitiated, boolean wasAcked);
+    void onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config);
+    void onTaskAssigned(EnkiConnection enki, TopicPartition topicPartition);
+    void onTaskUnassigned(EnkiConnection enki, TopicPartition topicPartition);
+    void onConnectionLost(EnkiConnection enki, boolean wasLeaving, boolean serverInitiated, boolean wasAcked);
 }

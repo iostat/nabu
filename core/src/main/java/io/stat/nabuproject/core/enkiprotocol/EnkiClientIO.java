@@ -3,7 +3,6 @@ package io.stat.nabuproject.core.enkiprotocol;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.AttributeKey;
-import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import lombok.extern.slf4j.Slf4j;
 
@@ -13,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class EnkiClientIO extends SimpleChannelInboundHandler<EnkiPacket> {
-    private static final AttributeKey<EnkiConnection> CONNECTED_ENKI_ATTR = AttributeKey.valueOf("connected_enki");
+    private static final AttributeKey<EnkiConnectionImpl> CONNECTED_ENKI_ATTR = AttributeKey.valueOf("connected_enki");
     private final EnkiClientEventListener toNotify;
 
     public EnkiClientIO(EnkiClientEventListener toNotify) {
@@ -45,16 +44,13 @@ public class EnkiClientIO extends SimpleChannelInboundHandler<EnkiPacket> {
         super.exceptionCaught(ctx, cause);
     }
 
-    private EnkiConnection getEnki(ChannelHandlerContext ctx) {
-        return null;
+    private EnkiConnectionImpl getEnki(ChannelHandlerContext ctx) {
+        return ctx.attr(CONNECTED_ENKI_ATTR).get();
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, EnkiPacket msg) throws Exception {
         logger.trace("channelRead0: {}", msg);
-        if(msg.getType() == EnkiPacket.Type.HEARTBEAT) {
-            logger.info("heartbeat!!!");
-            ctx.writeAndFlush(new EnkiAck(msg.getSequenceNumber()));
-        }
+        getEnki(ctx).onPacketReceived(msg);
     }
 }

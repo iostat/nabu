@@ -1,5 +1,7 @@
 package io.stat.nabuproject.core.enkiprotocol.packet;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -24,4 +26,13 @@ public class EnkiConfigure extends EnkiPacket {
     }
 
     private final @Getter ImmutableMap<String, Serializable> options;
+
+    @Override
+    public String toString() {
+        return MoreObjects
+                .toStringHelper(this)
+                .add("sequence", sequenceNumber)
+                .add("config", "{" + Joiner.on(',').withKeyValueSeparator("=").join(options) + "}")
+                .toString();
+    }
 }

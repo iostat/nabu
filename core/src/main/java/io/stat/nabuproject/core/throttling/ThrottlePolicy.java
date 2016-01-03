@@ -17,6 +17,8 @@ import org.slf4j.LoggerFactory;
  */
 @EqualsAndHashCode @ToString
 public class ThrottlePolicy implements MappedConfigObject<ThrottlePolicy> {
+    private static final long serialVersionUID = -3488467207469822148L;
+
     public static final long DEFAULT_WRITE_TIME_TARGET = 500;
     public static final int DEFAULT_MAX_BATCH_SIZE = 500;
 

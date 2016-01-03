@@ -1,6 +1,8 @@
 package io.stat.nabuproject.core.util;
 
 import com.google.common.collect.Sets;
+import io.stat.nabuproject.core.Component;
+import io.stat.nabuproject.core.ComponentException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -20,7 +22,7 @@ import java.util.stream.Collectors;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class AsyncListenerDispatcher<T> {
+public class AsyncListenerDispatcher<T> extends Component {
     private final ExecutorService workerExecutorService;
     private final ExecutorService collectorExecutorService;
     private final Set<T> listeners;
@@ -60,6 +62,13 @@ public class AsyncListenerDispatcher<T> {
      */
     public void removeListener(T listener) {
         listeners.remove(listener);
+    }
+
+    @Override
+    public void shutdown() throws ComponentException {
+        this.workerExecutorService.shutdown();
+        this.collectorExecutorService.shutdown();
+        super.shutdown();
     }
 
     /**

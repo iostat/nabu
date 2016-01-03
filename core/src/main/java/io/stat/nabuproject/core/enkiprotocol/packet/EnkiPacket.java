@@ -1,5 +1,6 @@
 package io.stat.nabuproject.core.enkiprotocol.packet;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -39,6 +40,14 @@ public abstract class EnkiPacket {
 
     protected EnkiPacket(long sequenceNumber) {
         this.sequenceNumber = sequenceNumber;
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects
+                .toStringHelper(this)
+                .add("sequence", sequenceNumber)
+                .toString();
     }
 
     @Slf4j

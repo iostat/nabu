@@ -1,5 +1,6 @@
 package io.stat.nabuproject.core.enkiprotocol.packet;
 
+import com.google.common.base.MoreObjects;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
@@ -19,5 +20,15 @@ public class EnkiAssign extends EnkiPacket {
         super(sequenceNumber);
         this.indexName = indexName;
         this.partitionNumber = partitionNumber;
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects
+                .toStringHelper(this)
+                .add("sequence", sequenceNumber)
+                .add("topic", indexName)
+                .add("partition", partitionNumber)
+                .toString();
     }
 }

@@ -1,12 +1,14 @@
 package io.stat.nabuproject.core.config;
 
+import java.io.Serializable;
+
 /**
  * A class which can be rebuilt from a Map&lt;String, Object&gt;
  *
  * @param <T> should always be the same as the implementor.
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public interface MappedConfigObject<T extends MappedConfigObject> {
+public interface MappedConfigObject<T extends MappedConfigObject> extends Serializable {
     /**
      * Return a {@link ConfigMapper} which can an instance of this object.
      *

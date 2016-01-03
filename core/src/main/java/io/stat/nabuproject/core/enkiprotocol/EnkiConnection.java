@@ -8,6 +8,6 @@ package io.stat.nabuproject.core.enkiprotocol;
  */
 public interface EnkiConnection {
     void leave();
-    void onDisconnected();
-
+    void ack(long sequence);
+    void nak(long sequence);
 }

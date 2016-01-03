@@ -1,5 +1,6 @@
 package io.stat.nabuproject.core.enkiprotocol.packet;
 
+import com.google.common.base.MoreObjects;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
@@ -23,5 +24,14 @@ public final class EnkiHeartbeat extends EnkiPacket {
     EnkiHeartbeat(long sequenceNumber, long timestamp) {
         super(sequenceNumber);
         this.timestamp = timestamp;
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects
+                .toStringHelper(this)
+                .add("sequence", sequenceNumber)
+                .add("timestamp", timestamp)
+                .toString();
     }
 }

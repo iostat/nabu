@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.AttributeKey;
+import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiHeartbeat;
@@ -76,7 +77,6 @@ class NabuConnectionImpl implements NabuConnection {
         this.kafkaBrokerConfigProvider = kafkaBrokerConfigProvider;
 
         this.context.attr(LAST_SEQUENCE).set(0L);
-        logger.info("New NabuConnectionImpl({}) for {}", this, context);
 
         this.lastOutgoingSequence = new AtomicLong(0L);
         this.lastIncomingSequence = new AtomicLong(0L);
@@ -101,11 +101,14 @@ class NabuConnectionImpl implements NabuConnection {
         this.leaveEnforcerTask = this.new LeaveEnforcerTask();
 
         // todo: heartbeat timeouts should be configurable.
-        this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 0, 3000);
+        // 1 second delay before first run, 3 second delay between runs
+        this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 1000, 3000);
 
         connectionListener.onNewNabuConnection(this);
 
-        dispatchConfigure(buildDispatchedNabuConfig());
+        logger.info("New NabuConnectionImpl({}) for {}", this, context);
+
+        dispatchConfigure(buildDispatchedNabuConfig()).complete(null);
     }
 
     private Map<String, Serializable> buildDispatchedNabuConfig() {
@@ -116,9 +119,9 @@ class NabuConnectionImpl implements NabuConnection {
 
         ImmutableList<ThrottlePolicy> tps  = ImmutableList.copyOf(throttlePolicyProvider.getThrottlePolicies());
 
-        builder.put("kafka.brokers", kafkaBrokers)
-               .put("kafka.group", kafkaGroup)
-               .put("throttle.policies", tps);
+        builder.put(EnkiSourcedConfigKeys.KAFKA_BROKERS, kafkaBrokers)
+               .put(EnkiSourcedConfigKeys.KAFKA_GROUP, kafkaGroup)
+               .put(EnkiSourcedConfigKeys.THROTTLE_POLICIES, tps);
 
         return builder.build();
     }

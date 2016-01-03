@@ -8,6 +8,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LoggingHandler;
+import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
@@ -19,6 +20,7 @@ import io.stat.nabuproject.core.util.functional.PentaConsumer;
 import io.stat.nabuproject.core.util.functional.QuadConsumer;
 import io.stat.nabuproject.core.util.functional.TriConsumer;
 import io.stat.nabuproject.enki.EnkiConfig;
+import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
@@ -112,6 +114,9 @@ class ServerImpl extends EnkiServer {
         logger.info("Shutting down Enki server...");
         this.listenerChannel.close();
 
+        // todo: close all dispatched listeners before actually shutting everything down...
+        dispatcher.shutdown();
+
         acceptorGroup.shutdownGracefully();
         workerGroup.shutdownGracefully();
     }
@@ -129,7 +134,9 @@ class ServerImpl extends EnkiServer {
     /**
      * Dispatches callbacks to any {@link NabuConnectionListener}s registered to it asynchronously.
      */
+    @Slf4j
     private static final class NabuConnectionListenerDispatcher implements NabuConnectionListener {
+        @Delegate(types=Component.class)
         private final AsyncListenerDispatcher<NabuConnectionListener> dispatcher;
 
         public NabuConnectionListenerDispatcher() {
@@ -151,7 +158,7 @@ class ServerImpl extends EnkiServer {
                     5, 60,
                     60, TimeUnit.SECONDS,
                     new SynchronousQueue<>(),
-                    new NamedThreadFactory("NCLDWorker")
+                    new NamedThreadFactory("NabuCnxnDispatcher-Worker")
             );
 
             // 20 fixed pool size.
@@ -161,7 +168,7 @@ class ServerImpl extends EnkiServer {
                     20, 20,
                     5, TimeUnit.MINUTES,
                     new SynchronousQueue<>(),
-                    new NamedThreadFactory("NCLDCollector")
+                    new NamedThreadFactory("NabuCnxnDispatcher-Collector")
             );
 
             this.dispatcher = new AsyncListenerDispatcher<>(dispatchWorkerExecutor, collectorWorkerExecutor);

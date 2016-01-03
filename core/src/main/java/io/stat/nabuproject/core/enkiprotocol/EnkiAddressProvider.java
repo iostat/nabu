@@ -25,7 +25,7 @@ public interface EnkiAddressProvider {
 
     /**
      * The port of the Enki master instance that serves the Enki protocol.
-     * @return the port an {@link EnkiClient} should connect to reach the Enki master
+     * @return the port an {@link EnkiClientImpl} should connect to reach the Enki master
      *         or -1 if {@link EnkiAddressProvider#isEnkiDiscovered()} is false.
      */
     default int getEnkiPort() {
