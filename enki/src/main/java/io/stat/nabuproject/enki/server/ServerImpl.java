@@ -1,7 +1,5 @@
 package io.stat.nabuproject.enki.server;
 
-import com.google.common.base.Joiner;
-import com.google.common.collect.Sets;
 import com.google.inject.Inject;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -15,6 +13,7 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.net.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.core.util.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.functional.PentaConsumer;
 import io.stat.nabuproject.core.util.functional.QuadConsumer;
@@ -22,18 +21,13 @@ import io.stat.nabuproject.core.util.functional.TriConsumer;
 import io.stat.nabuproject.enki.EnkiConfig;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /**
  * Runs the Enki management server.
@@ -132,24 +126,13 @@ class ServerImpl extends EnkiServer {
         dispatcher.removeNabuConnectionListener(ncl);
     }
 
+    /**
+     * Dispatches callbacks to any {@link NabuConnectionListener}s registered to it asynchronously.
+     */
     private static final class NabuConnectionListenerDispatcher implements NabuConnectionListener {
-        private final Set<NabuConnectionListener> listeners;
-        /**
-         * this executor is used to dispatch events asynchronously.
-         */
-        private final ThreadPoolExecutor dispatchWorkerExecutor;
-
-        /**
-         * after every dispatch, this executor runs a task that
-         * collects the results of the workers, and responds
-         * to the situation appropriately depending on whether the
-         * workers ran successfully or not.
-         */
-        private final ExecutorService collectorWorkerExecutor;
+        private final AsyncListenerDispatcher<NabuConnectionListener> dispatcher;
 
         public NabuConnectionListenerDispatcher() {
-            this.listeners = Sets.newConcurrentHashSet();
-
             // todo: figure out optimal thread pool sized because
             // honestly these thread pool sizes are beyond overkill
             // ditto for the timeouts
@@ -164,7 +147,7 @@ class ServerImpl extends EnkiServer {
             // 60 second timeout
             // backed by a SynchronousQueue.
             // with thread names starting with NCLDWorker
-            this.dispatchWorkerExecutor = new ThreadPoolExecutor(
+            ExecutorService dispatchWorkerExecutor = new ThreadPoolExecutor(
                     5, 60,
                     60, TimeUnit.SECONDS,
                     new SynchronousQueue<>(),
@@ -174,12 +157,14 @@ class ServerImpl extends EnkiServer {
             // 20 fixed pool size.
             // 5 minute timeout
             // with thread names starting with NCLDCollector
-            this.collectorWorkerExecutor = new ThreadPoolExecutor(
+            ExecutorService collectorWorkerExecutor = new ThreadPoolExecutor(
                     20, 20,
                     5, TimeUnit.MINUTES,
                     new SynchronousQueue<>(),
                     new NamedThreadFactory("NCLDCollector")
             );
+
+            this.dispatcher = new AsyncListenerDispatcher<>(dispatchWorkerExecutor, collectorWorkerExecutor);
         }
 
 
@@ -228,30 +213,28 @@ class ServerImpl extends EnkiServer {
             );
         }
 
+        public void addNabuConnectionListener(NabuConnectionListener listener) {
+            dispatcher.addListener(listener);
+        }
+
+        public void removeNabuConnectionListener(NabuConnectionListener listener) {
+            dispatcher.removeListener(listener);
+        }
+
         private <T extends NabuConnection, U extends EnkiPacket> void dispatchBinaryAckerTask(String callbackName,
                                                                                               TriConsumer<
                                                                                                       NabuConnectionListener,
                                                                                                       T, U> callback,
                                                                                               T cnxn, U packet) {
-            List<Future> futures = listeners.stream()
-                    .map(listener ->
-                            dispatchWorkerExecutor.submit(() -> callback.accept(listener, cnxn, packet)))
-                    .collect(Collectors.toList());
-
-            collectorWorkerExecutor.submit(
-                    new OnFailNakPacketTask(
-                            callbackName,
-                            cnxn,
-                            packet,
-                            new FutureCollectorTask(futures)));
+            dispatcher.dispatchListenerCallbacks(listener -> callback.accept(listener, cnxn, packet),
+                    new CBFailedPacketNAKer(
+                        callbackName,
+                        cnxn,
+                        packet));
         }
 
-        public void addNabuConnectionListener(NabuConnectionListener listener) {
-            listeners.add(listener);
-        }
-
-        public void removeNabuConnectionListener(NabuConnectionListener listener) {
-            listeners.remove(listener);
+        private void dispatchKillerTask(String callbackName, NabuConnection cnxn, Consumer<NabuConnectionListener> listenerConsumer) {
+            dispatcher.dispatchListenerCallbacks(listenerConsumer, new CBFailedCnxnKicker(callbackName, cnxn));
         }
 
         private <T extends NabuConnection> void dispatchBinaryKillerTask(String callbackName,
@@ -289,105 +272,62 @@ class ServerImpl extends EnkiServer {
             dispatchKillerTask(callbackName, cnxn, listener -> callback.accept(listener, cnxn, arg2, arg3, arg4));
         }
 
-        private void dispatchKillerTask(String callbackName, NabuConnection cnxn, Consumer<NabuConnectionListener> listenerConsumer) {
-            List<Future> futures = listeners.stream()
-                    .map(listener ->
-                            dispatchWorkerExecutor.submit(() -> listenerConsumer.accept(listener)))
-                    .collect(Collectors.toList());
 
-            collectorWorkerExecutor.submit(
-                    new OnFailCnxnKickTask(
-                            callbackName,
-                            cnxn,
-                            new FutureCollectorTask(futures)));
-        }
-
-        /**
-         * For every future that it is assigned to run, it will see if the future failed.
-         */
-        @Slf4j
-        private static final class FutureCollectorTask implements Callable<Boolean> {
-            final List<Future> futuresToCollect;
-
-            FutureCollectorTask(List<Future> futuresToCollect) {
-                this.futuresToCollect = futuresToCollect;
-            }
-
-            @Override
-            public Boolean call() throws Exception {
-                for(Future f : futuresToCollect) {
-                    f.get();
-                }
-                return true;
-            }
-        }
-
-
-        private static final class OnFailCnxnKickTask implements Runnable {
+        private static final class CBFailedCnxnKicker extends AsyncListenerDispatcher.CallbackResultsConsumer {
             private final String name;
             private final NabuConnection cnxn;
-            private final FutureCollectorTask collectorTask;
 
-            OnFailCnxnKickTask(String collectionType,
-                               NabuConnection cnxn,
-                               FutureCollectorTask collectorTask) {
+            CBFailedCnxnKicker(String collectionType,
+                               NabuConnection cnxn) {
                 this.name = String.format("%s-%s", cnxn.prettyName(), collectionType);
                 this.cnxn = cnxn;
-                this.collectorTask = collectorTask;
             }
-
 
             @Override
-            public void run() {
-                boolean result;
-                try {
-                    result = collectorTask.call();
-                } catch(Exception e) {
-                    logger.error("Received an Exception while collecting " + Joiner.on(',').join(collectorTask.futuresToCollect), e);
-                    result = false;
-                }
-
-                if(!result) {
-                    logger.error("Some dispatch tasks failed for {}", name);
-                    cnxn.kick();
-                }
+            public void failedWithThrowable(Throwable t) {
+                logger.error("Received an Exception while collecting " + name, t);
+                cnxn.kick();
             }
+
+            @Override
+            public void failed() {
+                logger.error("Some dispatch tasks failed for {}", name);
+                cnxn.kick();
+            }
+
+            @Override
+            public void success() { /* no-op */ }
         }
 
 
-        private static final class OnFailNakPacketTask implements Runnable {
+        private static final class CBFailedPacketNAKer extends AsyncListenerDispatcher.CallbackResultsConsumer {
             private final String name;
             private final NabuConnection cnxn;
             private final EnkiPacket packet;
-            private final FutureCollectorTask collectorTask;
 
-            OnFailNakPacketTask(String collectionType,
+            CBFailedPacketNAKer(String collectionType,
                                 NabuConnection cnxn,
-                                EnkiPacket packet,
-                                FutureCollectorTask collectorTask) {
-                this.name = String.format("%s-%s", cnxn.prettyName(), collectionType);
+                                EnkiPacket packet) {
+                this.name = String.format("%s-%s::%s", cnxn.prettyName(), collectionType, packet);
                 this.packet = packet;
                 this.cnxn = cnxn;
-                this.collectorTask = collectorTask;
             }
 
+            @Override
+            public void failedWithThrowable(Throwable t) {
+                logger.error("Received an Exception while collecting callbacks for packet " + name, t);
+                cnxn.nak(packet);
+            }
 
             @Override
-            public void run() {
-                boolean result;
-                try {
-                    result = collectorTask.call();
-                } catch(Exception e) {
-                    logger.error("Received an Exception while collecting callbacks for packet " + packet.toString(), e);
-                    result = false;
-                }
+            public void failed() {
+                logger.error("Some dispatch tasks failed for " + name);
+                cnxn.nak(packet);
+            }
 
-                if(!result) {
-                    logger.error("Some dispatch tasks failed for packet {}", packet);
-                    cnxn.nak(packet);
-                } else {
-                    cnxn.ack(packet);
-                }
+            @Override
+            public void success() {
+                cnxn.ack(packet);
             }
         }
     }
