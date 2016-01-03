@@ -13,7 +13,7 @@ import java.util.Map;
 @EqualsAndHashCode(callSuper = false)
 
 public class EnkiConfigure extends EnkiPacket {
-    EnkiConfigure(long sequenceNumber, Map<String, Serializable> src){
+    public EnkiConfigure(long sequenceNumber, Map<String, Serializable> src){
         super(sequenceNumber);
         this.options = ImmutableMap.copyOf(src);
     }

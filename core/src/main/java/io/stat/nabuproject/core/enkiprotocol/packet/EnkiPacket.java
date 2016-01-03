@@ -60,13 +60,15 @@ public abstract class EnkiPacket {
         protected void encode(ChannelHandlerContext ctx, EnkiPacket msg, ByteBuf out) throws Exception {
             Type packetType = msg.getType();
 
-            if(packetType == Type.ACK || packetType == Type.LEAVE) {
+            // ACK NAK and LEAVE have no special data attached to them.
+            if(packetType == Type.ACK || packetType == Type.NAK || packetType == Type.LEAVE) {
                 out.writeInt(MAGIC);
                 out.writeInt(packetType.getCode());
                 out.writeLong(msg.getSequenceNumber());
                 return;
             }
 
+            // Heartbeats are very simple to serialize.
             if(packetType == Type.HEARTBEAT) {
                 out.writeInt(MAGIC);
                 out.writeInt(packetType.getCode());
@@ -75,6 +77,7 @@ public abstract class EnkiPacket {
                 return;
             }
 
+            // Everything else brings us pain and suffering.
             ByteBuf restOfPacket = Unpooled.buffer();
             switch(packetType) {
                 case ASSIGN:
@@ -152,11 +155,13 @@ public abstract class EnkiPacket {
             }
             long sequenceNumber = in.readLong();
 
-            // if the type is an ACK, it has no other data attached to it.
+            // if the type is an ACK, NAK, or LEAVE it has no other data attached to it.
             // otherwise, it's followed by at least a long for timestamp if its a HEARTBEAT
             // or REST_OF_PACKET_SIZE and PARTITION_NUMBER (2x int)
             if(packetType == Type.ACK) {
                 out.add(new EnkiAck(sequenceNumber));
+            } else if (packetType == Type.NAK) {
+                out.add(new EnkiNak(sequenceNumber));
             } else if (packetType == Type.LEAVE) {
                 out.add(new EnkiLeave(sequenceNumber));
             } else if(packetType == Type.HEARTBEAT) {
@@ -229,7 +234,12 @@ public abstract class EnkiPacket {
         /**
          * @see EnkiAck
          */
-        ACK(100);
+        ACK(100),
+
+        /**
+         * @see EnkiNak
+         */
+        NAK(999);
 
         private final @Getter int code;
 

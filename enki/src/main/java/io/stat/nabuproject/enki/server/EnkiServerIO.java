@@ -4,6 +4,8 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
+import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -13,16 +15,28 @@ import lombok.extern.slf4j.Slf4j;
 public class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> {
     private static final AttributeKey<NabuConnection> CONNECTED_NABU_ATTR = AttributeKey.newInstance("connected_nabu");
     private final NabuConnectionListener toNotify;
+    private final ThrottlePolicyProvider throttlePolicyProvider;
+    private final KafkaBrokerConfigProvider kafkaBrokerConfigProvider;
 
-    public EnkiServerIO(NabuConnectionListener toNotify) {
+    public EnkiServerIO(NabuConnectionListener toNotify,
+                        ThrottlePolicyProvider throttlePolicyProvider,
+                        KafkaBrokerConfigProvider kafkaBrokerConfigProvider) {
         super();
+        this.throttlePolicyProvider = throttlePolicyProvider;
+        this.kafkaBrokerConfigProvider = kafkaBrokerConfigProvider;
         this.toNotify = toNotify;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         logger.debug("CHANNEL_ACTIVE: {}", ctx);
-        ctx.attr(CONNECTED_NABU_ATTR).set(new NabuConnectionImpl(ctx, toNotify));
+        ctx.attr(CONNECTED_NABU_ATTR).set(
+                new NabuConnectionImpl(
+                        ctx,
+                        toNotify,
+                        throttlePolicyProvider,
+                        kafkaBrokerConfigProvider
+        ));
         super.channelActive(ctx);
     }
 

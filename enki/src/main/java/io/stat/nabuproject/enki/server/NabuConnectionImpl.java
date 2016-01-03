@@ -1,18 +1,26 @@
 package io.stat.nabuproject.enki.server;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiHeartbeat;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiLeave;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiNak;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
+import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.net.ConnectionLostException;
 import io.stat.nabuproject.core.net.NodeLeavingException;
+import io.stat.nabuproject.core.throttling.ThrottlePolicy;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Timer;
@@ -31,8 +39,12 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 class NabuConnectionImpl implements NabuConnection {
     private static final AttributeKey<Long> LAST_SEQUENCE = AttributeKey.newInstance("last_heartbeat");
+
+    private final NabuConnectionListener connectionListener;
+    private final ThrottlePolicyProvider throttlePolicyProvider;
+    private final KafkaBrokerConfigProvider kafkaBrokerConfigProvider;
+
     private final ChannelHandlerContext context;
-    private NabuConnectionListener connectionListener;
     private final Map<Long, CompletableFuture<EnkiPacket>> promises;
 
     private final AtomicLong lastOutgoingSequence;
@@ -54,9 +66,15 @@ class NabuConnectionImpl implements NabuConnection {
     private final Timer heartbeatTimer;
     private final Timer leaveEnforcerTimer;
 
-    public NabuConnectionImpl(ChannelHandlerContext context, NabuConnectionListener listener) {
+    public NabuConnectionImpl(ChannelHandlerContext context,
+                              NabuConnectionListener connectionListener,
+                              ThrottlePolicyProvider throttlePolicyProvider,
+                              KafkaBrokerConfigProvider kafkaBrokerConfigProvider) {
         this.context = context;
-        connectionListener = listener;
+        this.connectionListener = connectionListener;
+        this.throttlePolicyProvider = throttlePolicyProvider;
+        this.kafkaBrokerConfigProvider = kafkaBrokerConfigProvider;
+
         this.context.attr(LAST_SEQUENCE).set(0L);
         logger.info("New NabuConnectionImpl({}) for {}", this, context);
 
@@ -76,8 +94,8 @@ class NabuConnectionImpl implements NabuConnection {
 
         this.promises = Maps.newConcurrentMap();
 
-        this.heartbeatTimer = new Timer(String.format("NabuConnection-Heartbeat-%s", prettifyRemoteAddress()));
-        this.leaveEnforcerTimer = new Timer(String.format("NabuConnection-LeaveEnforcer-%s", prettifyRemoteAddress()));
+        this.heartbeatTimer = new Timer(String.format("NabuConnection-Heartbeat-%s", prettyName()));
+        this.leaveEnforcerTimer = new Timer(String.format("NabuConnection-LeaveEnforcer-%s", prettyName()));
 
         this.heartbeatTask = this.new HeartbeatTask();
         this.leaveEnforcerTask = this.new LeaveEnforcerTask();
@@ -85,22 +103,60 @@ class NabuConnectionImpl implements NabuConnection {
         // todo: heartbeat timeouts should be configurable.
         this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 0, 3000);
 
-        listener.onNewNabuConnection(this);
+        connectionListener.onNewNabuConnection(this);
+
+        dispatchConfigure(buildDispatchedNabuConfig());
+    }
+
+    private Map<String, Serializable> buildDispatchedNabuConfig() {
+        ImmutableMap.Builder<String, Serializable> builder = ImmutableMap.builder();
+
+        ImmutableList<String> kafkaBrokers = ImmutableList.copyOf(kafkaBrokerConfigProvider.getKafkaBrokers());
+        String kafkaGroup                  = kafkaBrokerConfigProvider.getKafkaGroup();
+
+        ImmutableList<ThrottlePolicy> tps  = ImmutableList.copyOf(throttlePolicyProvider.getThrottlePolicies());
+
+        builder.put("kafka.brokers", kafkaBrokers)
+               .put("kafka.group", kafkaGroup)
+               .put("throttle.policies", tps);
+
+        return builder.build();
     }
 
     private CompletableFuture<EnkiPacket> dispatchHeartbeat() {
         return dispatchPacket(new EnkiHeartbeat(assignSequence()));
     }
     private CompletableFuture<EnkiPacket> dispatchKick() { return dispatchPacket(new EnkiLeave(assignSequence())); }
-    private CompletableFuture<EnkiPacket> dispatchAck(long sequence) { return dispatchPacket(new EnkiAck(sequence)); }
+    private CompletableFuture<EnkiPacket> dispatchConfigure(Map<String, Serializable> configPacketData) {
+        return dispatchPacket(new EnkiConfigure(assignSequence(), configPacketData));
+    }
 
-    private CompletableFuture<EnkiPacket> dispatchPacket(EnkiPacket packet) {
+    private void dispatchAck(long sequence) { dispatchAck(sequence, false); }
+    private void dispatchAck(long sequence, boolean ignoreDC) {
+        dispatchEphemeral(new EnkiAck(sequence), ignoreDC);
+    }
+
+    private void dispatchNak(long sequence) { dispatchNak(sequence, false); }
+    private void dispatchNak(long sequence, boolean ignoreDC) {
+        dispatchEphemeral(new EnkiNak(sequence), ignoreDC);
+    }
+
+    // ephemeral because it has no future waiting behind it ?
+    // or something, i guess :/
+    private void dispatchEphemeral(EnkiPacket packet, boolean ignoreDisconnect) {
+        if(!isDisconnecting.get() || ignoreDisconnect) {
+            context.writeAndFlush(packet);
+        }
+    }
+
+    private CompletableFuture<EnkiPacket> dispatchPacket(EnkiPacket packet) { return dispatchPacket(packet, false); }
+    private CompletableFuture<EnkiPacket> dispatchPacket(EnkiPacket packet, boolean ignoreDisconnect) {
         CompletableFuture<EnkiPacket> future = new CompletableFuture<>();
         connectionListener.onPacketDispatched(this, packet, future);
         if(!isDisconnecting.get()) {
             promises.put(packet.getSequenceNumber(), future);
             context.writeAndFlush(packet);
-        } else if(packet.getType() == EnkiPacket.Type.LEAVE) {
+        } else if(packet.getType() == EnkiPacket.Type.LEAVE || ignoreDisconnect) {
             promises.put(packet.getSequenceNumber(), future);
             context.writeAndFlush(packet);
         } else {
@@ -201,7 +257,8 @@ class NabuConnectionImpl implements NabuConnection {
                     dispatchAck(packet.getSequenceNumber());
                 } else {
                     // todo: client shouldn't be sending anything else. what to do?
-                    logger.error("RECEIVED A PACKET THAT CLIENTS SHOULDNT BE SENDING :: {}", packet);
+                    // logger.error("RECEIVED A PACKET THAT CLIENTS SHOULDNT BE SENDING :: {}", packet);
+                    // todo: dispatch that motherfucker.
                 }
             } else {
                 logger.error("RECEIVED AN UNEXPECTED PACKET (sequence out of order) :: {}", packet);
@@ -213,7 +270,7 @@ class NabuConnectionImpl implements NabuConnection {
     @Override @Synchronized
     public String toString() {
         MoreObjects.ToStringHelper tsh = MoreObjects.toStringHelper(this);
-        tsh.add("addr", prettifyRemoteAddress())
+        tsh.add("addr", prettyName())
            .add("isDisconnecting", isDisconnecting.get())
            .add("lastOutgoingSequence", lastOutgoingSequence.get());
 
@@ -227,9 +284,20 @@ class NabuConnectionImpl implements NabuConnection {
         return tsh.toString();
     }
 
-    private String prettifyRemoteAddress() {
+    @Override
+    public String prettyName() {
         InetSocketAddress remoteAddress = ((InetSocketAddress) context.channel().remoteAddress());
         return remoteAddress.getAddress() + ":" + remoteAddress.getPort();
+    }
+
+    @Override
+    public void nak(EnkiPacket packet) {
+        dispatchNak(packet.getSequenceNumber());
+    }
+
+    @Override
+    public void ack(EnkiPacket packet) {
+        dispatchAck(packet.getSequenceNumber());
     }
 
     /**
