@@ -9,26 +9,16 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.net.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
-import io.stat.nabuproject.core.util.AsyncListenerDispatcher;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * A client for the Enki protocol, used by Nabu.
@@ -36,14 +26,14 @@ import java.util.concurrent.TimeUnit;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class EnkiClientImpl extends EnkiClient implements EnkiClientEventListener {
-
+class EnkiClientImpl extends EnkiClient implements EnkiClientEventListener {
     private final FluentChannelInitializer channelInitializer;
     private EnkiAddressProvider config;
     private Bootstrap bootstrap;
     private EventLoopGroup eventLoopGroup;
     private Channel clientChannel;
 
+    @Delegate(types=EnkiClientEventSource.class)
     private final EnkiClientEventDispatcher dispatcher;
 
     private final byte[] $enkiSourcedConfigLock;
@@ -58,7 +48,9 @@ public class EnkiClientImpl extends EnkiClient implements EnkiClientEventListene
 
         this.config = provider;
         this.eventLoopGroup = new NioEventLoopGroup();
-        this.dispatcher = new EnkiClientEventDispatcher();
+        this.dispatcher = new EnkiClientEventDispatcher(this);
+
+        this.dispatcher.addEnkiClientEventListener(this);
         this.channelInitializer =
                 new FluentChannelInitializer()
                         .addHandler(EnkiPacket.Encoder.class)
@@ -105,16 +97,6 @@ public class EnkiClientImpl extends EnkiClient implements EnkiClientEventListene
     }
 
     @Override
-    public void addEnkiClientEventListener(EnkiClientEventListener ecel) {
-        dispatcher.addListener(ecel);
-    }
-
-    @Override
-    public void removeEnkiClientEventListener(EnkiClientEventListener ecel) {
-        dispatcher.removeListener(ecel);
-    }
-
-    @Override
     public boolean isKafkaBrokerConfigAvailable() {
         synchronized($enkiSourcedConfigLock) {
             return wasEnkiSourcedConfigSet;
@@ -141,121 +123,20 @@ public class EnkiClientImpl extends EnkiClient implements EnkiClientEventListene
     }
 
     @Override
-    public void onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config) {
+    public boolean onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config) {
         logger.info("Received configuration from Enki! {}", config);
         synchronized ($enkiSourcedConfigLock) {
             wasEnkiSourcedConfigSet = true;
             enkiSourcedConfigs = ImmutableMap.copyOf(config);
         }
+
+        return true;
     }
 
     @Override
-    public void onTaskAssigned(EnkiConnection enki, TopicPartition topicPartition) { /* no-op */ }
-
-    @Override
-    public void onTaskUnassigned(EnkiConnection enki, TopicPartition topicPartition) { /* no-op */ }
-
-    @Override
-    public void onConnectionLost(EnkiConnection enki, boolean wasLeaving, boolean serverInitiated, boolean wasAcked) { /* no-op, but should find the next master unless its supposed to be leaving. */ }
-
-    private final class EnkiClientEventDispatcher implements EnkiClientEventListener {
-        @Delegate(types=Component.class)
-        private final AsyncListenerDispatcher<EnkiClientEventListener> dispatcher;
-        private final AsyncListenerDispatcher.CallbackResultsConsumer CALLBACK_FAILED_SHUTDOWNER;
-        private final Logger logger;
-
-        public EnkiClientEventDispatcher() {
-            // todo: figure out optimal thread pool sized because
-            // honestly these thread pool sizes are beyond overkill
-            // ditto for the timeouts
-            // especially for the collector
-            // (it has to be larger than the worker timeout
-            //  though so that the workers it's collecting against
-            //  can timeout without causing the collector to timeout)
-
-            // todo: make these configurable?
-            // 5 min ThreadPool size
-            // 30 max threads
-            // 60 second timeout
-            // backed by a SynchronousQueue.
-            // with thread names starting with NCLDWorker
-            ExecutorService dispatchWorkerExecutor = new ThreadPoolExecutor(
-                    5, 30,
-                    60, TimeUnit.SECONDS,
-                    new SynchronousQueue<>(),
-                    new NamedThreadFactory("EnkiClientEventDispatcher-Worker")
-            );
-
-            // 20 fixed pool size.
-            // 5 minute timeout
-            // with thread names starting with NCLDCollector
-            ExecutorService collectorWorkerExecutor = new ThreadPoolExecutor(
-                    20, 20,
-                    5, TimeUnit.MINUTES,
-                    new SynchronousQueue<>(),
-                    new NamedThreadFactory("EnkiClientEventDispatcher-Collector")
-            );
-
-            this.CALLBACK_FAILED_SHUTDOWNER = new AsyncListenerDispatcher.CallbackResultsConsumer() {
-                @Override
-                public void failedWithThrowable(Throwable t) {
-                    logger.error("Shutting down because some callback(s) failed with", t);
-                    EnkiClientImpl.this.shutdown();
-                }
-
-                @Override
-                public void failed() {
-                    logger.error("Callback(s) failed with no throwable thrown. Shutting down.");
-                    EnkiClientImpl.this.shutdown();
-                }
-
-                @Override
-                public void success() {/* no-op */ }
-            };
-
-            this.logger = LoggerFactory.getLogger(EnkiClientImpl.EnkiClientEventDispatcher.class);
-            this.dispatcher = new AsyncListenerDispatcher<>(dispatchWorkerExecutor, collectorWorkerExecutor);
-        }
-
-        @Override
-        public void onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config) {
-            logger.info("onConfigurationReceived({}, {})", enki, config);
-            dispatcher.dispatchListenerCallbacks(
-                    listener -> listener.onConfigurationReceived(enki, config),
-                    CALLBACK_FAILED_SHUTDOWNER);
-        }
-
-        @Override
-        public void onTaskAssigned(EnkiConnection enki, TopicPartition topicPartition) {
-            logger.info("onTaskAssigned({}, {})", enki, topicPartition);
-            dispatcher.dispatchListenerCallbacks(
-                    listener -> listener.onTaskAssigned(enki, topicPartition),
-                    CALLBACK_FAILED_SHUTDOWNER);
-        }
-
-        @Override
-        public void onTaskUnassigned(EnkiConnection enki, TopicPartition topicPartition) {
-            logger.info("onUnTaskAssigned({}, {})", enki, topicPartition);
-            dispatcher.dispatchListenerCallbacks(
-                    listener -> listener.onTaskUnassigned(enki, topicPartition),
-                    CALLBACK_FAILED_SHUTDOWNER);
-        }
-
-        @Override
-        public void onConnectionLost(EnkiConnection enki, boolean wasLeaving, boolean serverInitiated, boolean wasAcked) {
-            logger.info("onConnectionLost({}, {}, {}, {})", enki, wasLeaving, serverInitiated, wasAcked);
-            dispatcher.dispatchListenerCallbacks(
-                    listener -> listener.onConnectionLost(enki, wasLeaving, serverInitiated, wasAcked),
-                    CALLBACK_FAILED_SHUTDOWNER);
-
-        }
-
-        public void addListener(EnkiClientEventListener ecel) {
-            dispatcher.addListener(ecel);
-        }
-
-        public void removeListener(EnkiClientEventListener ecel) {
-            dispatcher.removeListener(ecel);
-        }
+    public boolean onConnectionLost(EnkiConnection enki, boolean wasLeaving, boolean serverInitiated, boolean wasAcked) {
+        /* no-op, but should find the next master unless its supposed to be leaving. */
+        return true;
     }
+
 }

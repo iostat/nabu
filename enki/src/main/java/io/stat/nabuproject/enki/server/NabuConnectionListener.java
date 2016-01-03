@@ -17,8 +17,9 @@ public interface NabuConnectionListener {
      *
      * @param cnxn a high-level connection implementation that implements the Enki protocol, and can have further events
      *             registered against it
+     * @return whether or not this callback ran successfully.
      */
-    void onNewNabuConnection(NabuConnection cnxn);
+    boolean onNewNabuConnection(NabuConnection cnxn);
 
     /**
      * Called when a Nabu is leaving on peaceable terms.
@@ -30,8 +31,9 @@ public interface NabuConnectionListener {
      *
      * @param cnxn the NabuConnection that's leaving.
      * @param serverInitiated true if this leave was server initated, false if it was client initiated.
+     * @return whether or not this callback ran successfully.
      */
-    void onNabuLeaving(NabuConnection cnxn, boolean serverInitiated);
+    boolean onNabuLeaving(NabuConnection cnxn, boolean serverInitiated);
 
     /**
      * Callback when the socket has closed and the connection is
@@ -41,21 +43,24 @@ public interface NabuConnectionListener {
      * @param serverInitiated true if the leave was server initiated, false if client initiated or was a connection loss/reset.
      * @param wasAcked true if the leave request was acked by the client (if server-initiated),
      *                 true if the client-inited leave request was acked by the server (and why wouldn't it be).
+     * @return whether or not this callback ran successfully.
      */
-    void onNabuDisconnected(NabuConnection cnxn, boolean wasLeaving, boolean serverInitiated, boolean wasAcked);
+    boolean onNabuDisconnected(NabuConnection cnxn, boolean wasLeaving, boolean serverInitiated, boolean wasAcked);
 
     /**
      * Called when a packet is dispatched. This includes heartbeats, etc.
      * @param cnxn the connection that the packet was sent to.
      * @param packet the packet that was sent.
      * @param future the future associated with this packet.
+     * @return whether or not this callback ran successfully
      */
-    void onPacketDispatched(NabuConnection cnxn, EnkiPacket packet, CompletableFuture<EnkiPacket> future);
+    boolean onPacketDispatched(NabuConnection cnxn, EnkiPacket packet, CompletableFuture<EnkiPacket> future);
 
     /**
      * Called when a packet is received. This includes ACKs, etc.
      * @param cnxn the connection it was received on
      * @param packet the packed that was received.
+     * @return whether or not this callback ran successfullyw
      */
-    void onPacketReceived(NabuConnection cnxn, EnkiPacket packet);
+    boolean onPacketReceived(NabuConnection cnxn, EnkiPacket packet);
 }

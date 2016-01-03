@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.util;
+package io.stat.nabuproject.core.util.dispatch;
 
 import com.google.common.collect.Sets;
 import io.stat.nabuproject.core.Component;
@@ -10,12 +10,16 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
  * Asynchronously dispatches arbitrary callbacks, and then runs a
  * finalizer function based on whether or not those callbacks succeeded.
+ *
+ * A successful callback is one that returns "true".
+ * A null or false implies failure.
+ * An exception thrown implies an exception failure.
  *
  * @param <T> The type of consumer that's being dispatched
  *
@@ -36,16 +40,17 @@ public class AsyncListenerDispatcher<T> extends Component {
 
     /**
      * Dispatch a callback to all listeners.
-     * @param callbackCallerFunction A function which calls the callback you want on ONE listener.
-     * @param crc a CallbackResultsConsumer that is called when all callbacks have finished running.
+     * @param callbackCaller A function which calls the callback you want on ONE listener.
+     *                       It will be applied once to each listener on a separate worker thread.
+     * @param crc a CallbackReducerCallback that is called when all callbacks have finished running.
      */
-    public void dispatchListenerCallbacks(Consumer<T> callbackCallerFunction, CallbackResultsConsumer crc) {
-        List<Future> futures = listeners.stream()
+    public void dispatchListenerCallbacks(Function<T, Boolean> callbackCaller, CallbackReducerCallback crc) {
+        List<Future<Boolean>> futures = listeners.stream()
                 .map(listener ->
-                        workerExecutorService.submit(() -> callbackCallerFunction.accept(listener)))
+                        workerExecutorService.submit(() -> callbackCaller.apply(listener)))
                 .collect(Collectors.toList());
 
-        collectorExecutorService.submit(new CallbackResultsConsumerRunner(crc, new FutureCollectorTask(futures)));
+        collectorExecutorService.submit(new CallbackReducerRunner(crc, new FutureCollectorTask(futures)));
     }
 
     /**
@@ -71,35 +76,12 @@ public class AsyncListenerDispatcher<T> extends Component {
         super.shutdown();
     }
 
-    /**
-     * A set of callbacks which respond to whether or not the callbacks that a AsyncListenerDispatcher
-     * was told run failed and how they failed if they did.
-     */
-    public static abstract class CallbackResultsConsumer {
-
-        /**
-         * Called if any callback threw something.
-         * @param t what a callback threw.
-         */
-        public abstract void failedWithThrowable(Throwable t);
-
-        /**
-         * Called if not all callbacks ran successfully.
-         */
-        public abstract void failed();
-
-        /**
-         * Called if all callbacks executed successfully
-         */
-        public abstract void success();
-    }
-
-    private class CallbackResultsConsumerRunner implements Runnable {
-        private final CallbackResultsConsumer crc;
+    private class CallbackReducerRunner implements Runnable {
+        private final CallbackReducerCallback cr;
         private final FutureCollectorTask fct;
 
-        public CallbackResultsConsumerRunner(CallbackResultsConsumer crc, FutureCollectorTask fct) {
-            this.crc = crc;
+        public CallbackReducerRunner(CallbackReducerCallback crc, FutureCollectorTask fct) {
+            this.cr = crc;
             this.fct = fct;
         }
 
@@ -109,36 +91,40 @@ public class AsyncListenerDispatcher<T> extends Component {
             try {
                 result = fct.call();
             } catch(Throwable t) {
-                crc.failedWithThrowable(t);
+                cr.failedWithThrowable(t);
             }
 
             if(!result) {
-                crc.failed();
+                cr.failed();
             } else {
-                crc.success();
+                cr.success();
             }
         }
     }
 
     /**
      * For every future that it is assigned to run, it will see if the future failed.
-     * A future's failure is determined by whether or not it threw an Exception.
+     * A future's failure is determined by whether or not it threw an Exception, or if it
+     * returned null (kind of impossible) or false. In the case of the former failure case, it
+     * is called an "exceptional failure"
      */
     @Slf4j
     public static final class FutureCollectorTask implements Callable<Boolean> {
+        final List<Future<Boolean>> futuresToCollect;
 
-        final List<Future> futuresToCollect;
-
-        FutureCollectorTask(List<Future> futuresToCollect) {
+        FutureCollectorTask(List<Future<Boolean>> futuresToCollect) {
             this.futuresToCollect = futuresToCollect;
         }
         @Override
         public Boolean call() throws Exception {
-            for(Future f : futuresToCollect) {
-                f.get();
+            for(Future<Boolean> f : futuresToCollect) {
+                Boolean thisResult = f.get();
+
+                if(thisResult == null || !thisResult) {
+                    return false;
+                }
             }
             return true;
         }
-
     }
 }

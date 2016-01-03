@@ -10,7 +10,8 @@ import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public abstract class EnkiClient extends Component implements KafkaBrokerConfigProvider, ThrottlePolicyProvider {
-    public abstract void addEnkiClientEventListener(EnkiClientEventListener ecel);
-    public abstract void removeEnkiClientEventListener(EnkiClientEventListener ecel);
+public abstract class EnkiClient extends Component implements
+        KafkaBrokerConfigProvider,
+        ThrottlePolicyProvider,
+        EnkiClientEventSource {
 }

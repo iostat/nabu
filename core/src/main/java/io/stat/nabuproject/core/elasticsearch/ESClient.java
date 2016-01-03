@@ -25,7 +25,7 @@ import java.util.Set;
  */
 @EqualsAndHashCode(callSuper=true)
 @Slf4j
-public abstract class ESClient extends Component implements EnkiAddressProvider {
+public abstract class ESClient extends Component implements EnkiAddressProvider, ESEventSource {
     /**
      * The Set of {@link NabuESEventListener}s registered to this ESClient.
      */
@@ -41,16 +41,14 @@ public abstract class ESClient extends Component implements EnkiAddressProvider 
      */
     public abstract Client getESClient();
 
-    /**
-     * Register a {@link NabuESEventListener} to receive Nabu-related elasticsearch cluster events.
-     * @param listener a {@link NabuESEventListener}
-     */
-    public void registerESEventListener(NabuESEventListener listener) {
+    @Override
+    public void addNabuESEventListener(NabuESEventListener listener) {
         logger.info("Registered NabuESEventListener {}", listener);
         eSEventListeners.add(listener);
     }
 
-    public void unregisterESEventListener(NabuESEventListener listener) {
+    @Override
+    public void removeNabuESEventListener(NabuESEventListener listener) {
         eSEventListeners.remove(listener);
         logger.info("Unregistered NabuESEventListener {}", listener);
     }

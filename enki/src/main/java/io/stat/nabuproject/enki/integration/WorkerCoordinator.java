@@ -4,10 +4,12 @@ import com.google.inject.Inject;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
+import io.stat.nabuproject.core.elasticsearch.ESEventSource;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.enki.server.EnkiServer;
+import io.stat.nabuproject.enki.server.NabuConnectionEventSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,16 +24,18 @@ import lombok.extern.slf4j.Slf4j;
 public class WorkerCoordinator extends Component implements NabuESEventListener {
     private final ThrottlePolicyProvider config;
     private final ESClient esClient;
+    private final ESEventSource esEventSource;
     private final EnkiServer enkiServer;
+    private final NabuConnectionEventSource eventSource;
 
     @Override
     public void start() throws ComponentException {
-        esClient.registerESEventListener(this);
+        esEventSource.addNabuESEventListener(this);
     }
 
     @Override
     public void shutdown() throws ComponentException {
-        esClient.unregisterESEventListener(this);
+        esEventSource.removeNabuESEventListener(this);
     }
 
     @Override

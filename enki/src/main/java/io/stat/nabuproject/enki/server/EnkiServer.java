@@ -8,7 +8,5 @@ import io.stat.nabuproject.core.Component;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public abstract class EnkiServer extends Component {
-    public abstract void addNabuConnectionListener(NabuConnectionListener ncl);
-    public abstract void removeNabuConnectionListener(NabuConnectionListener ncl);
+public abstract class EnkiServer extends Component implements NabuConnectionEventSource {
 }

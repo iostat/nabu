@@ -14,5 +14,6 @@ public class ESModule extends AbstractModule {
         bind(NodeClientImpl.class).asEagerSingleton();
         bind(ESClient.class).to(NodeClientImpl.class);
         bind(EnkiAddressProvider.class).to(NodeClientImpl.class);
+        bind(ESEventSource.class).to(NodeClientImpl.class);
     }
 }

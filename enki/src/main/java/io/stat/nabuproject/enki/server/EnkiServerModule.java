@@ -15,5 +15,6 @@ public class EnkiServerModule extends AbstractModule {
     protected void configure() {
         bind(ServerImpl.class).in(Singleton.class);
         bind(EnkiServer.class).to(ServerImpl.class);
+        bind(NabuConnectionEventSource.class).to(ServerImpl.class);
     }
 }

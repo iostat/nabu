@@ -12,6 +12,7 @@ import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
 
+import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -128,5 +129,11 @@ public class EnkiConnectionImpl implements EnkiConnection {
 
     private long assignSequence() {
         return lastOutgoingSequence.incrementAndGet();
+    }
+
+    @Override
+    public String prettyName() {
+        InetSocketAddress remoteAddress = ((InetSocketAddress) ctx.channel().remoteAddress());
+        return remoteAddress.getAddress() + ":" + remoteAddress.getPort();
     }
 }
