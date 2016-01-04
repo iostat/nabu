@@ -15,8 +15,8 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.net.FluentChannelInitializer;
+import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
-import io.stat.nabuproject.enki.EnkiConfig;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListenerDispatcher;
@@ -32,14 +32,15 @@ import lombok.extern.slf4j.Slf4j;
 class ServerImpl extends EnkiServer {
     private ServerBootstrap bootstrap;
     private Channel listenerChannel;
-    private int acceptorThreads;
 
+    private int acceptorThreads;
     private int workerThreads;
     private String bindAddress;
     private int bindPort;
-    private EventLoopGroup acceptorGroup;
 
+    private EventLoopGroup acceptorGroup;
     private EventLoopGroup workerGroup;
+
     @Delegate(types=NabuConnectionEventSource.class)
     private final NabuConnectionListenerDispatcher dispatcher;
 
@@ -48,7 +49,7 @@ class ServerImpl extends EnkiServer {
     private final ChannelGroup allOpenChannels;
 
     @Inject
-    ServerImpl(EnkiConfig config) {
+    ServerImpl(NetworkServerConfigProvider config) {
         this.bootstrap = new ServerBootstrap();
 
         this.acceptorThreads = config.getAcceptorThreads();

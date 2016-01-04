@@ -6,7 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 
 /**
- * Hunts for files in the classpath, system path, etc. and gets Stream to them
+ * Hunts for files in the classpath, system path, etc. and gets Streams to them
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

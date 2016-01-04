@@ -9,7 +9,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LoggingHandler;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.net.FluentChannelInitializer;
-import io.stat.nabuproject.nabu.NabuConfig;
+import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.nabu.protocol.CommandDecoder;
 import io.stat.nabuproject.nabu.protocol.ResponseEncoder;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +19,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 class ServerImpl extends NabuServer {
-    private NabuConfig config;
-
     private ServerBootstrap bootstrap;
     private Channel listenerChannel;
 
@@ -35,15 +33,14 @@ class ServerImpl extends NabuServer {
     private final FluentChannelInitializer channelInitializer;
 
     @Inject
-    ServerImpl(NabuConfig config) {
-        this.config = config;
+    ServerImpl(NetworkServerConfigProvider config) {
 
         this.bootstrap = new ServerBootstrap();
 
-        this.acceptorThreads = this.config.getAcceptorThreads();
-        this.workerThreads   = this.config.getWorkerThreads();
-        this.bindAddress     = this.config.getListenAddress();
-        this.bindPort        = this.config.getListenPort();
+        this.acceptorThreads = config.getAcceptorThreads();
+        this.workerThreads   = config.getWorkerThreads();
+        this.bindAddress     = config.getListenAddress();
+        this.bindPort        = config.getListenPort();
 
         this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
         this.workerGroup   = new NioEventLoopGroup(workerThreads);

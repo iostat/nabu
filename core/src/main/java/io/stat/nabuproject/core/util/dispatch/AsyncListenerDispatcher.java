@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,8 +30,9 @@ public class AsyncListenerDispatcher<T> extends Component {
     private final ExecutorService workerExecutorService;
     private final ExecutorService collectorExecutorService;
     private final Set<T> listeners;
-    private final byte[] $executorLock;
     private final AtomicBoolean isShuttingDown;
+
+    private final byte[] $executorLock;
 
     public AsyncListenerDispatcher(ExecutorService workerExecutorService, ExecutorService collectorExecutorService) {
         this.workerExecutorService = workerExecutorService;
@@ -90,58 +90,6 @@ public class AsyncListenerDispatcher<T> extends Component {
             this.isShuttingDown.set(true);
             this.workerExecutorService.shutdown();
             this.collectorExecutorService.shutdown();
-        }
-    }
-
-    private class CallbackReducerRunner implements Runnable {
-        private final CallbackReducerCallback cr;
-        private final FutureCollectorTask fct;
-
-        public CallbackReducerRunner(CallbackReducerCallback crc, FutureCollectorTask fct) {
-            this.cr = crc;
-            this.fct = fct;
-        }
-
-        @Override
-        public void run() {
-            boolean result = false;
-            try {
-                result = fct.call();
-            } catch(Throwable t) {
-                cr.failedWithThrowable(t);
-            }
-
-            if(!result) {
-                cr.failed();
-            } else {
-                cr.success();
-            }
-        }
-    }
-
-    /**
-     * For every future that it is assigned to run, it will see if the future failed.
-     * A future's failure is determined by whether or not it threw an Exception, or if it
-     * returned null (kind of impossible) or false. In the case of the former failure case, it
-     * is called an "exceptional failure"
-     */
-    @Slf4j
-    public static final class FutureCollectorTask implements Callable<Boolean> {
-        final List<Future<Boolean>> futuresToCollect;
-
-        FutureCollectorTask(List<Future<Boolean>> futuresToCollect) {
-            this.futuresToCollect = futuresToCollect;
-        }
-        @Override
-        public Boolean call() throws Exception {
-            for(Future<Boolean> f : futuresToCollect) {
-                Boolean thisResult = f.get();
-
-                if(thisResult == null || !thisResult) {
-                    return false;
-                }
-            }
-            return true;
         }
     }
 }

@@ -10,8 +10,8 @@ import java.util.List;
 
 /**
  * Allows one to create channel initializers for Netty
- * without worrying about making specific constructors for every kind of
- * possible server/client socket channel handler.
+ * without worrying about making specific constructors/factories for
+ * every kind of possible server/client socket channel handler.
  *
  * You can pass in either specific instances of ChannelHandler or a
  * class to construct (and optionally arguments).
@@ -100,8 +100,12 @@ public class FluentChannelInitializer extends ChannelInitializer<SocketChannel> 
          * Creates a FluentHandlerWrapper that wraps a concrete instance
          * of ChannelHandler
          * @param instance the instance to wrap.
+         * @throws IllegalArgumentException if <tt>instance</tt> is null
          */
         FluentHandlerWrapper(ChannelHandler instance) {
+            if(instance == null) {
+                throw new IllegalArgumentException("Received null instead of a ChannelHandler instance");
+            }
             this.instance = instance;
             this.theClass = null;
             this.classInitArgs = null;
@@ -109,13 +113,15 @@ public class FluentChannelInitializer extends ChannelInitializer<SocketChannel> 
         }
 
         /**
-         * Creates a FluentHandlerWrapper that wraps a sub-Class of
+         * Creates a FluentHandlerWrapper that wraps a subclass of
          * ChannelHandler. If no arguments need to be passed to construct <tt>theClass</tt>,
          * <tt>classInitArgs</tt> and <tt>classInitArgTypes</tt> can be null.
          * @param theClass the subclass to wrap
          * @param classInitArgs an array of arguments to pass to the constructor. Varargs need to be wrapped in an array at the very end.
          * @param classInitArgTypes the classes of the above arguments. must match the signature of the constructor
-         * @throws IllegalArgumentException if <tt>classInitArgs</tt> is specified, but <tt>classInitArgTypes</tt> isnt
+         * @throws IllegalArgumentException if <tt>theClass</tt> is null
+         * @throws IllegalArgumentException if <tt>classInitArgs</tt> is specified, but <tt>classInitArgTypes</tt> isn't
+         * @throws IllegalArgumentException if <tt>classInitArgsTypes</tt> is specified, but <tt>classInitArgs</tt> isn't
          * @throws IllegalArgumentException if the length of <tt>classInitArgs</tt> and <tt>classInitArgTypes</tt> are different.
          */
         FluentHandlerWrapper(Class<? extends ChannelHandler> theClass,
@@ -127,12 +133,20 @@ public class FluentChannelInitializer extends ChannelInitializer<SocketChannel> 
             this.classInitArgs = classInitArgs;
             this.classInitArgTypes = classInitArgTypes;
 
+            if(theClass == null) {
+                throw new IllegalArgumentException("Received null instead of a class to construct.");
+            }
+
             if(classInitArgs == null && classInitArgTypes == null) {
                 return;
             }
 
             if(classInitArgs != null && classInitArgTypes == null) {
                 throw new IllegalArgumentException("Constructor argument type inference is currently not supported.");
+            }
+
+            if(classInitArgs == null) {
+                throw new IllegalArgumentException("Constructor argument types specified but no arguments given.");
             }
 
             if(classInitArgs.length != classInitArgTypes.length) {

@@ -20,16 +20,18 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * A leader election implementation using ZooKeeper.
  *
- * TODO: Needs to be able to integrate with ElasticSearch cluster events
- * TODO: since there is a bit of a delay between ZooKeeper watch events
- * TODO: and actual node events.
+ * @todo Needs to be able to integrate with ElasticSearch cluster events
+ *       since there is a bit of a delay between ZooKeeper watch events
+ *       and actual node events.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class ZKLeaderImpl extends EnkiLeaderElector {
+class ZKLeaderImpl extends EnkiLeaderElector {
+    // todo: configurable?
     private static final String ELECTION_PATH = "/enki_le";
     private static final String ELECTION_PREFIX = "n_";
+    private static final String FULL_ELECTION_PREFIX = ELECTION_PATH + "/" + ELECTION_PREFIX;
 
     private final ZKLeaderConfigProvider config;
     private final EnkiAddressProvider ownAddressProvider;
@@ -73,8 +75,8 @@ public class ZKLeaderImpl extends EnkiLeaderElector {
 
         synchronized ($leaderDataLock) {
             String collatedData = collateZNodeData();
-            String ownLEZNodePath = zkClient.createEphemeralSequential(ELECTION_PATH + "/" + ELECTION_PREFIX, collatedData);
-            logger.info("created leader election ephemeral + sequential znode at \"{}/{}\" with data \"{}\"",
+            String ownLEZNodePath = zkClient.createEphemeralSequential(FULL_ELECTION_PREFIX, collatedData);
+            logger.info("created leader election ephemeral + sequential znode at \"{}{}\" with data \"{}\"",
                     config.getLEZKChroot(), ownLEZNodePath, collatedData);
 
             ownZNodeSequence.set(parseSequence(ownLEZNodePath));
@@ -130,7 +132,7 @@ public class ZKLeaderImpl extends EnkiLeaderElector {
     }
 
     private static long parseSequence(String nodePath) {
-        return Integer.parseInt(nodePath.replaceFirst(ELECTION_PATH + "/" + ELECTION_PREFIX, ""), 10);
+        return Integer.parseInt(nodePath.replaceFirst(FULL_ELECTION_PREFIX, ""), 10);
     }
 
     private void setSelfAsLeader() {

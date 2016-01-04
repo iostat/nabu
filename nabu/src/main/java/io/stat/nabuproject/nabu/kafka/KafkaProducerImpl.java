@@ -1,7 +1,6 @@
 package io.stat.nabuproject.nabu.kafka;
 
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.nabu.NabuConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -11,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 class KafkaProducerImpl extends NabuKafkaProducer {
-    private NabuConfig config;
 
     @Override
     public void start() throws ComponentException {

@@ -7,7 +7,6 @@ package io.stat.nabuproject.core.util.functional;
  * @param <V> type of third arg
  * @param <W> yes.
  * @param <R> type of return value
- * @return an R
  * @see PentaFunction for even more exasperation
  */
 @FunctionalInterface
@@ -18,7 +17,7 @@ public interface QuadFunction<T, U, V, W, R> {
      * @param u arg the 2nd
      * @param v arg the 3rd
      * @param w <i>[exasperation intensifies]</i>
-     *
+     * @return an R
      */
     R apply(T t, U u, V v, W w);
 }

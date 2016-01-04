@@ -10,6 +10,7 @@ import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.config.ConfigStore;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
+import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.enki.leader.ZKLeaderConfigProvider;
@@ -20,17 +21,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Created by io on 12/28/15. io is an asshole because
- * he doesn't write documentation for his code.
+ * Adapter for all Enki-related configuration that is specified from
+ * a config file.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Singleton @Slf4j
-public class EnkiConfig extends AbstractConfig implements
+final class EnkiConfig extends AbstractConfig implements
         KafkaZkConfigProvider,
         ThrottlePolicyProvider,
         KafkaBrokerConfigProvider,
-        ZKLeaderConfigProvider {
+        ZKLeaderConfigProvider,
+        NetworkServerConfigProvider {
     /**
      * Mapped to the enki.env property
      */
@@ -102,11 +104,6 @@ public class EnkiConfig extends AbstractConfig implements
     private final @Getter int kafkaZkConnTimeout;
 
     /**
-     * How long can a Zk session be active before it times out.
-     */
-    private final @Getter long kafkaZkSessTimeout;
-
-    /**
      * Mapped to the enki.throttle.policies property.
      */
     private final @Getter List<ThrottlePolicy> throttlePolicies;
@@ -132,7 +129,6 @@ public class EnkiConfig extends AbstractConfig implements
         this.kafkaZookeepers = getRequiredSequence(Keys.ENKI_KAFKA_ZK_SERVERS, String.class);
         this.kafkaZkChroot   = getOptionalProperty(Keys.ENKI_KAFKA_ZK_CHROOT, Defaults.ENKI_KAFKA_ZK_CHROOT, String.class);
         this.kafkaZkConnTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_TIMEOUT, Defaults.ENKI_KAFKA_ZK_TIMEOUT, Integer.class);
-        this.kafkaZkSessTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_SESSION, Defaults.ENKI_KAFKA_ZK_SESSION, Long.class);
 
         this.lEZooKeepers = getRequiredSequence(Keys.ENKI_LEADER_ZOOKEEPERS, String.class);
         this.lEZKChroot   = getRequiredProperty(Keys.ENKI_LEADER_ZKCHROOT, String.class);
@@ -175,13 +171,15 @@ public class EnkiConfig extends AbstractConfig implements
     @Override
     public boolean isKafkaBrokerConfigAvailable() {
         // always... always true...
-        // it's only source from here, #nbd
+        // it's only sourced from here
         return true;
     }
 
     @Override
     public void setKafkaBrokerConfig(List<String> brokers, String group) {
-        logger.error("somebody tried to call EnkiConfig::setKafkaBrokerConfig. This is considered high treason.");
+        String msg = "somebody tried to call EnkiConfig::setKafkaBrokerConfig. This is considered high treason.";
+        logger.error(msg);
+        throw new IllegalStateException(msg);
     }
 
     public static final class Keys {
@@ -195,7 +193,6 @@ public class EnkiConfig extends AbstractConfig implements
         public static final String ENKI_KAFKA_ZK_SERVERS = "enki.kafka.zk.servers";
         public static final String ENKI_KAFKA_ZK_CHROOT  = "enki.kafka.zk.chroot";
         public static final String ENKI_KAFKA_ZK_TIMEOUT = "enki.kafka.zk.timeout";
-        public static final String ENKI_KAFKA_ZK_SESSION = "enki.kafka.zk.session";
         public static final String ENKI_KAFKA_GROUP      = "enki.kafka.group";
 
         public static final String ENKI_LEADER_ZOOKEEPERS = "enki.leader.zookeepers";
@@ -216,7 +213,6 @@ public class EnkiConfig extends AbstractConfig implements
 
         public static final String ENKI_KAFKA_ZK_CHROOT  = "/";
         public static final int    ENKI_KAFKA_ZK_TIMEOUT = 500;
-        public static final long   ENKI_KAFKA_ZK_SESSION = 1000000000;
 
         public static final int    ENKI_LEADER_ZKTIMEOUT = 500;
 

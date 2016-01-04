@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-@AllArgsConstructor(onConstructor = @__(@Inject))
+@AllArgsConstructor(onConstructor=@__(@Inject))
 @Slf4j
 class EnkiImpl implements Enki {
     private final EnkiConfig config;

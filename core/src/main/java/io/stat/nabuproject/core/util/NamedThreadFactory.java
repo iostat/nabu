@@ -14,7 +14,7 @@ import java.util.concurrent.ThreadFactory;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public class NamedThreadFactory implements ThreadFactory {
+public final class NamedThreadFactory implements ThreadFactory {
     @Getter
     @Delegate(types=ThreadFactory.class)
     private final ThreadFactory backingThreadFactory;

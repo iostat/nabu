@@ -11,9 +11,19 @@ import java.util.List;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 public interface KafkaBrokerConfigProvider {
+    /**
+     * @return whether or not the data this class is responsible for is data is available
+     */
     boolean isKafkaBrokerConfigAvailable();
 
+    /**
+     * @return A list of addresses to contact the Kafka brokers for this Nabu cluster
+     */
     List<String> getKafkaBrokers();
+
+    /**
+     * @return what group ID to use when subscribing to topics.
+     */
     String getKafkaGroup();
 
     /**

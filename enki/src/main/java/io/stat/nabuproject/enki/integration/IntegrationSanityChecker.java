@@ -8,7 +8,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.kafka.KafkaMetadataClient;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
-import io.stat.nabuproject.enki.EnkiConfig;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
@@ -29,7 +29,7 @@ import org.elasticsearch.index.IndexNotFoundException;
 @Slf4j
 public class IntegrationSanityChecker extends Component {
     private final ESClient esClient;
-    private final EnkiConfig config;
+    private final ThrottlePolicyProvider config;
     private final KafkaMetadataClient kafkaClient;
 
     @Override

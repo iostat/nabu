@@ -4,19 +4,21 @@ import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.config.ConfigStore;
+import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 
 /**
- * Created by io on 12/28/15. io is an asshole because
- * he doesn't write documentation for his code.
+ * Adapter for all Nabu-related configuration that is specified
+ * from a config file
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class NabuConfig extends AbstractConfig {
+final class NabuConfig extends AbstractConfig implements
+        NetworkServerConfigProvider {
     /**
      * Mapped to the nabu.env property
      */

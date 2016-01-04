@@ -13,6 +13,8 @@ import java.nio.charset.Charset;
 /**
  * Provides some helper functions for the network protocol that Nabu uses to communicate between
  * the server and clients, as well as internal communication between Enki and Nabu(s).
+ *
+ * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @UtilityClass
 public class ProtocolHelper {

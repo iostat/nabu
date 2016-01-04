@@ -12,9 +12,12 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Handles Enki server-side IO.
+ *
+ * This really needs to be package-protected, but then FluentChannelInitializer
+ * can't instantiate it.
  */
 @Slf4j
-public class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> {
+public final class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> {
     private static final AttributeKey<NabuConnection> CONNECTED_NABU_ATTR = AttributeKey.newInstance("connected_nabu");
     private final NabuConnectionListener toNotify;
     private final ThrottlePolicyProvider throttlePolicyProvider;
