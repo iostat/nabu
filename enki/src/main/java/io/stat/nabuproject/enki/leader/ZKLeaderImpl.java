@@ -5,7 +5,8 @@ import com.google.common.primitives.Longs;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.core.enkiprotocol.EnkiAddressProvider;
+import io.stat.nabuproject.core.net.AddressPort;
+import io.stat.nabuproject.core.net.AdvertisedAddressProvider;
 import io.stat.nabuproject.core.util.Tuple;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
@@ -26,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * A leader election implementation using ZooKeeper.
  *
- * @todo Needs to be able to integrate with ElasticSearch cluster events
+ * todo: Needs to be able to integrate with ElasticSearch cluster events
  *       since there is a bit of a delay between ZooKeeper watch events
  *       and actual node events.
  *
@@ -40,7 +41,7 @@ class ZKLeaderImpl extends EnkiLeaderElector {
     private static final String FULL_ELECTION_PREFIX = ELECTION_PATH + "/" + ELECTION_PREFIX;
 
     private final ZKLeaderConfigProvider config;
-    private final EnkiAddressProvider ownAddressProvider;
+    private final AdvertisedAddressProvider advertisedAddressProvider;
 
     private final byte[] $leaderDataLock;
     private final AtomicBoolean isLeader;
@@ -63,10 +64,10 @@ class ZKLeaderImpl extends EnkiLeaderElector {
 
     @Inject
     public ZKLeaderImpl(ZKLeaderConfigProvider config,
-                        EnkiAddressProvider ownAddressProvider,
+                        AdvertisedAddressProvider addressProvider,
                         Injector injector) {
         this.config = config;
-        this.ownAddressProvider = ownAddressProvider;
+        this.advertisedAddressProvider = addressProvider;
         this.injector = injector;
 
         this.$leaderDataLock = new byte[0];
@@ -155,7 +156,8 @@ class ZKLeaderImpl extends EnkiLeaderElector {
     }
 
     private String collateZNodeData() {
-        return ownAddressProvider.getEnkiHost() + "|" + ownAddressProvider.getEnkiPort();
+        AddressPort ap = advertisedAddressProvider.getAdvertisedAddress();
+        return ap.getAddress() + "|" + ap.getPort();
     }
 
     private String getAddressFromLeaderData(String data) {
@@ -176,9 +178,11 @@ class ZKLeaderImpl extends EnkiLeaderElector {
                 return;
             }
 
+            AddressPort ap = advertisedAddressProvider.getAdvertisedAddress();
+
             isLeader.set(true);
-            leaderAddress.set(ownAddressProvider.getEnkiHost());
-            leaderPort.set(ownAddressProvider.getEnkiPort());
+            leaderAddress.set(ap.getAddress());
+            leaderPort.set(ap.getPort());
         }
 
         dispatcher.dispatchListenerCallbacks(LeaderEventListener::onSelfElected,
@@ -252,7 +256,7 @@ class ZKLeaderImpl extends EnkiLeaderElector {
         }
 
         @Override
-        public void handleNewSession() throws Exception { }
+        public void handleNewSession() throws Exception { /* no-op */ }
 
         /**
          * Performs the full enki shutdown from outside the ZK Event loop

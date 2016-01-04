@@ -24,6 +24,9 @@ project(":core") {
             exclude group: 'com.google.guava', module: 'guava'
         }
 
+        // include Guice deps grapher (for debugging)
+        compile(group: 'com.google.inject.extensions', name: 'guice-grapher', version: '4.0')
+
         // guice depends on guava anyway, and we might get some use of it.
         compile(group: 'com.google.guava', name: 'guava', version: '19.0')
 

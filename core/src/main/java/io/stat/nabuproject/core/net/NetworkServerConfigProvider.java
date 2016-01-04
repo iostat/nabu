@@ -17,12 +17,7 @@ public interface NetworkServerConfigProvider {
     int getWorkerThreads();
 
     /**
-     * @return what IP address to listen on
+     * @return the address and point on which to listen to connections for
      */
-    String getListenAddress();
-
-    /**
-     * @return what port to listen ton
-     */
-    int getListenPort();
+    AddressPort getListenBinding();
 }

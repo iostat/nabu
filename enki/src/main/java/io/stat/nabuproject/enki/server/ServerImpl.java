@@ -14,6 +14,7 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
+import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
@@ -35,8 +36,7 @@ class ServerImpl extends EnkiServer {
 
     private int acceptorThreads;
     private int workerThreads;
-    private String bindAddress;
-    private int bindPort;
+    private final AddressPort listenBinding;
 
     private EventLoopGroup acceptorGroup;
     private EventLoopGroup workerGroup;
@@ -54,8 +54,7 @@ class ServerImpl extends EnkiServer {
 
         this.acceptorThreads = config.getAcceptorThreads();
         this.workerThreads   = config.getWorkerThreads();
-        this.bindAddress     = config.getListenAddress();
-        this.bindPort        = config.getListenPort();
+        this.listenBinding   = config.getListenBinding();
 
         this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
         this.workerGroup = new NioEventLoopGroup(workerThreads);
@@ -93,10 +92,10 @@ class ServerImpl extends EnkiServer {
                 .childHandler(channelInitializer);
 
         logger.info("Binding NettyServer on {}:{}, with {} acceptor thread(s) and {} worker thread(s)",
-                bindAddress, bindPort, acceptorThreads, workerThreads);
+                listenBinding.getAddress(), listenBinding.getPort(), acceptorThreads, workerThreads);
 
         try {
-            this.listenerChannel = bootstrap.bind(bindAddress, bindPort).sync().channel();
+            this.listenerChannel = bootstrap.bind(listenBinding.getAddress(), listenBinding.getPort()).sync().channel();
             this.allOpenChannels.add(this.listenerChannel);
         } catch(InterruptedException e) {
             this.acceptorGroup.shutdownGracefully();

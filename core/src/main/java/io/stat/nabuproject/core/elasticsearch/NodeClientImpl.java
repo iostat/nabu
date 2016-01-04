@@ -37,7 +37,6 @@ class NodeClientImpl extends ESClient {
 
     @Inject
     NodeClientImpl(ESConfigProvider configProvider) {
-
         this.config = configProvider;
 
         nodeSettingsBuilder = Settings.settingsBuilder()

@@ -4,12 +4,15 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
+import com.google.inject.Injector;
 import com.google.inject.Singleton;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.config.ConfigStore;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
+import io.stat.nabuproject.core.net.AddressPort;
+import io.stat.nabuproject.core.net.AdvertisedAddressProvider;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
@@ -39,14 +42,9 @@ final class EnkiConfig extends AbstractConfig implements
     private final @Getter String env;
 
     /**
-     * Mapped to the enki.server.bind property
+     * Mapped to the enki.server.bind and enki.server.port propertoes
      */
-    private final @Getter String listenAddress;
-
-    /**
-     * Mapped to the enki.server.port property
-     */
-    private final @Getter int listenPort;
+    private final @Getter AddressPort listenBinding;
 
     /**
      * Mapped to the enki.server.threads.acceptor property
@@ -107,14 +105,16 @@ final class EnkiConfig extends AbstractConfig implements
      * Mapped to the enki.throttle.policies property.
      */
     private final @Getter List<ThrottlePolicy> throttlePolicies;
-
     private final @Getter List<String> lEZooKeepers;
     private final @Getter String lEZKChroot;
     private final @Getter int lEZKConnTimeout;
 
+    private final Injector injector;
+
     @Inject
-    public EnkiConfig(ConfigStore provider) {
+    public EnkiConfig(ConfigStore provider, Injector injector) {
         super(provider);
+        this.injector = injector;
 
         this.env    = getRequiredProperty(Keys.ENKI_ENV, String.class);
 
@@ -134,8 +134,9 @@ final class EnkiConfig extends AbstractConfig implements
         this.lEZKChroot   = getRequiredProperty(Keys.ENKI_LEADER_ZKCHROOT, String.class);
         this.lEZKConnTimeout  = getOptionalProperty(Keys.ENKI_LEADER_ZKTIMEOUT, Defaults.ENKI_LEADER_ZKTIMEOUT, Integer.class);
 
-        this.listenAddress = getOptionalProperty(Keys.ENKI_SERVER_BIND, Defaults.ENKI_SERVER_BIND, String.class);
-        this.listenPort    = getOptionalProperty(Keys.ENKI_SERVER_PORT, Defaults.ENKI_SERVER_PORT, Integer.class);
+        String listenAddress = getOptionalProperty(Keys.ENKI_SERVER_BIND, Defaults.ENKI_SERVER_BIND, String.class);
+        int    listenPort    = getOptionalProperty(Keys.ENKI_SERVER_PORT, Defaults.ENKI_SERVER_PORT, Integer.class);
+        this.listenBinding = new AddressPort(listenAddress, listenPort);
 
         this.acceptorThreads = getOptionalProperty(Keys.ENKI_SERVER_THREADS_ACCEPTOR,
                 Defaults.ENKI_SERVER_THREADS_ACCEPTOR,
@@ -165,7 +166,11 @@ final class EnkiConfig extends AbstractConfig implements
 
     @Override
     public Map<String, String> getESNodeAttributes() {
-        return ImmutableMap.of("enki", getListenAddress() + ":" + getListenPort());
+        // todo: need a better workaround to getting advertised address than just doing this
+        //       without creating a potential circular dependency during constructor-injection
+        //       also this whole thing is a bit of a hack really...
+        AddressPort ap = injector.getInstance(AdvertisedAddressProvider.class).getAdvertisedAddress();
+        return ImmutableMap.of("enki", ap.getAddress() + ":" + ap.getPort());
     }
 
     @Override

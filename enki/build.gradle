@@ -11,6 +11,12 @@ project(":enki") {
     dependencies {
         compile(project(':core'))
     }
+
+    run {
+        if (project.hasProperty('args')) {
+            args project.args.split('\\s+')
+        }
+    }
 }
 
 
