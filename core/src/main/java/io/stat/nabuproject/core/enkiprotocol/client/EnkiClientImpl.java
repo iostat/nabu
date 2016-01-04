@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.client;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -10,6 +10,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.enkiprotocol.EnkiAddressProvider;
+import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventDispatcher;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventListener;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventSource;
@@ -20,8 +22,10 @@ import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
+import java.net.ConnectException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A client for the Enki protocol, used by Nabu.
@@ -43,8 +47,12 @@ class EnkiClientImpl extends EnkiClient implements EnkiClientEventListener {
     private boolean wasEnkiSourcedConfigSet;
     private Map<String, Object> enkiSourcedConfigs;
 
+    private final AtomicBoolean shouldAttemptReconnect;
+
     @Inject
     public EnkiClientImpl(EnkiAddressProvider provider) {
+        this.shouldAttemptReconnect = new AtomicBoolean(true);
+
         this.$enkiSourcedConfigLock = new byte[0];
         this.wasEnkiSourcedConfigSet = false;
         this.enkiSourcedConfigs = ImmutableMap.of();
@@ -67,36 +75,98 @@ class EnkiClientImpl extends EnkiClient implements EnkiClientEventListener {
         addEnkiClientEventListener(this);
     }
 
+    public void beginClientReconnectLoop() throws ComponentException {
+        int loops = 1;
+        String lastEnkiHostSeen = "";
+        int lastEnkiPortSeen = -1;
+        int sameHostSeenCount = 0;
+        while(shouldAttemptReconnect.get()) {
+            if(!config.isEnkiDiscovered()) {
+                shouldAttemptReconnect.set(false);
+                throw new ComponentException(true, "EnkiAddressProvider did not discover any Enkis!");
+            }
+
+            String thisEnkiHost = config.getEnkiHost();
+            int thisEnkiPort = config.getEnkiPort();
+
+            if(lastEnkiHostSeen.equals(thisEnkiHost) && lastEnkiPortSeen == thisEnkiPort) {
+                sameHostSeenCount++;
+
+                if(sameHostSeenCount == 5) {
+                    // todo: also a gargantuan fucking hack.
+                    throw new ComponentException(true, "Can't find any Enki hosts that I haven't already seen.");
+                }
+                // we may have just lost the connection, lets a wait bit for the cluster state to
+                // to get updated.
+                // todo: total fucking hack until we can get a proper system of enki master election going.
+                try {
+                    Thread.sleep(1000);
+                } catch(Exception e) {
+                    logger.info("cant sleep #storyofmylife");
+                    continue;
+                }
+
+                continue;
+            }
+
+            // todo: can anyone say hack?
+
+            lastEnkiHostSeen = thisEnkiHost;
+            lastEnkiPortSeen = thisEnkiPort;
+
+            this.bootstrap = new Bootstrap();
+            this.bootstrap.group(eventLoopGroup)
+                    .channel(NioSocketChannel.class)
+                    .option(ChannelOption.TCP_NODELAY, true) // the enki protocol is really tiny. john nagle is not our friend.
+                    .handler(channelInitializer);
+
+            try {
+                this.clientChannel = this.bootstrap
+                        .connect(config.getEnkiHost(), config.getEnkiPort())
+                        .sync()
+                        .channel();
+
+                clientChannel.closeFuture().syncUninterruptibly();
+            } catch(Exception e) {
+                shouldAttemptReconnect.set(false);
+                // this is an unchecked exception... but it could still be there
+                if(e instanceof ConnectException) {
+                    logger.error("Got a ConnectException! ", e);
+                } else if(e instanceof InterruptedException) {
+                    this.eventLoopGroup.shutdownGracefully();
+
+                    logger.error("Failed to " + (loops == 1 ? "" : "re") + "start EnkiClient, {}", e);
+                    throw new ComponentException(true, e);
+                }
+            }
+
+            logger.info("restarting of the loop");
+            loops++;
+        }
+    }
+
+    private void closeClientWithoutShutdown() {
+        this.clientChannel.close();
+    }
+
     @Override
     public void start() throws ComponentException {
-        if(!config.isEnkiDiscovered()) {
-            throw new ComponentException(true, "EnkiAddressProvider did not discover any Enkis!");
-        }
-
-        this.bootstrap = new Bootstrap();
-        this.bootstrap.group(eventLoopGroup)
-                      .channel(NioSocketChannel.class)
-                      .option(ChannelOption.TCP_NODELAY, true) // the enki protocol is really tiny. john nagle is not our friend.
-                      .handler(channelInitializer);
-
         try {
-            this.clientChannel = this.bootstrap
-                                     .connect(config.getEnkiHost(), config.getEnkiPort())
-                                     .sync()
-                                     .channel();
-        } catch (InterruptedException e) {
-            this.eventLoopGroup.shutdownGracefully();
-
-            logger.error("Failed to start EnkiClient, {}", e);
-            throw new ComponentException(true, e);
+            beginClientReconnectLoop();
+        } catch(ComponentException ce) {
+            logger.info("Reconnect loop stopped!", ce);
+            shutdown();
+            throw ce;
         }
+        logger.info("past start!");
     }
 
     @Override
     public void shutdown() throws ComponentException {
         dispatcher.shutdown();
-        this.clientChannel.close();
-        this.eventLoopGroup.shutdownGracefully();
+
+        if(this.clientChannel != null) { this.clientChannel.close(); }
+        if(this.eventLoopGroup != null) { this.eventLoopGroup.shutdownGracefully(); }
     }
 
     @Override
@@ -139,6 +209,10 @@ class EnkiClientImpl extends EnkiClient implements EnkiClientEventListener {
     @Override
     public boolean onConnectionLost(EnkiConnection enki, boolean wasLeaving, boolean serverInitiated, boolean wasAcked) {
         /* no-op, but should find the next master unless its supposed to be leaving. */
+        // todo: figure out a way to find the next enki master and connect to that!
+        logger.info("onConnectionLost!");
+        closeClientWithoutShutdown();
+        logger.info("ccws!");
         return true;
     }
 

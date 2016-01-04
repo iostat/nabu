@@ -6,7 +6,7 @@ import io.stat.nabuproject.Version;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
-import io.stat.nabuproject.core.enkiprotocol.EnkiClientModule;
+import io.stat.nabuproject.core.enkiprotocol.client.EnkiClientModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.nabu.kafka.KafkaModule;
 import io.stat.nabuproject.nabu.router.RouterModule;

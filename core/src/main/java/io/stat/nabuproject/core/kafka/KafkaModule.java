@@ -1,6 +1,7 @@
 package io.stat.nabuproject.core.kafka;
 
 import com.google.inject.AbstractModule;
+import com.google.inject.Singleton;
 
 /**
  * Created by io on 12/30/15. io is an asshole because
@@ -11,6 +12,6 @@ import com.google.inject.AbstractModule;
 public class KafkaModule extends AbstractModule {
     @Override
     protected void configure() {
-        bind(KafkaMetadataClient.class).asEagerSingleton();
+        bind(KafkaMetadataClient.class).in(Singleton.class);
     }
 }

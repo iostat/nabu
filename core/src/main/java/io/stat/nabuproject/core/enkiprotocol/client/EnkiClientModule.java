@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.client;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;

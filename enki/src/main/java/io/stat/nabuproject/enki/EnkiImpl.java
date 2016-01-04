@@ -36,8 +36,8 @@ class EnkiImpl implements Enki {
                 this.esClient,
                 this.metadataClient,
                 this.sanityChecker,
-                this.workerCoordinator,
-                this.enkiServer);
+                this.enkiServer,
+                this.workerCoordinator);
 
         try {
             componentStarter.start();

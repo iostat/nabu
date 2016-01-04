@@ -34,7 +34,7 @@ public abstract class Component {
      * a call to {@link Component#start()}
      * @throws ComponentException if any bubbled up from {@link Component#start()}
      */
-    void _dispatchStart() throws ComponentException {
+    final void _dispatchStart() throws ComponentException {
         if(wasStopped()) {
             logger.warn("Trying to start() a {} that's already been stopped before.", this.getClass().getCanonicalName());
             return;
@@ -53,7 +53,7 @@ public abstract class Component {
      * a call to {@link Component#shutdown()}
      * @throws ComponentException if any bubbled up from {@link Component#shutdown()}
      */
-    void _dispatchShutdown() throws ComponentException {
+    final void _dispatchShutdown() throws ComponentException {
         if(wasStopped()) { logger.warn("Trying to shutdown an already stopped {}", this.getClass().getCanonicalName()); return; }
         if(!wasStarted()) {
             logger.warn("Trying to shutdown a non-started {}", this.getClass().getCanonicalName());
@@ -80,4 +80,14 @@ public abstract class Component {
 
     private boolean _started = false;
     private boolean _stopped = false;
+
+    /**
+     * Lombok helper for methods which can't be delegated, when trying to delegate two levels of Component.
+     */
+    public interface Undelegatable {
+        boolean wasStarted();
+        boolean wasStopped();
+        void _dispatchStart();
+        void _dispatchShutdown();
+    }
 }

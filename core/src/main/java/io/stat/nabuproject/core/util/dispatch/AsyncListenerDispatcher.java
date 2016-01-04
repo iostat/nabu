@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -30,10 +31,15 @@ public class AsyncListenerDispatcher<T> extends Component {
     private final ExecutorService workerExecutorService;
     private final ExecutorService collectorExecutorService;
     private final Set<T> listeners;
+    private final byte[] $executorLock;
+    private final AtomicBoolean isShuttingDown;
 
     public AsyncListenerDispatcher(ExecutorService workerExecutorService, ExecutorService collectorExecutorService) {
         this.workerExecutorService = workerExecutorService;
         this.collectorExecutorService = collectorExecutorService;
+
+        this.$executorLock = new byte[0];
+        this.isShuttingDown = new AtomicBoolean(false);
 
         this.listeners = Sets.newConcurrentHashSet();
     }
@@ -45,12 +51,21 @@ public class AsyncListenerDispatcher<T> extends Component {
      * @param crc a CallbackReducerCallback that is called when all callbacks have finished running.
      */
     public void dispatchListenerCallbacks(Function<T, Boolean> callbackCaller, CallbackReducerCallback crc) {
-        List<Future<Boolean>> futures = listeners.stream()
-                .map(listener ->
-                        workerExecutorService.submit(() -> callbackCaller.apply(listener)))
-                .collect(Collectors.toList());
+        synchronized ($executorLock) {
+            if(isShuttingDown.get()) {
+                logger.error("This AsyncListenerDispatcher is shutting down and cannot dispatch callbacks!\n" +
+                        "Attempted to call:\n" +
+                        "{}\n{}",
+                        callbackCaller, crc);
+                return;
+            }
+            List<Future<Boolean>> futures = listeners.stream()
+                    .map(listener ->
+                            workerExecutorService.submit(() -> callbackCaller.apply(listener)))
+                    .collect(Collectors.toList());
 
-        collectorExecutorService.submit(new CallbackReducerRunner(crc, new FutureCollectorTask(futures)));
+            collectorExecutorService.submit(new CallbackReducerRunner(crc, new FutureCollectorTask(futures)));
+        }
     }
 
     /**
@@ -71,9 +86,11 @@ public class AsyncListenerDispatcher<T> extends Component {
 
     @Override
     public void shutdown() throws ComponentException {
-        this.workerExecutorService.shutdown();
-        this.collectorExecutorService.shutdown();
-        super.shutdown();
+        synchronized ($executorLock) {
+            this.isShuttingDown.set(true);
+            this.workerExecutorService.shutdown();
+            this.collectorExecutorService.shutdown();
+        }
     }
 
     private class CallbackReducerRunner implements Runnable {

@@ -45,7 +45,8 @@ public final class KafkaMetadataClient extends Component {
         this.zkClient.setZkSerializer(new KafkaZKStringSerializerProxy());
     }
 
-    public void stop() throws ComponentException {
+    @Override
+    public void shutdown() throws ComponentException {
         if(this.zkClient != null) {
             this.zkClient.close();
         }
@@ -61,13 +62,13 @@ public final class KafkaMetadataClient extends Component {
 
     public boolean topicExists(String topicName) {
         synchronized ($zkClientLock) {
-            return AdminUtils.topicExists(zkClient, topicName);
+            return AdminUtils.topicExists(getZkClient(), topicName);
         }
     }
 
     public int topicPartitionsCount(String topicName) {
         synchronized ($zkClientLock) {
-            TopicMetadata topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topicName, zkClient);
+            TopicMetadata topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topicName, getZkClient());
             return topicMetadata.partitionsMetadata().size();
         }
     }

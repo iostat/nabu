@@ -24,13 +24,13 @@ public final class KillCnxnOnFailCRC extends CallbackReducerCallback {
     @Override
     public void failedWithThrowable(Throwable t) {
         logger.error("Received an Exception while collecting " + name, t);
-        cnxn.kill();
+        cnxn.leaveGracefully();
     }
 
     @Override
     public void failed() {
         logger.error("Some dispatch tasks failed for {}", name);
-        cnxn.kill();
+        cnxn.leaveGracefully();
     }
 
     @Override

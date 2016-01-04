@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.client;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -41,8 +41,7 @@ public class EnkiClientIO extends SimpleChannelInboundHandler<EnkiPacket> {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         // todo: no comment....
         logger.error("EXCEPTION_CAUGHT: {}", cause);
-        getEnki(ctx).leave();
-        super.exceptionCaught(ctx, cause);
+        getEnki(ctx).leaveGracefully();
     }
 
     private EnkiConnectionImpl getEnki(ChannelHandlerContext ctx) {

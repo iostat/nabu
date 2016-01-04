@@ -5,7 +5,7 @@ import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
-import io.stat.nabuproject.core.enkiprotocol.EnkiClient;
+import io.stat.nabuproject.core.enkiprotocol.client.EnkiClient;
 import io.stat.nabuproject.nabu.server.NabuServer;
 import lombok.AllArgsConstructor;
 import lombok.Synchronized;

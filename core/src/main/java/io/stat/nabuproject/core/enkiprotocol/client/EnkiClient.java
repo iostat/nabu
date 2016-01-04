@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.client;
 
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventSource;

@@ -27,7 +27,12 @@ public interface EnkiPacketConnection {
     String prettyName();
 
     /**
-     * Try to leave gracefully. But kill the connection if necessary.
+     * Try to leave gracefully.
      */
-    void kill();
+    void leaveGracefully();
+
+    /**
+     * Kill the connection immediately.
+     */
+    void killConnection();
 }

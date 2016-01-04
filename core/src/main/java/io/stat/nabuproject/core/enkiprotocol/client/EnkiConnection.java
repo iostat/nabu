@@ -1,5 +1,6 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.client;
 
+import io.stat.nabuproject.core.enkiprotocol.EnkiPacketConnection;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 
 /**
@@ -9,8 +10,6 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 public interface EnkiConnection extends EnkiPacketConnection {
-    void leave();
-
     void ack(long sequence);
     void nak(long sequence);
 

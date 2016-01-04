@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.enkiprotocol;
+package io.stat.nabuproject.core.enkiprotocol.client;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventListener;
@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -41,6 +42,8 @@ public class EnkiConnectionImpl implements EnkiConnection {
     private final AtomicBoolean wasLeaveServerInitiated;
     private final AtomicBoolean wasLeaveAcknowledged;
 
+    private final CompletableFuture<EnkiConnectionImpl> afterClientLeaveAcked;
+
     public EnkiConnectionImpl(ChannelHandlerContext ctx,
                               EnkiClientEventListener toNotify) {
         this.ctx = ctx;
@@ -58,17 +61,8 @@ public class EnkiConnectionImpl implements EnkiConnection {
         wasLeavePacketSent = new AtomicBoolean(false);
         wasLeaveServerInitiated = new AtomicBoolean(false);
         wasLeaveAcknowledged = new AtomicBoolean(false);
-    }
 
-
-    @Synchronized @Override
-    public void leave() {
-        isDisconnecting.set(true);
-        EnkiLeave leave = new EnkiLeave(assignSequence());
-        dispatchPacket(leave);
-        sequenceNumberOfLeave.set(leave.getSequenceNumber());
-        wasLeavePacketSent.set(true);
-        wasLeaveServerInitiated.set(false);
+        afterClientLeaveAcked = new CompletableFuture<>();
     }
 
     @Override
@@ -107,6 +101,7 @@ public class EnkiConnectionImpl implements EnkiConnection {
             case ACK:
                 if(p.getSequenceNumber() == sequenceNumberOfLeave.get()) {
                     wasLeaveAcknowledged.set(true);
+                    afterClientLeaveAcked.complete(this);
                 }
                 break;
             case ASSIGN:
@@ -124,10 +119,29 @@ public class EnkiConnectionImpl implements EnkiConnection {
         }
     }
 
+    @Synchronized
     @Override
-    public void kill() {
-        logger.warn("kill() called. This will not be pretty...");
+    public void leaveGracefully() {
+        isDisconnecting.set(true);
+        EnkiLeave leave = new EnkiLeave(assignSequence());
+        dispatchPacket(leave);
+        sequenceNumberOfLeave.set(leave.getSequenceNumber());
+        wasLeavePacketSent.set(true);
+        wasLeaveServerInitiated.set(false);
+
+        afterClientLeaveAcked.thenAcceptAsync(eci -> eci.killConnection(true));
+    }
+
+    private void killConnection(boolean suppressWarning) {
+        if(!suppressWarning) {
+            logger.warn("killConnection() called. This is going to be ugly.");
+        }
         ctx.close();
+    }
+
+    @Override
+    public void killConnection() {
+        killConnection(false);
     }
 
     private void dispatchPacket(EnkiPacket p) {

@@ -182,8 +182,8 @@ class NabuConnectionImpl implements NabuConnection {
 
     @Override
     @Synchronized
-    public void kill() {
-        logger.info("kill called on {}", this);
+    public void leaveGracefully() {
+        logger.info("leaveGracefully called on {}", this);
 
         nabuLeaving(true);
 
@@ -192,20 +192,33 @@ class NabuConnectionImpl implements NabuConnection {
 
         dispatchKick().whenCompleteAsync((packet, exception) -> {
             if(exception != null && !(exception instanceof ConnectionLostException)) {
-                logger.error("Dispatch kill promise fulfilled with unexpected exception: ", exception);
+                logger.error("Dispatch leaveGracefully promise fulfilled with unexpected exception: ", exception);
             } else if (exception != null && exception instanceof ConnectionLostException) {
                 logger.info("The connection to Nabu was terminated while waiting for a response to a LEAVE.");
             } else {
                 this.leaveAcknowledged.set(true);
-                context.close();
+                killConnection(true);
             }
         });
     }
 
+    @Override
+    public void killConnection() {
+        killConnection(false);
+    }
+
+    private void killConnection(boolean suppressWarning) {
+        if(!suppressWarning) {
+            logger.warn("killConnection() called. This is going to be ugly.");
+        }
+
+        context.close();
+    }
+
     /**
-     * common functionality for when kill() is called vs. client notifies that
+     * common functionality for when leaveGracefully() is called vs. client notifies that
      * it's leaving.
-     * @param serverInitiated true for kill(), false for client-initiated
+     * @param serverInitiated true for leaveGracefully(), false for client-initiated
      */
     private void nabuLeaving(boolean serverInitiated) {
         isDisconnecting.set(true);
@@ -216,7 +229,7 @@ class NabuConnectionImpl implements NabuConnection {
             promises.forEach((seq, promise) ->
                     promise.completeExceptionally(new NodeLeavingException(
                             "The Nabu node is leaving the cluster " +
-                                    "and will not be able to respond to this request.")));
+                                    "and will not be able to respond to this request. (sequence " + seq + ")")));
         }
 
         connectionListener.onNabuLeaving(this, true);
@@ -234,10 +247,11 @@ class NabuConnectionImpl implements NabuConnection {
                 promise.completeExceptionally(
                     new ConnectionLostException(
                             "The connection to the Nabu node " +
-                            "has been lost")));
+                            "has been lost (sequence " + seq + ")")));
         }
 
         heartbeatTimer.cancel();
+        leaveEnforcerTimer.cancel();
 
         // todo: dispatch to listeners that the client has disconnected.
         // todo: for whatever reason (whether kicked or just connection lost)
@@ -266,7 +280,7 @@ class NabuConnectionImpl implements NabuConnection {
                 }
             } else {
                 logger.error("RECEIVED AN UNEXPECTED PACKET (sequence out of order) :: {}", packet);
-                // todo: kill the client?
+                // todo: leaveGracefully the client?
             }
         }
     }
@@ -317,8 +331,8 @@ class NabuConnectionImpl implements NabuConnection {
                 // todo: this should be configurable.
                 if(missedHeartbeats >= 5) {
                     logger.error("Nabu node has missed {} heartbeats now!", missedHeartbeats);
-                    // todo: force deallocate and kill from cluster.
-                    NabuConnectionImpl.this.kill();
+                    // todo: force deallocate and leaveGracefully from cluster.
+                    NabuConnectionImpl.this.leaveGracefully();
                 }
             } else {
                 waitingForHeartbeat.set(true);
@@ -351,7 +365,7 @@ class NabuConnectionImpl implements NabuConnection {
             if(!NabuConnectionImpl.this.leaveAcknowledged.get()) {
                 logger.error("Server-initiated leave request was NOT acknowledged..");
                 logger.error("Forcibly closing the connection to {}. " +
-                        "You may want to kill the node to ensure data doesn't get re-written!",
+                        "You may want to leaveGracefully the node to ensure data doesn't get re-written!",
                         NabuConnectionImpl.this);
             } else {
                 logger.debug("No need to enforce leave request for {}", NabuConnectionImpl.this);

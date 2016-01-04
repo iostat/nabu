@@ -12,7 +12,7 @@ public interface NabuConnection extends EnkiPacketConnection {
     /**
      * Send this client a LEAVE request, and try to ask it to leave amicably.
      */
-    void kill();
+    void leaveGracefully();
 
     /**
      * Used by the ServerIO backend to inform the connection that its channel has closed.

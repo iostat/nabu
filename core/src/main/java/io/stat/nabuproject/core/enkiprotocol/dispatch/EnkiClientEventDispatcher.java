@@ -1,8 +1,8 @@
 package io.stat.nabuproject.core.enkiprotocol.dispatch;
 
 import io.stat.nabuproject.core.Component;
-import io.stat.nabuproject.core.enkiprotocol.EnkiClient;
-import io.stat.nabuproject.core.enkiprotocol.EnkiConnection;
+import io.stat.nabuproject.core.enkiprotocol.client.EnkiClient;
+import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
@@ -23,8 +23,8 @@ import java.util.concurrent.TimeUnit;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public final class EnkiClientEventDispatcher implements EnkiClientEventListener, EnkiClientEventSource {
-    @Delegate(types = Component.class)
+public final class EnkiClientEventDispatcher extends Component implements EnkiClientEventListener, EnkiClientEventSource {
+    @Delegate(types=Component.class, excludes=Component.Undelegatable.class)
     private final AsyncListenerDispatcher<EnkiClientEventListener> dispatcher;
     private final CallbackReducerCallback CALLBACK_FAILED_SHUTDOWNER;
 
