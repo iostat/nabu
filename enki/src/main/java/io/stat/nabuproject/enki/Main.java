@@ -8,6 +8,7 @@ import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.kafka.KafkaModule;
 import io.stat.nabuproject.core.util.JVMHackery;
+import io.stat.nabuproject.enki.leader.LeaderElectionModule;
 import io.stat.nabuproject.enki.server.EnkiServerModule;
 import lombok.Getter;
 import lombok.experimental.Delegate;
@@ -37,6 +38,7 @@ public class Main {
                 new ConfigModule(),
                 new ESModule(),
                 new KafkaModule(),
+                new LeaderElectionModule(),
                 new EnkiServerModule()
         );
 

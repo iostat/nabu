@@ -7,6 +7,7 @@ import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.kafka.KafkaMetadataClient;
 import io.stat.nabuproject.enki.integration.IntegrationSanityChecker;
 import io.stat.nabuproject.enki.integration.WorkerCoordinator;
+import io.stat.nabuproject.enki.leader.EnkiLeaderElector;
 import io.stat.nabuproject.enki.server.EnkiServer;
 import lombok.AllArgsConstructor;
 import lombok.Synchronized;
@@ -26,6 +27,7 @@ class EnkiImpl implements Enki {
     private final KafkaMetadataClient metadataClient;
     private final IntegrationSanityChecker sanityChecker;
     private final WorkerCoordinator workerCoordinator;
+    private final EnkiLeaderElector leaderElector;
 
     private final ComponentStarter componentStarter;
 
@@ -36,6 +38,7 @@ class EnkiImpl implements Enki {
                 this.esClient,
                 this.metadataClient,
                 this.sanityChecker,
+                this.leaderElector,
                 this.enkiServer,
                 this.workerCoordinator);
 

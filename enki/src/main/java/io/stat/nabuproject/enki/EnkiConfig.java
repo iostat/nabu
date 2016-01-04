@@ -12,6 +12,7 @@ import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.leader.ZKLeaderConfigProvider;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,7 +26,11 @@ import java.util.Map;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Singleton @Slf4j
-public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider, ThrottlePolicyProvider, KafkaBrokerConfigProvider {
+public class EnkiConfig extends AbstractConfig implements
+        KafkaZkConfigProvider,
+        ThrottlePolicyProvider,
+        KafkaBrokerConfigProvider,
+        ZKLeaderConfigProvider {
     /**
      * Mapped to the enki.env property
      */
@@ -106,6 +111,10 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
      */
     private final @Getter List<ThrottlePolicy> throttlePolicies;
 
+    private final @Getter List<String> lEZooKeepers;
+    private final @Getter String lEZKChroot;
+    private final @Getter int lEZKConnTimeout;
+
     @Inject
     public EnkiConfig(ConfigStore provider) {
         super(provider);
@@ -124,6 +133,10 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
         this.kafkaZkChroot   = getOptionalProperty(Keys.ENKI_KAFKA_ZK_CHROOT, Defaults.ENKI_KAFKA_ZK_CHROOT, String.class);
         this.kafkaZkConnTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_TIMEOUT, Defaults.ENKI_KAFKA_ZK_TIMEOUT, Integer.class);
         this.kafkaZkSessTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_SESSION, Defaults.ENKI_KAFKA_ZK_SESSION, Long.class);
+
+        this.lEZooKeepers = getRequiredSequence(Keys.ENKI_LEADER_ZOOKEEPERS, String.class);
+        this.lEZKChroot   = getRequiredProperty(Keys.ENKI_LEADER_ZKCHROOT, String.class);
+        this.lEZKConnTimeout  = getOptionalProperty(Keys.ENKI_LEADER_ZKTIMEOUT, Defaults.ENKI_LEADER_ZKTIMEOUT, Integer.class);
 
         this.listenAddress = getOptionalProperty(Keys.ENKI_SERVER_BIND, Defaults.ENKI_SERVER_BIND, String.class);
         this.listenPort    = getOptionalProperty(Keys.ENKI_SERVER_PORT, Defaults.ENKI_SERVER_PORT, Integer.class);
@@ -183,8 +196,11 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
         public static final String ENKI_KAFKA_ZK_CHROOT  = "enki.kafka.zk.chroot";
         public static final String ENKI_KAFKA_ZK_TIMEOUT = "enki.kafka.zk.timeout";
         public static final String ENKI_KAFKA_ZK_SESSION = "enki.kafka.zk.session";
-
         public static final String ENKI_KAFKA_GROUP      = "enki.kafka.group";
+
+        public static final String ENKI_LEADER_ZOOKEEPERS = "enki.leader.zookeepers";
+        public static final String ENKI_LEADER_ZKCHROOT   = "enki.leader.zkchroot";
+        public static final String ENKI_LEADER_ZKTIMEOUT  = "enki.leader.zktimeout";
 
         public static final String ENKI_SERVER_BIND             = "enki.server.bind";
         public static final String ENKI_SERVER_PORT             = "enki.server.port";
@@ -201,6 +217,8 @@ public class EnkiConfig extends AbstractConfig implements KafkaZkConfigProvider,
         public static final String ENKI_KAFKA_ZK_CHROOT  = "/";
         public static final int    ENKI_KAFKA_ZK_TIMEOUT = 500;
         public static final long   ENKI_KAFKA_ZK_SESSION = 1000000000;
+
+        public static final int    ENKI_LEADER_ZKTIMEOUT = 500;
 
         public static final String  ENKI_SERVER_BIND             = "0.0.0.0";
         public static final int     ENKI_SERVER_PORT             = 3654;

@@ -215,5 +215,4 @@ class EnkiClientImpl extends EnkiClient implements EnkiClientEventListener {
         logger.info("ccws!");
         return true;
     }
-
 }

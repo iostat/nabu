@@ -102,6 +102,10 @@ public abstract class EnkiPacket {
                     exposer.exposeEncode(ctx, configure, restOfPacket);
 
                     break;
+                case REDIRECT:
+                    EnkiRedirect redir = ((EnkiRedirect) msg);
+                    ProtocolHelper.writeStringToByteBuf(redir.getAddress(), restOfPacket);
+                    restOfPacket.writeInt(redir.getPort());
                 default:
                     throw new RuntimeException("Don't know how to handle EnkiPacket of type " + packetType);
             }
@@ -205,6 +209,12 @@ public abstract class EnkiPacket {
                         out.add(new EnkiConfigure(sequenceNumber, (Map)(decodedList.get(0))));
 
                         return;
+                    case REDIRECT:
+                        String address = ProtocolHelper.readStringFromByteBuf(in);
+                        int port = in.readInt();
+
+                        out.add(new EnkiRedirect(sequenceNumber, address, port));
+                        return;
                     default:
                         throw new CorruptedFrameException("Don't know how to handle EnkiPacket of type " + packetType);
                 }
@@ -244,6 +254,12 @@ public abstract class EnkiPacket {
          * @see EnkiAck
          */
         ACK(100),
+
+        /**
+         * An awesome pun on so many levels
+         * @see EnkiRedirect
+         */
+        REDIRECT(303),
 
         /**
          * @see EnkiNak

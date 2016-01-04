@@ -19,8 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Created by io on 1/2/16. io is an asshole because
- * he doesn't write documentation for his code.
+ * The implementation of the high-level Enki client.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */

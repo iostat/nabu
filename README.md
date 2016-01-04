@@ -65,6 +65,8 @@ It also generates javadocs.
 
 
 ## Running
+Make you sure you read the config files and connect the dots where needed.
+
 Something that is mentioned LITERALLY nowhere in the ES docs is that if there is any custom cluster-wide metadata, 
 a node won't be able to join the cluster and participate unless it knows what to do with it. 
 

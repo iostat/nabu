@@ -105,10 +105,28 @@ enki:
       # OPTIONAL, defaults to 1000000000
       # session: 1000000000
 
+  # ZooKeeper leader election settings
+  #
+  # REQUIRED, at least zookeepers and chroot
+  leader:
+    # Addresses of Zk instances to use for leader election
+    zookeepers:
+    - localhost:2181
+
+    # The chroot, if the leader election is chrooted
+    zkchroot: '/nabu'
+
+    # Connection timeout
+    #
+    # OPTIONAL, defaults to 500
+    # zktimeout: 500
+
+
+
   # Settings for the Nabu API server
   #
   # OPTIONAL
-  # server:
+  server:
     # Address to bind the API server to
     #
     # OPTIONAL, defaults to 127.0.0.1
@@ -116,7 +134,7 @@ enki:
     # Port to bind the API server to
     #
     # OPTIONAL, defaults to 6228
-    # port: 6228
+    port: 26228
     # NIO threading parameters
     #
     # OPTIONAL

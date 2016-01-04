@@ -8,6 +8,7 @@ import com.google.inject.name.Names;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.leader.ZKLeaderConfigProvider;
 
 import java.util.Map;
 
@@ -28,6 +29,7 @@ public class EnkiModule extends AbstractModule {
         bind(AbstractConfig.class).to(EnkiConfig.class);
         bind(KafkaZkConfigProvider.class).to(EnkiConfig.class);
         bind(ThrottlePolicyProvider.class).to(EnkiConfig.class);
+        bind(ZKLeaderConfigProvider.class).to(EnkiConfig.class);
 
         bind(String.class).annotatedWith(Names.named("Configuration File Name")).toInstance(CONFIG_FILE_NAME);
         bind(new TypeLiteral<Map<String, Object>>() {}).annotatedWith(Names.named("ES Extra Configs")).toInstance(EXTRA_ES_OPTIONS);

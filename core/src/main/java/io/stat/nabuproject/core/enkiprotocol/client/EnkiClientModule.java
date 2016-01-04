@@ -4,8 +4,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;
 
 /**
- * Created by io on 1/3/16. io is an asshole because
- * he doesn't write documentation for his code.
+ * A Guice module for the Enki protocol client.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
