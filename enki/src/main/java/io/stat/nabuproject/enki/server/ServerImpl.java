@@ -18,6 +18,7 @@ import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListenerDispatcher;
@@ -49,7 +50,8 @@ class ServerImpl extends EnkiServer {
     private final ChannelGroup allOpenChannels;
 
     @Inject
-    ServerImpl(NetworkServerConfigProvider config) {
+    ServerImpl(NetworkServerConfigProvider config,
+               ElectedLeaderProvider leaderProvider) {
         this.bootstrap = new ServerBootstrap();
 
         this.acceptorThreads = config.getAcceptorThreads();
@@ -72,13 +74,15 @@ class ServerImpl extends EnkiServer {
                         allOpenChannels,
                         config,
                         config,
+                        leaderProvider
 
                 },
                 new Class[]{
                         NabuConnectionListener.class,
                         ChannelGroup.class,
                         ThrottlePolicyProvider.class,
-                        KafkaBrokerConfigProvider.class
+                        KafkaBrokerConfigProvider.class,
+                        ElectedLeaderProvider.class
                 });
 
     }

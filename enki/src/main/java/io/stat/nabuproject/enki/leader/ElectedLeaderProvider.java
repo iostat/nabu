@@ -1,5 +1,7 @@
 package io.stat.nabuproject.enki.leader;
 
+import io.stat.nabuproject.core.net.AddressPort;
+
 /**
  * Something which can provide information on who the leader is amongst a group of Enkis.
  *
@@ -7,6 +9,5 @@ package io.stat.nabuproject.enki.leader;
  */
 public interface ElectedLeaderProvider {
     boolean isSelf();
-    String getLeaderAddress();
-    int getLeaderPort();
+    AddressPort getElectedLeaderAP();
 }

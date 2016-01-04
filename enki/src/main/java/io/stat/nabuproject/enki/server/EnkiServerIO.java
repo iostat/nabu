@@ -7,6 +7,7 @@ import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,16 +24,19 @@ public final class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> 
     private final ThrottlePolicyProvider throttlePolicyProvider;
     private final KafkaBrokerConfigProvider kafkaBrokerConfigProvider;
     private final ChannelGroup channelGroup;
+    private final ElectedLeaderProvider electedLeaderProvider;
 
     public EnkiServerIO(NabuConnectionListener toNotify,
                         ChannelGroup channelGroup,
                         ThrottlePolicyProvider throttlePolicyProvider,
-                        KafkaBrokerConfigProvider kafkaBrokerConfigProvider) {
+                        KafkaBrokerConfigProvider kafkaBrokerConfigProvider,
+                        ElectedLeaderProvider electedLeaderProvider) {
         super();
         this.channelGroup = channelGroup;
         this.throttlePolicyProvider = throttlePolicyProvider;
         this.kafkaBrokerConfigProvider = kafkaBrokerConfigProvider;
         this.toNotify = toNotify;
+        this.electedLeaderProvider = electedLeaderProvider;
     }
 
     @Override
@@ -44,7 +48,8 @@ public final class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> 
                         ctx,
                         toNotify,
                         throttlePolicyProvider,
-                        kafkaBrokerConfigProvider
+                        kafkaBrokerConfigProvider,
+                        electedLeaderProvider
         ));
         super.channelActive(ctx);
     }

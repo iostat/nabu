@@ -16,6 +16,7 @@ import org.I0Itec.zkclient.IZkChildListener;
 import org.I0Itec.zkclient.IZkStateListener;
 import org.I0Itec.zkclient.ZkClient;
 import org.apache.zookeeper.Watcher;
+import org.elasticsearch.common.Strings;
 
 import java.util.Iterator;
 import java.util.List;
@@ -142,16 +143,9 @@ class ZKLeaderImpl extends EnkiLeaderElector {
     }
 
     @Override
-    public String getLeaderAddress() {
-        synchronized ($leaderDataLock) {
-            return leaderAddress.get();
-        }
-    }
-
-    @Override
-    public int getLeaderPort() {
-        synchronized ($leaderDataLock) {
-            return leaderPort.get();
+    public AddressPort getElectedLeaderAP() {
+        synchronized($leaderDataLock) {
+            return new AddressPort(leaderAddress.get(), leaderPort.get());
         }
     }
 
@@ -161,11 +155,11 @@ class ZKLeaderImpl extends EnkiLeaderElector {
     }
 
     private String getAddressFromLeaderData(String data) {
-        return data.split("|")[0];
+        return data.split("\\|")[0];
     }
 
     private int getPortFromLeaderData(String data) {
-        return Integer.parseInt(data.split("|")[1]);
+        return Integer.parseInt(data.split("\\|")[1]);
     }
 
     private static long parseSequence(String nodePath) {
@@ -234,11 +228,13 @@ class ZKLeaderImpl extends EnkiLeaderElector {
                         .orElse(new Tuple<>("irrelevant", own));
 
                 if (highestSequenceUpToOwn.second() == own) {
-                    logger.info("A change in the leader election path has been detected, and I am the leader.");
+                    logger.info("A change in the leader election ZNode has been detected, and I am the leader. " +
+                            "(n_{})", Strings.padStart(Long.toString(own), 10, '0'));
                     setSelfAsLeader();
                 } else {
                     String leaderData = zkClient.readData(ELECTION_PATH + "/" + highestSequenceUpToOwn.first());
-                    logger.info("A change in the leader election path has been detected, and I am NOT the leader. The leader is {}", leaderData);
+                    logger.info("A change in the leader election path has been detected, and I am NOT the leader. " +
+                            "The leader is {} => {}", highestSequenceUpToOwn.first(), leaderData);
                     setOtherAsLeader(leaderData);
                 }
             }

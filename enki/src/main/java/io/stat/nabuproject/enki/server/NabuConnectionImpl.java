@@ -13,11 +13,14 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiHeartbeat;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiLeave;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiNak;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
+import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.ConnectionLostException;
 import io.stat.nabuproject.core.net.NodeLeavingException;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
@@ -68,14 +71,18 @@ class NabuConnectionImpl implements NabuConnection {
     private final Timer heartbeatTimer;
     private final Timer leaveEnforcerTimer;
 
+    private final ElectedLeaderProvider electedLeaderProvider;
+
     public NabuConnectionImpl(ChannelHandlerContext context,
                               NabuConnectionListener connectionListener,
                               ThrottlePolicyProvider throttlePolicyProvider,
-                              KafkaBrokerConfigProvider kafkaBrokerConfigProvider) {
+                              KafkaBrokerConfigProvider kafkaBrokerConfigProvider,
+                              ElectedLeaderProvider electedLeaderProvider) {
         this.context = context;
         this.connectionListener = connectionListener;
         this.throttlePolicyProvider = throttlePolicyProvider;
         this.kafkaBrokerConfigProvider = kafkaBrokerConfigProvider;
+        this.electedLeaderProvider = electedLeaderProvider;
 
         this.context.attr(LAST_SEQUENCE).set(0L);
 
@@ -109,7 +116,11 @@ class NabuConnectionImpl implements NabuConnection {
 
         logger.info("New NabuConnectionImpl({}) for {}", this, context);
 
-        dispatchConfigure(buildDispatchedNabuConfig()).complete(null);
+        if(electedLeaderProvider.isSelf()) {
+            dispatchConfigure(buildDispatchedNabuConfig()).complete(null);
+        } else {
+            performRedirect(electedLeaderProvider.getElectedLeaderAP());
+        }
     }
 
     private Map<String, Serializable> buildDispatchedNabuConfig() {
@@ -133,6 +144,11 @@ class NabuConnectionImpl implements NabuConnection {
     private CompletableFuture<EnkiPacket> dispatchKick() { return dispatchPacket(new EnkiLeave(assignSequence())); }
     private CompletableFuture<EnkiPacket> dispatchConfigure(Map<String, Serializable> configPacketData) {
         return dispatchPacket(new EnkiConfigure(assignSequence(), configPacketData));
+    }
+
+    private void performRedirect(AddressPort ap) {
+        dispatchPacket(new EnkiRedirect(assignSequence(), ap.getAddress(), ap.getPort()))
+            .thenAcceptAsync($$$$$$ -> leaveGracefully());
     }
 
     private void dispatchAck(long sequence) { dispatchAck(sequence, false); }

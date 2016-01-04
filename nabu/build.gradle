@@ -15,6 +15,9 @@ project(":nabu") {
         if (project.hasProperty('args')) {
             args project.args.split('\\s+')
         }
+
+        systemProperties System.properties
     }
+
 }
 

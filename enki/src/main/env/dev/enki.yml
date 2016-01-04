@@ -133,8 +133,8 @@ enki:
     # bind: '127.0.0.1'
     # Port to bind the API server to
     #
-    # OPTIONAL, defaults to 6228
-    port: 26228
+    # OPTIONAL, defaults to 3654
+    port: ${prop:override.server.port:3654}
     # NIO threading parameters
     #
     # OPTIONAL
