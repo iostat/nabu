@@ -7,5 +7,5 @@ import io.stat.nabuproject.core.Component;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public abstract class EnkiLeaderElector extends Component implements ElectedLeaderProvider {
+public abstract class EnkiLeaderElector extends Component implements ElectedLeaderProvider, LeaderEventSource {
 }

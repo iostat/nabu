@@ -1,11 +1,9 @@
 package io.stat.nabuproject.nabu;
 
-import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.IComponent;
 
 /**
  * Hah! Fooled ya!
  */
-public interface Nabu {
-    void start() throws ComponentException;
-    void shutdown() throws ComponentException;
+public abstract class Nabu implements IComponent {
 }

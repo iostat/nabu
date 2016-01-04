@@ -3,12 +3,18 @@ package io.stat.nabuproject.enki.leader;
 import com.google.common.base.Joiner;
 import com.google.common.primitives.Longs;
 import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.enkiprotocol.EnkiAddressProvider;
 import io.stat.nabuproject.core.util.Tuple;
+import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
+import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
+import io.stat.nabuproject.enki.Enki;
 import lombok.extern.slf4j.Slf4j;
 import org.I0Itec.zkclient.IZkChildListener;
+import org.I0Itec.zkclient.IZkStateListener;
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.zookeeper.Watcher;
 
 import java.util.Iterator;
 import java.util.List;
@@ -44,13 +50,24 @@ class ZKLeaderImpl extends EnkiLeaderElector {
     private final AtomicLong ownZNodeSequence;
 
     private ZkClient zkClient;
+
     private final IZkChildListener electionPathChildListener;
+    private final IZkStateListener connectionStateListener;
+
+    private final AsyncListenerDispatcher<LeaderEventListener> dispatcher;
+
+    /**
+     * For grabbing the root Enki instance.
+     */
+    private final Injector injector;
 
     @Inject
     public ZKLeaderImpl(ZKLeaderConfigProvider config,
-                        EnkiAddressProvider ownAddressProvider) {
+                        EnkiAddressProvider ownAddressProvider,
+                        Injector injector) {
         this.config = config;
         this.ownAddressProvider = ownAddressProvider;
+        this.injector = injector;
 
         this.$leaderDataLock = new byte[0];
         this.isLeader = new AtomicBoolean(false);
@@ -58,34 +75,49 @@ class ZKLeaderImpl extends EnkiLeaderElector {
         this.leaderPort = new AtomicInteger(-1);
 
         this.ownZNodeSequence = new AtomicLong(-1);
+
         this.electionPathChildListener = new ElectionPathChildListener();
+        this.connectionStateListener   = new ConnectionStateListener();
+
+        this.dispatcher = new AsyncListenerDispatcher<>("ZKLeaderEventDispatch");
     }
 
     @Override
     public void start() throws ComponentException {
-        Iterator<String> chrootedZookeepersIterator =
-                config.getLEZooKeepers()
-                        .stream()
-                        .map(zk -> zk + config.getLEZKChroot())
-                        .iterator();
+        try {
+            Iterator<String> chrootedZookeepersIterator =
+                    config.getLEZooKeepers()
+                            .stream()
+                            .map(zk -> zk + config.getLEZKChroot())
+                            .iterator();
 
-        this.zkClient = new ZkClient(
-                Joiner.on(',').join(chrootedZookeepersIterator),
-                config.getLEZKConnTimeout());
+            this.zkClient = new ZkClient(
+                    Joiner.on(',').join(chrootedZookeepersIterator),
+                    config.getLEZKConnTimeout());
 
-        synchronized ($leaderDataLock) {
             String collatedData = collateZNodeData();
             String ownLEZNodePath = zkClient.createEphemeralSequential(FULL_ELECTION_PREFIX, collatedData);
             logger.info("created leader election ephemeral + sequential znode at \"{}{}\" with data \"{}\"",
                     config.getLEZKChroot(), ownLEZNodePath, collatedData);
 
+            zkClient.subscribeStateChanges(connectionStateListener);
+
             ownZNodeSequence.set(parseSequence(ownLEZNodePath));
             List<String> children = zkClient.subscribeChildChanges(ELECTION_PATH, electionPathChildListener);
-            try {
-                // bootstrap the first connection
-                electionPathChildListener.handleChildChange(null, children);
-            } catch(Exception e) {
-                throw new ComponentException(true, "Couldn't bootstrap the leader election process!", e);
+
+            synchronized ($leaderDataLock) {
+                try {
+                    // bootstrap the first connection
+                    electionPathChildListener.handleChildChange(null, children);
+                } catch(Exception e) {
+                    throw new ComponentException(true, "Couldn't register the ZK child node change listener!", e);
+                }
+            }
+        } catch(Exception e) {
+            if(e instanceof ComponentException) {
+                throw e;
+            } else {
+                throw new ComponentException(true, "Failed to start the ZK leader election system", e);
             }
         }
     }
@@ -93,9 +125,12 @@ class ZKLeaderImpl extends EnkiLeaderElector {
     @Override
     public void shutdown() throws ComponentException {
         // todo: stop watchers, etc.
+        // may not actually be necessary...
         if(this.zkClient != null) {
             this.zkClient.close();
         }
+
+        this.dispatcher.shutdown();
     }
 
     @Override
@@ -145,17 +180,40 @@ class ZKLeaderImpl extends EnkiLeaderElector {
             leaderAddress.set(ownAddressProvider.getEnkiHost());
             leaderPort.set(ownAddressProvider.getEnkiPort());
         }
+
+        dispatcher.dispatchListenerCallbacks(LeaderEventListener::onSelfElected,
+                new ShutdownOnFailureCRC(injector.getInstance(Enki.class),
+                        "ZKLESelfElectedCallbackFailed"));
     }
 
     private void setOtherAsLeader(String leaderData) {
-        synchronized ($leaderDataLock) {
-            String newAddress = getAddressFromLeaderData(leaderData);
-            int    newPort    = getPortFromLeaderData(leaderData);
+        String newAddress = getAddressFromLeaderData(leaderData);
+        int    newPort    = getPortFromLeaderData(leaderData);
 
+        synchronized ($leaderDataLock) {
             isLeader.set(false);
             leaderAddress.set(newAddress);
             leaderPort.set(newPort);
         }
+
+        dispatcher.dispatchListenerCallbacks(listener -> listener.onOtherElected(newAddress, newPort),
+                new ShutdownOnFailureCRC(injector.getInstance(Enki.class),
+                        "ZKLEOnOtherElectedCallbackFailed"));
+    }
+
+    @Override
+    public void addLeaderEventListener(LeaderEventListener listener) {
+        dispatcher.addListener(listener);
+    }
+
+    @Override
+    public void removeLeaderEventListener(LeaderEventListener listener) {
+        dispatcher.removeListener(listener);
+    }
+
+    @Override
+    public boolean isLeader() {
+        return false;
     }
 
     private final class ElectionPathChildListener implements IZkChildListener {
@@ -180,6 +238,33 @@ class ZKLeaderImpl extends EnkiLeaderElector {
                     setOtherAsLeader(leaderData);
                 }
             }
+        }
+    }
+
+    private final class ConnectionStateListener implements IZkStateListener, Runnable {
+        @Override
+        public void handleStateChanged(Watcher.Event.KeeperState keeperState) throws Exception {
+            if(keeperState == Watcher.Event.KeeperState.Disconnected) {
+                Thread t = new Thread(this);
+                t.setName("ZKLeaderDisconnectedShutdownThread");
+                t.start();
+            }
+        }
+
+        @Override
+        public void handleNewSession() throws Exception { }
+
+        /**
+         * Performs the full enki shutdown from outside the ZK Event loop
+         * (since the ZK client will get stopped in the case of a disconnect)
+         */
+        @Override
+        public void run() {
+            logger.error("ZkConnectionState changed to DISCONNECTED. Shutting down Enki");
+            zkClient.unsubscribeAll();
+            zkClient.close();
+            ZKLeaderImpl.this.shutdown();
+            injector.getInstance(Enki.class).shutdown();
         }
     }
 }

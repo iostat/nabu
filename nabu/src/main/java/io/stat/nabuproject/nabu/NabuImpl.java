@@ -1,7 +1,6 @@
 package io.stat.nabuproject.nabu;
 
 import com.google.inject.Inject;
-import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
@@ -18,12 +17,11 @@ import lombok.extern.slf4j.Slf4j;
  */
 @AllArgsConstructor(onConstructor = @__(@Inject))
 @Slf4j
-class NabuImpl extends Component implements Nabu {
+class NabuImpl extends Nabu {
     private final NabuConfig config;
     private final ESClient esClient;
     private final EnkiClient enkiClient;
     private final NabuServer nabuServer;
-
     private final ComponentStarter componentStarter;
 
     @Override @Synchronized

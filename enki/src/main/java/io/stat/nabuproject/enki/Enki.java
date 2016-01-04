@@ -1,6 +1,6 @@
 package io.stat.nabuproject.enki;
 
-import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.IComponent;
 
 /**
  * Created by io on 12/28/15. io is an asshole because
@@ -8,7 +8,5 @@ import io.stat.nabuproject.core.ComponentException;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public interface Enki {
-    void start() throws ComponentException;
-    void shutdown() throws ComponentException;
+public abstract class Enki implements IComponent {
 }

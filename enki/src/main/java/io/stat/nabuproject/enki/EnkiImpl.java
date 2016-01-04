@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @AllArgsConstructor(onConstructor=@__(@Inject))
 @Slf4j
-class EnkiImpl implements Enki {
+class EnkiImpl extends Enki {
     private final EnkiConfig config;
     private final ESClient esClient;
     private final EnkiServer enkiServer;
@@ -28,7 +28,6 @@ class EnkiImpl implements Enki {
     private final IntegrationSanityChecker sanityChecker;
     private final WorkerCoordinator workerCoordinator;
     private final EnkiLeaderElector leaderElector;
-
     private final ComponentStarter componentStarter;
 
     @Override @Synchronized

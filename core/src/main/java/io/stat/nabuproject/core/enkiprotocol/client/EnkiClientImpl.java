@@ -16,7 +16,7 @@ import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventDispatcher;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventListener;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventSource;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
-import io.stat.nabuproject.core.net.FluentChannelInitializer;
+import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;

@@ -14,21 +14,7 @@ import lombok.extern.slf4j.Slf4j;
  * if your component blocks anywhere, you may very well hang the whole application.
  */
 @Slf4j @EqualsAndHashCode
-public abstract class Component {
-    /**
-     * Called *synchronously* when the component is started.
-     *
-     * @throws ComponentException if something went wrong while starting the Component
-     */
-    public void start() throws ComponentException { }
-
-    /**
-     * Called *synchronously* when Nabu shuts down, clean up and prepare for shutdown.
-     *
-     * @throws ComponentException if something went wrong while shutting down the Component
-     */
-    public void shutdown() throws ComponentException { }
-
+public abstract class Component implements IComponent {
     /**
      * (internal) validates that this component is in a valid state to start and dispatches
      * a call to {@link Component#start()}

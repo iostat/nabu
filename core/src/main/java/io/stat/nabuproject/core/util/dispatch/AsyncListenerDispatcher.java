@@ -3,12 +3,16 @@ package io.stat.nabuproject.core.util.dispatch;
 import com.google.common.collect.Sets;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.util.NamedThreadFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -34,6 +38,33 @@ public class AsyncListenerDispatcher<T> extends Component {
 
     private final byte[] $executorLock;
 
+    /**
+     * Creates an AsyncListenerDispatcher with ExecutorServices generated on the fly
+     * with defaults of 2 min threads, 10 max threads, 20 second timeout, a new SynchronousQueue,
+     * and with {@link NamedThreadFactory}s backing them
+     * @param name the name to prefix the threads with.
+     */
+    public AsyncListenerDispatcher(String name) {
+        this(
+                new ThreadPoolExecutor(
+                    2, 10,
+                    20, TimeUnit.SECONDS,
+                    new SynchronousQueue<>(),
+                    new NamedThreadFactory(name + "-Worker")),
+
+                new ThreadPoolExecutor(
+                    2, 10,
+                    20, TimeUnit.SECONDS,
+                    new SynchronousQueue<>(),
+                    new NamedThreadFactory(name + "-Collector"))
+        );
+    }
+
+    /**
+     * Creates an AsyncListenerDispatcher backed by the specified ExecutorServices
+     * @param workerExecutorService the ExecutorService for callback workers
+     * @param collectorExecutorService the ExecutorService for collecting the results of the callback workers
+     */
     public AsyncListenerDispatcher(ExecutorService workerExecutorService, ExecutorService collectorExecutorService) {
         this.workerExecutorService = workerExecutorService;
         this.collectorExecutorService = collectorExecutorService;
