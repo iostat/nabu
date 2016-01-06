@@ -1,8 +1,10 @@
 package io.stat.nabuproject.core.elasticsearch;
 
+import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
+import io.stat.nabuproject.core.net.AddressPort;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Synchronized;
@@ -82,65 +84,23 @@ class NodeClientImpl extends ESClient {
 
     @Override @Synchronized
     public boolean isEnkiDiscovered() {
-        return findEnkiMasterNode() != null;
+        return getDiscoveredEnkis().size() > 0;
 
     }
 
     @Override @Synchronized
-    public String getEnkiHost() {
-        DiscoveryNode master = findEnkiMasterNode();
-        String addr = null;
+    public List<AddressPort> getDiscoveredEnkis() {
+        ImmutableList.Builder<AddressPort> builder = ImmutableList.builder();
 
-        if(master != null) {
-            addr = master.getAttributes().getOrDefault("enki", null);
-        }
-
-        if (addr != null) {
-            String ipOrHost = addr.split(":")[0];
-            if (ipOrHost.equals("0.0.0.0")) {
-                return master.getHostAddress();
-            }
-
-            return ipOrHost;
-        }
-
-        return super.getEnkiHost();
-
-    }
-
-    @Override @Synchronized
-    public int getEnkiPort() {
-        DiscoveryNode master = findEnkiMasterNode();
-        String addr = null;
-
-        if(master != null) {
-            addr = master.getAttributes().getOrDefault("enki", null);
-        }
-
-        if(addr != null) {
-            try {
-                return Integer.parseInt(addr.split(":")[1]);
-            } catch(NumberFormatException | ArrayIndexOutOfBoundsException n) {
-                logger.error("getEnkiPort(): Could not parse {}", addr, n);
-            }
-        }
-
-        return super.getEnkiPort();
-    }
-
-    @Synchronized
-    private DiscoveryNode findEnkiMasterNode() {
         for(DiscoveryNode n : this.clusterState.getNodes()) {
             if(nodeIsEnkiNode(n)) {
-                // TODO: need to identify master. kinda important...
-                // todo: like really important
-                // ToDo: important enough to warrant four todos
-                // tODo: in four different case styles
-                return n;
+                String[] addressBits = n.getAttributes().getOrDefault("enki", "").split(":");
+                builder.add(new AddressPort(addressBits[0], Integer.parseInt(addressBits[1])));
             }
         }
 
-        return null;
+
+        return builder.build();
     }
 
     private static boolean nodeIsEnkiNode(DiscoveryNode n) {
@@ -149,6 +109,15 @@ class NodeClientImpl extends ESClient {
 
     private static boolean nodeIsNabuNode(DiscoveryNode n) {
         return n.attributes().getOrDefault("nabu", "false").equals("true");
+    }
+
+    @Override
+    public String getElasticSearchIndentifier() {
+        if(this.esNode != null) {
+            return this.esNode.settings().get("name");
+        }
+
+        return "NOT AVAILABLE";
     }
 
     /**

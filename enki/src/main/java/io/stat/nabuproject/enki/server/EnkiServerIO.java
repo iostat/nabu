@@ -44,7 +44,7 @@ public final class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> 
         logger.debug("CHANNEL_ACTIVE: {}", ctx);
         channelGroup.add(ctx.channel());
         ctx.attr(CONNECTED_NABU_ATTR).set(
-                new NabuConnectionImpl(
+                new ConnectionImpl(
                         ctx,
                         toNotify,
                         throttlePolicyProvider,

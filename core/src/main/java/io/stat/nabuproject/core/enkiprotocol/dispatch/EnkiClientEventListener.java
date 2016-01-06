@@ -2,6 +2,7 @@ package io.stat.nabuproject.core.enkiprotocol.dispatch;
 
 import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
+import io.stat.nabuproject.core.net.AddressPort;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
@@ -13,6 +14,19 @@ import java.util.Map;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 public interface EnkiClientEventListener {
+
+    /**
+     * A callback that is called when the connection was redirected
+     * The connection is still open at this point, but the server
+     * is expecting an ACK.
+     * @param sequence the sequence number of the associated REDIRECT packet
+     * @param redirectedTo where this client was redirected to
+     * @return whether or not this callback ran successfully.
+     */
+    default boolean onRedirected(EnkiConnection enki, long sequence, AddressPort redirectedTo) {
+        return true;
+    }
+
     /**
      * A callback that is sent when Enki sends new configuration data.
      * @param enki a high-level interface to the connected enki
@@ -48,13 +62,11 @@ public interface EnkiClientEventListener {
     /**
      * Called when this Nabu has disconnected from Enki
      * @param enki a high-level interface to the connected Enki. Not that it may very well be useless as it is no longer connected to anything.
-     * @param wasLeaving whether or not this connection was terminated gracefully using an {@link io.stat.nabuproject.core.enkiprotocol.packet.EnkiLeave}
-     *                   packet that was sent by either the server or by the client
-     * @param serverInitiated true if it were Enki that requested the leave, false if it was this Nabu that requested the leave
+     * @param reason the {@link io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection.DisconnectCause} for this connection loss.
      * @param wasAcked whether or not the LEAVE request, if present, was acknowledged by the other party
      * @return whether or not this callback ran successfully.
      */
-    default boolean onConnectionLost(EnkiConnection enki, boolean wasLeaving, boolean serverInitiated, boolean wasAcked) {
+    default boolean onConnectionLost(EnkiConnection enki, EnkiConnection.DisconnectCause reason, boolean wasAcked) {
         return true;
     }
 }

@@ -3,6 +3,7 @@ package io.stat.nabuproject.core.enkiprotocol.client;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventSource;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
+import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 
 /**
@@ -15,4 +16,10 @@ public abstract class EnkiClient extends Component implements
         KafkaBrokerConfigProvider,
         ThrottlePolicyProvider,
         EnkiClientEventSource {
+
+    /**
+     * Called by a EnkiConnection when it is told to redirect.
+     * @param ap the AddressPort of the redirection target.
+     */
+    abstract void setRedirectionTarget(AddressPort ap);
 }

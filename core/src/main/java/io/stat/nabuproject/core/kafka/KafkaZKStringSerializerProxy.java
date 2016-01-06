@@ -10,7 +10,7 @@ import org.I0Itec.zkclient.serialize.ZkSerializer;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/) (although, lets be honest, the Kafka team did all the hard work)
  */
-final class KafkaZKStringSerializerProxy implements ZkSerializer {
+public final class KafkaZKStringSerializerProxy implements ZkSerializer {
     @Override
     public byte[] serialize(Object o) throws ZkMarshallingError {
         return ZKStringSerializer.serialize(o);

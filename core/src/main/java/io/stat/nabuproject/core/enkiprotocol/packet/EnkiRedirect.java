@@ -1,6 +1,7 @@
 package io.stat.nabuproject.core.enkiprotocol.packet;
 
 import com.google.common.base.MoreObjects;
+import io.stat.nabuproject.core.net.AddressPort;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
@@ -21,27 +22,50 @@ public class EnkiRedirect extends EnkiPacket {
     }
 
     /**
-     * The address that the client should connect to.
+     * Where the redirect points to
      */
-    private final @Getter String address;
+    private @Getter AddressPort destination;
+
 
     /**
-     * The port that the client should connect to.
+     * Create a new EnkiRedirect
+     * @param sequence the sequence number
+     * @param address the address
+     * @param port the port
      */
-    private final @Getter int port;
-
     public EnkiRedirect(long sequence, String address, int port) {
+        this(sequence, new AddressPort(address, port));
+    }
+
+    /**
+     * Create a new EnkiRedirect from an {@link AddressPort}
+     * @param sequence the sequence number
+     * @param ap the AddressPort
+     */
+    public EnkiRedirect(long sequence, AddressPort ap) {
         super(sequence);
-        this.address = address;
-        this.port = port;
+        this.destination = ap;
+    }
+
+    /**
+     * @see AddressPort#getAddress()
+     */
+    public String getAddress() {
+        return destination.getAddress();
+    }
+
+    /**
+     * @see AddressPort#getPort()
+     */
+    public int getPort() {
+        return destination.getPort();
     }
 
     @Override
     public String toString() {
         return MoreObjects.toStringHelper(this)
                 .add("sequence", sequenceNumber)
-                .add("address", address)
-                .add("port", port)
+                .add("destination", destination)
                 .toString();
     }
 }

@@ -3,6 +3,8 @@ package io.stat.nabuproject.core.enkiprotocol.dispatch;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiClient;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
+import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
@@ -80,6 +82,16 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
     }
 
     @Override
+    public boolean onRedirected(EnkiConnection enki, long sequence, AddressPort redirectedTo) {
+        logger.info("onRedirected({}, {})", enki, redirectedTo);
+        dispatcher.dispatchListenerCallbacks(
+                listener -> listener.onRedirected(enki, sequence, redirectedTo),
+                new AckOnSuccessCRC("onRedirected", enki, new EnkiRedirect(sequence, redirectedTo)));
+        return true;
+
+    }
+
+    @Override
     public boolean onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config) {
         logger.info("onConfigurationReceived({}, {})", enki, config);
         dispatcher.dispatchListenerCallbacks(
@@ -107,10 +119,10 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
     }
 
     @Override
-    public boolean onConnectionLost(EnkiConnection enki, boolean wasLeaving, boolean serverInitiated, boolean wasAcked) {
-        logger.info("onConnectionLost({}, {}, {}, {})", enki, wasLeaving, serverInitiated, wasAcked);
+    public boolean onConnectionLost(EnkiConnection enki, EnkiConnection.DisconnectCause cause, boolean wasAcked) {
+        logger.info("onConnectionLost({}, {}, {})", enki, cause, wasAcked);
         dispatcher.dispatchListenerCallbacks(
-                listener -> listener.onConnectionLost(enki, wasLeaving, serverInitiated, wasAcked),
+                listener -> listener.onConnectionLost(enki, cause, wasAcked),
                 CALLBACK_FAILED_SHUTDOWNER);
         return true;
     }

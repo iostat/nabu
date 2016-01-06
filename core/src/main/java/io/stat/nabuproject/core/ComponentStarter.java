@@ -48,6 +48,7 @@ public final class ComponentStarter extends Component {
     public void start() throws ComponentException {
         // don't use deque.forEach unless you want terrible exception bubbling.
         for (Component c : deque) {
+            c.setStarter(this);
             c._dispatchStart();
         }
     }

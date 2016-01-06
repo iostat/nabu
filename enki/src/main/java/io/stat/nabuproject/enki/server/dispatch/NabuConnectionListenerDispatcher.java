@@ -1,14 +1,12 @@
 package io.stat.nabuproject.enki.server.dispatch;
 
 import io.stat.nabuproject.core.Component;
+import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.AckOnSuccessCRC;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.KillCnxnOnFailCRC;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
-import io.stat.nabuproject.core.util.functional.PentaFunction;
-import io.stat.nabuproject.core.util.functional.QuadFunction;
-import io.stat.nabuproject.core.util.functional.TriFunction;
 import io.stat.nabuproject.enki.server.NabuConnection;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
@@ -18,8 +16,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
  * Dispatches callbacks to any {@link NabuConnectionListener}s registered to it asynchronously.
@@ -67,53 +63,44 @@ public final class NabuConnectionListenerDispatcher implements NabuConnectionLis
 
     @Override
     public boolean onNewNabuConnection(NabuConnection cnxn) {
-        logger.info("onNewNabuConnection({})", cnxn);
-        dispatchBinaryKillerTask("onNewNabuConnection", NabuConnectionListener::onNewNabuConnection, cnxn);
+        dispatcher.dispatchListenerCallbacks(
+                listener -> listener.onNewNabuConnection(cnxn),
+                new KillCnxnOnFailCRC("onNewNabuConnection", cnxn));
         return true;
     }
 
     @Override
     public boolean onNabuLeaving(NabuConnection cnxn, boolean serverInitiated) {
-        logger.info("onNabuLeaving({}, {})", cnxn, serverInitiated);
-        dispatchTernaryKillerTask("onNabuLeaving", NabuConnectionListener::onNabuLeaving, cnxn, serverInitiated);
+        dispatcher.dispatchListenerCallbacks(
+                listener -> listener.onNabuLeaving(cnxn, serverInitiated),
+                new KillCnxnOnFailCRC("onNabuLeaving", cnxn));
+
         return true;
     }
 
     @Override
     public boolean onPacketDispatched(NabuConnection cnxn, EnkiPacket packet, CompletableFuture<EnkiPacket> future) {
-        logger.info("onPacketDispatched({}, {}, {})", cnxn, packet, future);
-        dispatchQuaternaryKillerTask(
-                "onPacketDispatched",
-                NabuConnectionListener::onPacketDispatched,
-                cnxn, packet, future
-        );
+        dispatcher.dispatchListenerCallbacks(
+                listener -> listener.onPacketDispatched(cnxn, packet, future),
+                new KillCnxnOnFailCRC("onPacketDispatched", cnxn));
         return true;
     }
 
     @Override
-    public boolean onNabuDisconnected(NabuConnection cnxn, boolean wasLeaving, boolean serverInitiated, boolean wasAcked) {
-        logger.info("onNabuDisconnected({}, {}, {}, {}", cnxn, wasLeaving, serverInitiated, wasAcked);
-
-        dispatchPentaryKillerTask(
-                "onNabuDisconnected",
-                NabuConnectionListener::onNabuDisconnected,
-                cnxn,
-                wasLeaving,
-                serverInitiated,
-                wasAcked);
+    public boolean onNabuDisconnected(NabuConnection cnxn, EnkiConnection.DisconnectCause cause, boolean wasAcked) {
+        dispatcher.dispatchListenerCallbacks(
+                listener -> listener.onNabuDisconnected(cnxn, cause, wasAcked),
+                new KillCnxnOnFailCRC("onNabuDisconnected", cnxn));
         return true;
     }
 
     @Override
     public boolean onPacketReceived(NabuConnection cnxn, EnkiPacket packet) {
-        logger.info("onPacketReceived({}, {})", cnxn, packet);
-        dispatchBinaryAckerTask(
-                "onPacketReceived",
-                NabuConnectionListener::onPacketReceived,
-                cnxn,
-                packet
-        );
-
+        dispatcher.dispatchListenerCallbacks(listener -> listener.onPacketReceived(cnxn, packet),
+                new AckOnSuccessCRC(
+                        "onPacketReceived",
+                        cnxn,
+                        packet));
         return true;
     }
 
@@ -126,60 +113,4 @@ public final class NabuConnectionListenerDispatcher implements NabuConnectionLis
     public void removeNabuConnectionListener(NabuConnectionListener listener) {
         dispatcher.removeListener(listener);
     }
-
-    // todo: let's be honest i'm basically flexing with all this FP shit. Could probably reduce the code to 1 or 2 less stack frames :P
-    // even if it's a little repetitive.
-
-    private <T extends NabuConnection, U extends EnkiPacket> void dispatchBinaryAckerTask(String callbackName,
-                                                                                          TriFunction<
-                                                                                                  NabuConnectionListener,
-                                                                                                  T, U, Boolean> callback,
-                                                                                          T cnxn, U packet) {
-        dispatcher.dispatchListenerCallbacks(listener -> callback.apply(listener, cnxn, packet),
-                new AckOnSuccessCRC(
-                    callbackName,
-                    cnxn,
-                    packet));
-    }
-
-    private void dispatchKillerTask(String callbackName, NabuConnection cnxn, Function<NabuConnectionListener, Boolean> listenerConsumer) {
-        dispatcher.dispatchListenerCallbacks(listenerConsumer, new KillCnxnOnFailCRC(callbackName, cnxn));
-    }
-
-    private <T extends NabuConnection> void dispatchBinaryKillerTask(String callbackName,
-                                                                     BiFunction<
-                                                                             NabuConnectionListener,
-                                                                             T, Boolean> callback,
-                                                                     T cnxn) {
-        dispatchKillerTask(callbackName, cnxn, listener -> callback.apply(listener, cnxn));
-    }
-
-    private <T extends NabuConnection, U> void dispatchTernaryKillerTask(String callbackName,
-                                                                         TriFunction<
-                                                                                    NabuConnectionListener,
-                                                                                    T, U,
-                                                                                    Boolean> callback,
-                                                                     T cnxn, U arg2) {
-        dispatchKillerTask(callbackName, cnxn, listener -> callback.apply(listener, cnxn, arg2));
-    }
-
-    private <T extends NabuConnection, U , V> void dispatchQuaternaryKillerTask(String callbackName,
-                                                                                QuadFunction<
-                                                                                        NabuConnectionListener,
-                                                                                        T, U, V,
-                                                                                        Boolean> callback,
-                                                                                T cnxn, U arg2, V arg3) {
-        dispatchKillerTask(callbackName, cnxn, listener -> callback.apply(listener, cnxn, arg2, arg3));
-    }
-
-    private <T extends NabuConnection, U, V, W> void dispatchPentaryKillerTask(String callbackName,
-                                                                               PentaFunction<
-                                                                                       NabuConnectionListener,
-                                                                                       T, U, V, W,
-                                                                                       Boolean> callback,
-                                                                               T cnxn, U arg2, V arg3, W arg4) {
-        dispatchKillerTask(callbackName, cnxn, listener -> callback.apply(listener, cnxn, arg2, arg3, arg4));
-    }
-
-
 }

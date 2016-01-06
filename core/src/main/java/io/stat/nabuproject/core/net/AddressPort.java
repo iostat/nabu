@@ -2,7 +2,9 @@ package io.stat.nabuproject.core.net;
 
 import com.google.common.base.MoreObjects;
 import io.stat.nabuproject.core.util.Tuple;
-import lombok.EqualsAndHashCode;
+
+import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * A simple immutable {@link Tuple} which holds an address
@@ -10,8 +12,9 @@ import lombok.EqualsAndHashCode;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-@EqualsAndHashCode(callSuper=false)
-public class AddressPort extends Tuple<String, Integer> {
+public class AddressPort extends Tuple<String, Integer> implements Serializable {
+    private static final long serialVersionUID = -1566911022466119392L;
+
     public AddressPort(String address, int port) {
         super(address, port);
     }
@@ -30,5 +33,10 @@ public class AddressPort extends Tuple<String, Integer> {
                 .add("address", getAddress())
                 .add("port", getPort())
                 .toString();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(first(), second());
     }
 }

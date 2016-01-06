@@ -34,7 +34,7 @@ public final class ShutdownOnFailureCRC extends CallbackReducerCallback {
     public void success() { /* no-op */ }
 
     private void performShutdown() {
-        Thread t = new Thread(() -> target.shutdown());
+        Thread t = new Thread(target::shutdown);
         t.setName("ShutdownOnFailerCRC-"+name);
         t.start();
     }

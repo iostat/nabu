@@ -1,5 +1,6 @@
 package io.stat.nabuproject.enki.server.dispatch;
 
+import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.enki.server.NabuConnection;
 
@@ -40,13 +41,13 @@ public interface NabuConnectionListener {
      * Callback when the socket has closed and the connection is
      * basically useless.
      * @param cnxn the NabuConnection that left
-     * @param wasLeaving true if this was caused by a LEAVE packet, false if the connection was lost or otherwise reset
-     * @param serverInitiated true if the leave was server initiated, false if client initiated or was a connection loss/reset.
+     * @param cause the cause of the of disconnect
      * @param wasAcked true if the leave request was acked by the client (if server-initiated),
      *                 true if the client-inited leave request was acked by the server (and why wouldn't it be).
+     *                 false otherwise
      * @return whether or not this callback ran successfully.
      */
-    boolean onNabuDisconnected(NabuConnection cnxn, boolean wasLeaving, boolean serverInitiated, boolean wasAcked);
+    boolean onNabuDisconnected(NabuConnection cnxn, EnkiConnection.DisconnectCause cause, boolean wasAcked);
 
     /**
      * Called when a packet is dispatched. This includes heartbeats, etc.

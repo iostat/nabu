@@ -13,25 +13,29 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class EnkiClientIO extends SimpleChannelInboundHandler<EnkiPacket> {
-    private static final AttributeKey<EnkiConnectionImpl> CONNECTED_ENKI_ATTR = AttributeKey.valueOf("connected_enki");
+    private static final AttributeKey<ConnectionImpl> CONNECTED_ENKI_ATTR = AttributeKey.valueOf("connected_enki");
+    private final EnkiClient creator;
     private final EnkiClientEventListener toNotify;
 
-    public EnkiClientIO(EnkiClientEventListener toNotify) {
+    public EnkiClientIO(EnkiClient creator, EnkiClientEventListener toNotify) {
         super();
+        logger.info("New EnkiClientIO {} {}", creator, toNotify);
+        this.creator  = creator;
         this.toNotify = toNotify;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         logger.debug("CHANNEL_ACTIVE: {}", ctx);
+        ctx.attr(ConnectionImpl.SUPPRESS_DISCONNECT_CALLBACK).set(false);
         ctx.attr(CONNECTED_ENKI_ATTR).set(
-                new EnkiConnectionImpl(ctx, toNotify));
+                new ConnectionImpl(ctx, creator, toNotify));
         super.channelActive(ctx);
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        logger.error("CHANNEL_INACTIVE");
+        logger.debug("CHANNEL_INACTIVE");
         getEnki(ctx).onDisconnected();
         ctx.attr(CONNECTED_ENKI_ATTR).getAndRemove();
         super.channelInactive(ctx);
@@ -44,13 +48,13 @@ public class EnkiClientIO extends SimpleChannelInboundHandler<EnkiPacket> {
         getEnki(ctx).leaveGracefully();
     }
 
-    private EnkiConnectionImpl getEnki(ChannelHandlerContext ctx) {
-        return ctx.attr(CONNECTED_ENKI_ATTR).get();
-    }
-
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, EnkiPacket msg) throws Exception {
-        logger.trace("channelRead0: {}", msg);
+        logger.debug("channelRead0: {}", msg);
         getEnki(ctx).onPacketReceived(msg);
+    }
+
+    private ConnectionImpl getEnki(ChannelHandlerContext ctx) {
+        return ctx.attr(CONNECTED_ENKI_ATTR).get();
     }
 }

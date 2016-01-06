@@ -15,4 +15,11 @@ public interface EnkiConnection extends EnkiPacketConnection {
 
     default void ack(EnkiPacket p) { ack(p.getSequenceNumber()); }
     default void nak(EnkiPacket p) { nak(p.getSequenceNumber()); }
+
+    enum DisconnectCause {
+        REDIRECT,
+        SERVER_LEAVE_REQUEST,
+        CLIENT_LEAVE_REQUEST,
+        CONNECTION_RESET
+    };
 }

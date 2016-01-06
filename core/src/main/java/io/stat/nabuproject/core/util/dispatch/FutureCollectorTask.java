@@ -1,5 +1,7 @@
 package io.stat.nabuproject.core.util.dispatch;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -12,6 +14,7 @@ import java.util.concurrent.Future;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
+@Slf4j
 final class FutureCollectorTask implements Callable<Boolean> {
     final List<Future<Boolean>> futuresToCollect;
 
@@ -22,7 +25,13 @@ final class FutureCollectorTask implements Callable<Boolean> {
     @Override
     public Boolean call() throws Exception {
         for(Future<Boolean> f : futuresToCollect) {
-            Boolean thisResult = f.get();
+            Boolean thisResult;
+            try {
+                thisResult = f.get();
+            } catch(Exception e) {
+                logger.error("FCT.get() failed for future " + f.toString() + " with exception ", e);
+                throw e;
+            }
 
             if(thisResult == null || !thisResult) {
                 return false;

@@ -82,5 +82,7 @@ subprojects {
         // this sets baseName to `nabuproject-dev` or `nabuproject-prod`
         // depending on what -Penv= was passed when building
         baseName = "${baseName}-${project.ext.buildEnvironment}"
+
+        mergeServiceFiles()
     }
 }

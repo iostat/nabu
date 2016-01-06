@@ -1,7 +1,8 @@
 package io.stat.nabuproject.core.util;
 
 import com.google.common.base.MoreObjects;
-import lombok.EqualsAndHashCode;
+
+import java.io.Serializable;
 
 /**
  * A generic immutable binary tuple.
@@ -10,8 +11,7 @@ import lombok.EqualsAndHashCode;
  * @param <T> the type of the first element
  * @param <U> the type of the second element
  */
-@EqualsAndHashCode
-public class Tuple<T, U> {
+public class Tuple<T extends Serializable, U extends Serializable> implements Serializable {
     private final T first;
     private final U second;
 
@@ -45,5 +45,15 @@ public class Tuple<T, U> {
                 .add("first", first)
                 .add("second", second)
                 .toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if(!(o instanceof Tuple)) {
+            return false;
+        }
+
+        Tuple t = ((Tuple) o);
+        return t.first().equals(this.first()) && t.second().equals(this.second());
     }
 }

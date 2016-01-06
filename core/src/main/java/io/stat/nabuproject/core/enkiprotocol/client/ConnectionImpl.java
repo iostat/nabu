@@ -1,6 +1,7 @@
 package io.stat.nabuproject.core.enkiprotocol.client;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventListener;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAssign;
@@ -9,6 +10,8 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiHeartbeat;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiLeave;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiNak;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
+import io.stat.nabuproject.core.net.AddressPort;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
@@ -24,8 +27,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class EnkiConnectionImpl implements EnkiConnection {
+class ConnectionImpl implements EnkiConnection {
+    static final AttributeKey<Boolean> SUPPRESS_DISCONNECT_CALLBACK = AttributeKey.newInstance("SUPPRESS_DISCONNECT_CALLBACK");
+
     private final ChannelHandlerContext ctx;
+    private final EnkiClient creator;
     private final EnkiClientEventListener toNotify;
 
     private final AtomicLong lastOutgoingSequence;
@@ -40,12 +46,15 @@ public class EnkiConnectionImpl implements EnkiConnection {
     private final AtomicBoolean wasLeavePacketSent;
     private final AtomicBoolean wasLeaveServerInitiated;
     private final AtomicBoolean wasLeaveAcknowledged;
+    private final AtomicBoolean wasRedirected;
 
-    private final CompletableFuture<EnkiConnectionImpl> afterClientLeaveAcked;
+    private final CompletableFuture<ConnectionImpl> afterClientLeaveAcked;
 
-    public EnkiConnectionImpl(ChannelHandlerContext ctx,
-                              EnkiClientEventListener toNotify) {
+    public ConnectionImpl(ChannelHandlerContext ctx,
+                          EnkiClient creator,
+                          EnkiClientEventListener toNotify) {
         this.ctx = ctx;
+        this.creator = creator;
         this.toNotify = toNotify;
 
         lastIncomingSequence = new AtomicLong(0);
@@ -60,6 +69,7 @@ public class EnkiConnectionImpl implements EnkiConnection {
         wasLeavePacketSent = new AtomicBoolean(false);
         wasLeaveServerInitiated = new AtomicBoolean(false);
         wasLeaveAcknowledged = new AtomicBoolean(false);
+        wasRedirected = new AtomicBoolean(false);
 
         afterClientLeaveAcked = new CompletableFuture<>();
     }
@@ -75,11 +85,23 @@ public class EnkiConnectionImpl implements EnkiConnection {
     }
 
     public void onDisconnected() {
-        toNotify.onConnectionLost(this, wasLeavePacketSent.get(), wasLeaveServerInitiated.get(), wasLeaveAcknowledged.get());
+        DisconnectCause cause;
+        if(wasLeavePacketSent.get()) {
+            if(wasLeaveServerInitiated.get()) {
+                cause = DisconnectCause.SERVER_LEAVE_REQUEST;
+            } else {
+                cause = DisconnectCause.CLIENT_LEAVE_REQUEST;
+            }
+        } else {
+            cause = DisconnectCause.CONNECTION_RESET;
+        }
+
+        if(!ctx.attr(ConnectionImpl.SUPPRESS_DISCONNECT_CALLBACK).get()) {
+            toNotify.onConnectionLost(this, cause, wasLeaveAcknowledged.get());
+        }
     }
 
     public void onPacketReceived(EnkiPacket p) {
-        logger.info("onPacketReceived: {}", p);
         lastIncomingSequence.set(p.getSequenceNumber());
         switch(p.getType()) {
             case HEARTBEAT:
@@ -96,6 +118,16 @@ public class EnkiConnectionImpl implements EnkiConnection {
                 wasLeavePacketSent.set(true);
                 dispatchPacket(new EnkiAck(p.getSequenceNumber()));
                 wasLeaveAcknowledged.set(true);
+                break;
+            case REDIRECT:
+                AddressPort target = ((EnkiRedirect) p).getDestination();
+                wasLeaveServerInitiated.set(false);
+                wasLeavePacketSent.set(false);
+                wasLeaveAcknowledged.set(true);
+                wasRedirected.set(true);
+                creator.setRedirectionTarget(target);
+                toNotify.onRedirected(this, p.getSequenceNumber(), target);
+                ctx.attr(ConnectionImpl.SUPPRESS_DISCONNECT_CALLBACK).set(true);
                 break;
             case ACK:
                 if(p.getSequenceNumber() == sequenceNumberOfLeave.get()) {

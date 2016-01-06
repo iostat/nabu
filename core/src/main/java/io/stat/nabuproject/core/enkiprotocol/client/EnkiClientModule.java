@@ -11,7 +11,7 @@ import com.google.inject.Singleton;
 public class EnkiClientModule extends AbstractModule {
     @Override
     protected void configure() {
-        bind(EnkiClientImpl.class).in(Singleton.class);
-        bind(EnkiClient.class).to(EnkiClientImpl.class);
+        bind(ClientImpl.class).in(Singleton.class);
+        bind(EnkiClient.class).to(ClientImpl.class);
     }
 }

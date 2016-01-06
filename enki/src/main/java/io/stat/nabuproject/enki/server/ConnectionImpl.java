@@ -7,6 +7,7 @@ import com.google.common.collect.Maps;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
+import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiHeartbeat;
@@ -42,12 +43,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-class NabuConnectionImpl implements NabuConnection {
+class ConnectionImpl implements NabuConnection {
     private static final AttributeKey<Long> LAST_SEQUENCE = AttributeKey.newInstance("last_heartbeat");
 
     private final NabuConnectionListener connectionListener;
     private final ThrottlePolicyProvider throttlePolicyProvider;
     private final KafkaBrokerConfigProvider kafkaBrokerConfigProvider;
+    private final ElectedLeaderProvider electedLeaderProvider;
 
     private final ChannelHandlerContext context;
     private final Map<Long, CompletableFuture<EnkiPacket>> promises;
@@ -71,13 +73,12 @@ class NabuConnectionImpl implements NabuConnection {
     private final Timer heartbeatTimer;
     private final Timer leaveEnforcerTimer;
 
-    private final ElectedLeaderProvider electedLeaderProvider;
+    public ConnectionImpl(ChannelHandlerContext context,
+                          NabuConnectionListener connectionListener,
+                          ThrottlePolicyProvider throttlePolicyProvider,
+                          KafkaBrokerConfigProvider kafkaBrokerConfigProvider,
+                          ElectedLeaderProvider electedLeaderProvider) {
 
-    public NabuConnectionImpl(ChannelHandlerContext context,
-                              NabuConnectionListener connectionListener,
-                              ThrottlePolicyProvider throttlePolicyProvider,
-                              KafkaBrokerConfigProvider kafkaBrokerConfigProvider,
-                              ElectedLeaderProvider electedLeaderProvider) {
         this.context = context;
         this.connectionListener = connectionListener;
         this.throttlePolicyProvider = throttlePolicyProvider;
@@ -108,19 +109,24 @@ class NabuConnectionImpl implements NabuConnection {
         this.heartbeatTask = this.new HeartbeatTask();
         this.leaveEnforcerTask = this.new LeaveEnforcerTask();
 
-        // todo: heartbeat timeouts should be configurable.
-        // 1 second delay before first run, 3 second delay between runs
-        this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 1000, 3000);
-
         connectionListener.onNewNabuConnection(this);
 
-        logger.info("New NabuConnectionImpl({}) for {}", this, context);
+        logger.info("New ConnectionImpl({}) for {}", this, context);
 
-        if(electedLeaderProvider.isSelf()) {
+        if(this.electedLeaderProvider.isSelf()) {
+            logger.info("This node is the leader; sending CONFIGURE");
             dispatchConfigure(buildDispatchedNabuConfig()).complete(null);
+            // todo: heartbeat timeouts should be configurable.
+            // 1 second delay before first run, 3 second delay between runs
+            this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 1000, 3000);
         } else {
-            performRedirect(electedLeaderProvider.getElectedLeaderAP());
+            logger.info("This node IS NOT the leader; sending REDIRECT");
+            // have to free up the event loop thread before I can dispatch the redirect.
+            // im reusing the hearbeat timer since basically else will use it.
+            this.heartbeatTimer.schedule(new RedirectorTask(), 1000);
         }
+
+        logger.info("svci constructed");
     }
 
     private Map<String, Serializable> buildDispatchedNabuConfig() {
@@ -148,7 +154,10 @@ class NabuConnectionImpl implements NabuConnection {
 
     private void performRedirect(AddressPort ap) {
         dispatchPacket(new EnkiRedirect(assignSequence(), ap.getAddress(), ap.getPort()))
-            .thenAcceptAsync($$$$$$ -> leaveGracefully());
+            .thenAcceptAsync($$$$$$ -> {
+                logger.info("acceptored");
+                killConnection(true);
+            });
     }
 
     private void dispatchAck(long sequence) { dispatchAck(sequence, false); }
@@ -173,18 +182,23 @@ class NabuConnectionImpl implements NabuConnection {
     private CompletableFuture<EnkiPacket> dispatchPacket(EnkiPacket packet, boolean ignoreDisconnect) {
         CompletableFuture<EnkiPacket> future = new CompletableFuture<>();
         connectionListener.onPacketDispatched(this, packet, future);
-        if(!isDisconnecting.get()) {
+        if (!isDisconnecting.get()) {
             promises.put(packet.getSequenceNumber(), future);
             context.writeAndFlush(packet);
-        } else if(packet.getType() == EnkiPacket.Type.LEAVE || ignoreDisconnect) {
+        } else if (packet.getType() == EnkiPacket.Type.LEAVE || ignoreDisconnect) {
             promises.put(packet.getSequenceNumber(), future);
             context.writeAndFlush(packet);
         } else {
             future.completeExceptionally(
-                new NodeLeavingException(
+                    new NodeLeavingException(
                         "Cannot dispatch the packet as" +
                         " this node is disconnecting from the cluster"));
         }
+
+        if (packet.getType() != EnkiPacket.Type.ACK) {
+            connectionListener.onPacketDispatched(this, packet, future);
+        }
+
         return future;
     }
 
@@ -269,9 +283,17 @@ class NabuConnectionImpl implements NabuConnection {
         heartbeatTimer.cancel();
         leaveEnforcerTimer.cancel();
 
-        // todo: dispatch to listeners that the client has disconnected.
-        // todo: for whatever reason (whether kicked or just connection lost)
-        connectionListener.onNabuDisconnected(this, wasLeavePacketSent.get(), wasLeaveServerInitiated.get(), leaveAcknowledged.get());
+        EnkiConnection.DisconnectCause cause;
+        if(wasLeavePacketSent.get()) {
+            if(wasLeaveServerInitiated.get()) {
+                cause = EnkiConnection.DisconnectCause.SERVER_LEAVE_REQUEST;
+            } else {
+                cause = EnkiConnection.DisconnectCause.CLIENT_LEAVE_REQUEST;
+            }
+        } else {
+            cause = EnkiConnection.DisconnectCause.CONNECTION_RESET;
+        }
+        connectionListener.onNabuDisconnected(this, cause, leaveAcknowledged.get());
     }
 
     @Override @Synchronized
@@ -341,21 +363,21 @@ class NabuConnectionImpl implements NabuConnection {
         @Override
         public void run() {
             if(waitingForHeartbeat.get()) {
-                int missedHeartbeats = NabuConnectionImpl.this.missedHeartbeats.incrementAndGet();
+                int missedHeartbeats = ConnectionImpl.this.missedHeartbeats.incrementAndGet();
                 logger.warn("{} missed heartbeat(s) since last heartbeat...", missedHeartbeats);
 
                 // todo: this should be configurable.
                 if(missedHeartbeats >= 5) {
                     logger.error("Nabu node has missed {} heartbeats now!", missedHeartbeats);
                     // todo: force deallocate and leaveGracefully from cluster.
-                    NabuConnectionImpl.this.leaveGracefully();
+                    ConnectionImpl.this.leaveGracefully();
                 }
             } else {
                 waitingForHeartbeat.set(true);
-                CompletableFuture<EnkiPacket> f = NabuConnectionImpl.this.dispatchHeartbeat();
+                CompletableFuture<EnkiPacket> f = ConnectionImpl.this.dispatchHeartbeat();
                 f.whenCompleteAsync((enkiPacket, throwable) -> {
                     if(throwable == null) {
-                        NabuConnectionImpl.this.lastHeartbeat.set(System.currentTimeMillis());
+                        ConnectionImpl.this.lastHeartbeat.set(System.currentTimeMillis());
                         missedHeartbeats.set(0);
                     } else {
                         if(throwable instanceof ConnectionLostException || throwable instanceof NodeLeavingException) {
@@ -378,14 +400,22 @@ class NabuConnectionImpl implements NabuConnection {
     private class LeaveEnforcerTask extends TimerTask {
         @Override
         public void run() {
-            if(!NabuConnectionImpl.this.leaveAcknowledged.get()) {
+            if(!ConnectionImpl.this.leaveAcknowledged.get()) {
                 logger.error("Server-initiated leave request was NOT acknowledged..");
                 logger.error("Forcibly closing the connection to {}. " +
                         "You may want to leaveGracefully the node to ensure data doesn't get re-written!",
-                        NabuConnectionImpl.this);
+                        ConnectionImpl.this);
             } else {
-                logger.debug("No need to enforce leave request for {}", NabuConnectionImpl.this);
+                logger.debug("No need to enforce leave request for {}", ConnectionImpl.this);
             }
+        }
+    }
+
+    private class RedirectorTask extends TimerTask {
+        @Override
+        public void run() {
+            AddressPort electedAP = electedLeaderProvider.getElectedLeaderAP();
+            performRedirect(electedAP);
         }
     }
 }

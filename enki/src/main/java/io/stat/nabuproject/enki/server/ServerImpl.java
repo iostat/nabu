@@ -25,6 +25,8 @@ import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListenerDispatcher
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.BindException;
+
 /**
  * Runs the Enki management server.
  *
@@ -87,6 +89,7 @@ class ServerImpl extends EnkiServer {
 
     }
 
+    @SuppressWarnings("ConstantConditions") //BindException is an unchecked Exception with netty and its async sorcery.
     @Override
     public void start() throws ComponentException {
         bootstrap.group(acceptorGroup, workerGroup)
@@ -101,11 +104,19 @@ class ServerImpl extends EnkiServer {
         try {
             this.listenerChannel = bootstrap.bind(listenBinding.getAddress(), listenBinding.getPort()).sync().channel();
             this.allOpenChannels.add(this.listenerChannel);
-        } catch(InterruptedException e) {
-            this.acceptorGroup.shutdownGracefully();
-            this.workerGroup.shutdownGracefully();
+        } catch(Exception e) {
+            if (e instanceof InterruptedException) {
+                this.acceptorGroup.shutdownGracefully();
+                this.workerGroup.shutdownGracefully();
 
-            logger.error("Failed to start Enki Server, {}", e);
+                logger.error("Failed to start Enki Server", e);
+            } else if (e instanceof BindException) {
+                logger.error("Failed to start Enki Server couldn't bind", e);
+            } else {
+                logger.error("Failed to start Enki Server due to some other exception", e);
+            }
+
+            shutdown();
             throw new ComponentException(true, e);
         }
     }
@@ -115,22 +126,25 @@ class ServerImpl extends EnkiServer {
         // todo: disconnect all connected nodes. (or will the worker-coordinator or whatever do that first?)
         // TODO: fixes for shutdown() called on failed initialization (not critical)
         logger.info("Shutting down Netty server...");
-        try {
-            this.allOpenChannels.close().awaitUninterruptibly();
-        } catch (Exception e) {
-            logger.error("Exception while sync'ing listenerChannel.closeFuture()!", e);
+        if(this.allOpenChannels != null) {
+            try {
+                this.allOpenChannels.close().awaitUninterruptibly();
+            } catch (Exception e) {
+                logger.error("Exception while sync'ing listenerChannel.closeFuture()!", e);
+            }
         }
 
         logger.info("Shutting down NabuConnectionListenerDispatcher...");
-        try {
-            // todo: close all dispatched listeners before actually shutting everything down...
-            dispatcher.shutdown();
-        } catch(Exception e) {
-            logger.warn("Exception thrown while shutting down dispatcher!");
+        if(dispatcher != null) {
+            try {
+                // todo: close all dispatched listeners before actually shutting everything down...
+                dispatcher.shutdown();
+            } catch(Exception e) {
+                logger.warn("Exception thrown while shutting down dispatcher!");
+            }
         }
 
         acceptorGroup.shutdownGracefully();
         workerGroup.shutdownGracefully();
     }
-
 }

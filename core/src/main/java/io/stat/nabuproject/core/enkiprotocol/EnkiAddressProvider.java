@@ -1,6 +1,8 @@
 package io.stat.nabuproject.core.enkiprotocol;
 
-import io.stat.nabuproject.core.enkiprotocol.client.EnkiClient;
+import io.stat.nabuproject.core.net.AddressPort;
+
+import java.util.List;
 
 /**
  * Provides the IP address and port of the master Enki node.
@@ -10,6 +12,7 @@ import io.stat.nabuproject.core.enkiprotocol.client.EnkiClient;
 public interface EnkiAddressProvider {
     /**
      * Whether or not there is an Enki advertised in the cluster
+     * that we can connect to.
      * @return whether or not this provider knows of an Enki.
      */
     default boolean isEnkiDiscovered() {
@@ -17,20 +20,8 @@ public interface EnkiAddressProvider {
     }
 
     /**
-     * The hostname or IP address of the Enki master instance.
-     * @return the hostname or IP address of the Enki master
-     *         or null if {@link EnkiAddressProvider#isEnkiDiscovered()} is false.
+     * Gets a list of all Enkis that this provider is aware of.
+     * @return a list of all Enkis that this provider is aware of.
      */
-    default String getEnkiHost() {
-        return null;
-    }
-
-    /**
-     * The port of the Enki master instance that serves the Enki protocol.
-     * @return the port an {@link EnkiClient} should connect to reach the Enki master
-     *         or -1 if {@link EnkiAddressProvider#isEnkiDiscovered()} is false.
-     */
-    default int getEnkiPort() {
-        return -1;
-    }
+    default List<AddressPort> getDiscoveredEnkis() { return null; }
 }

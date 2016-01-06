@@ -106,6 +106,7 @@ public abstract class EnkiPacket {
                     EnkiRedirect redir = ((EnkiRedirect) msg);
                     ProtocolHelper.writeStringToByteBuf(redir.getAddress(), restOfPacket);
                     restOfPacket.writeInt(redir.getPort());
+                    break;
                 default:
                     throw new RuntimeException("Don't know how to handle EnkiPacket of type " + packetType);
             }

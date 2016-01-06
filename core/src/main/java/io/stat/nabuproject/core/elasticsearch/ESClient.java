@@ -60,4 +60,6 @@ public abstract class ESClient extends Component implements EnkiAddressProvider,
     protected void dispatchNabuEsEvent(NabuESEvent event) {
         eSEventListeners.forEach(listener -> listener.onNabuESEvent(event));
     }
+
+    public abstract String getElasticSearchIndentifier();
 }
