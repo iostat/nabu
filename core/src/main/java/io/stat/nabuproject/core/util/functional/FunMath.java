@@ -1,8 +1,11 @@
 package io.stat.nabuproject.core.util.functional;
 
+import com.google.common.primitives.Longs;
+
+import java.util.Comparator;
 import java.util.function.BiPredicate;
 import java.util.function.BinaryOperator;
-import java.util.function.UnaryOperator;
+import java.util.function.IntUnaryOperator;
 
 /**
  * Functional math
@@ -25,7 +28,8 @@ public final class FunMath {
     public static final BinaryOperator<Long>    sub = (a, b) -> a - b;
     public static final BinaryOperator<Long>    mod = (a, b) -> a % b;
 
-    public static final UnaryOperator<Integer>     neg = (a) -> a * -1;
+    public static final IntUnaryOperator negate = (a) -> a * -1;
+    public static final Comparator<Long> compare = Longs::compare;
 
-    public static final BiPredicate<?, ?> oeq = Object::equals;
+    public static final BiPredicate<Object, Object> oeq = (a, b) -> a.equals(b);
 }

@@ -5,6 +5,7 @@ import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.net.AddressPort;
+import io.stat.nabuproject.core.util.Tuple;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Synchronized;
@@ -37,6 +38,8 @@ class NodeClientImpl extends ESClient {
 
     private ESConfigProvider config;
 
+    private final byte[] $clusterStateLock;
+
     @Inject
     NodeClientImpl(ESConfigProvider configProvider) {
         this.config = configProvider;
@@ -58,6 +61,8 @@ class NodeClientImpl extends ESClient {
 
         this.esNode = this.nodeBuilder.build();
         this.clusterStateListener = this.new ClusterStateListener();
+
+        this.$clusterStateLock = new byte[0];
     }
 
     @Override
@@ -89,13 +94,18 @@ class NodeClientImpl extends ESClient {
     }
 
     @Override @Synchronized
-    public List<AddressPort> getDiscoveredEnkis() {
-        ImmutableList.Builder<AddressPort> builder = ImmutableList.builder();
+    public List<Tuple<String,AddressPort>> getDiscoveredEnkis() {
+        ImmutableList.Builder<Tuple<String,AddressPort>> builder = ImmutableList.builder();
 
         for(DiscoveryNode n : this.clusterState.getNodes()) {
             if(nodeIsEnkiNode(n)) {
                 String[] addressBits = n.getAttributes().getOrDefault("enki", "").split(":");
-                builder.add(new AddressPort(addressBits[0], Integer.parseInt(addressBits[1])));
+                builder.add(
+                        new Tuple<>(
+                            n.name(),
+                            new AddressPort(addressBits[0], Integer.parseInt(addressBits[1]))
+                        )
+                );
             }
         }
 
@@ -112,7 +122,7 @@ class NodeClientImpl extends ESClient {
     }
 
     @Override
-    public String getElasticSearchIndentifier() {
+    public String getESIdentifier() {
         if(this.esNode != null) {
             return this.esNode.settings().get("name");
         }
@@ -131,6 +141,9 @@ class NodeClientImpl extends ESClient {
          */
         @Override
         public void clusterChanged(ClusterChangedEvent event) {
+            synchronized(NodeClientImpl.this.$clusterStateLock) {
+                NodeClientImpl.this.clusterState = event.state();
+            }
             List<DiscoveryNode> addedNodes   = event.nodesDelta().addedNodes();
             List<DiscoveryNode> removedNodes = event.nodesDelta().removedNodes();
 
@@ -178,6 +191,5 @@ class NodeClientImpl extends ESClient {
                 }
             });
         }
-
     }
 }

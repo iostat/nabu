@@ -1,17 +1,15 @@
 package io.stat.nabuproject.enki.leader;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.stat.nabuproject.Version;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.ProtocolHelper;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-
-import java.io.Serializable;
 
 /**
  * A simple data class that represents leader election data
@@ -20,8 +18,7 @@ import java.io.Serializable;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @RequiredArgsConstructor
-@EqualsAndHashCode
-final class ZKLeaderData implements Serializable {
+final class ZKLeaderData extends LeaderData {
     private static final long serialVersionUID = -6197344956374201028L;
 
     private static final byte[] MAGIC = { 0x45, 0x5A, 0x4B, 0x4C, 0x45, 0x44 };
@@ -31,13 +28,27 @@ final class ZKLeaderData implements Serializable {
     private final @Getter String version;
     private final @Getter String nodeIdentifier;
     private final @Getter AddressPort addressPort;
+    private final @Getter long priority;
 
-    ZKLeaderData(String nodeID, AddressPort ap) {
-        this(Version.VERSION, nodeID, ap);
+    ZKLeaderData(String nodeID, AddressPort ap, long priority) {
+        this(Version.VERSION, nodeID, ap, priority);
     }
 
-    public boolean isAcceptable() {
-        return version.equals(Version.VERSION);
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(version, nodeIdentifier, addressPort);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(!(obj instanceof LeaderData)) {
+            return false;
+        }
+
+        LeaderData other = ((LeaderData) obj);
+        return this.getVersion().equals(other.getVersion())
+            && this.getNodeIdentifier().equals(other.getNodeIdentifier())
+            && this.getAddressPort().equals(other.getAddressPort());
     }
 
     @Override
@@ -45,6 +56,7 @@ final class ZKLeaderData implements Serializable {
         return MoreObjects.toStringHelper(this)
                 .add("version", version)
                 .add("nodeID", nodeIdentifier)
+                .add("pri", priority)
                 .add("ap", addressPort)
                 .toString();
     }
@@ -62,7 +74,7 @@ final class ZKLeaderData implements Serializable {
     }
 
     @SneakyThrows
-    public static ZKLeaderData fromBase64(String s) {
+    public static LeaderData fromBase64(String s, long priority) {
         byte[] bytes = java.util.Base64.getDecoder().decode(s);
 
         for(int i = 0; i < MAGIC.length; i++) {
@@ -81,14 +93,14 @@ final class ZKLeaderData implements Serializable {
             // so lets just be safe and give it garbage that anybody
             // who checks leader liveness will summarily ignore on the merit
             // that this IP is unconnectable
-            return new ZKLeaderData(version, "OUTDATEDNODE", new AddressPort("999.999.999.999", 99999));
+            return new ZKLeaderData(version, "OUTDATEDNODE", new AddressPort("999.999.999.999", 99999), priority);
         }
 
         String nodeId  = ProtocolHelper.readStringFromByteBuf(buffer);
         String address = ProtocolHelper.readStringFromByteBuf(buffer);
         int    port    = buffer.readInt();
 
-        return new ZKLeaderData(version, nodeId, new AddressPort(address, port));
+        return new ZKLeaderData(version, nodeId, new AddressPort(address, port), priority);
     }
 
     private static byte[] convertAndRelease(ByteBuf buffer) {

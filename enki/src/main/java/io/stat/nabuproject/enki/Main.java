@@ -11,7 +11,8 @@ import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.kafka.KafkaModule;
 import io.stat.nabuproject.core.net.SimpleAdvertisementResolverModule;
 import io.stat.nabuproject.core.util.JVMHackery;
-import io.stat.nabuproject.enki.leader.LeaderElectionModule;
+import io.stat.nabuproject.enki.integration.IntegrationModule;
+import io.stat.nabuproject.enki.leader.ZKLeaderElectionModule;
 import io.stat.nabuproject.enki.server.EnkiServerModule;
 import lombok.Getter;
 import lombok.experimental.Delegate;
@@ -45,7 +46,8 @@ public class Main {
                 new SimpleAdvertisementResolverModule(),
                 new ESModule(),
                 new KafkaModule(),
-                new LeaderElectionModule(),
+                new ZKLeaderElectionModule(),
+                new IntegrationModule(true),
                 new EnkiServerModule()
         );
 

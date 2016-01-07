@@ -121,6 +121,7 @@ class ConnectionImpl implements EnkiConnection {
                 break;
             case REDIRECT:
                 AddressPort target = ((EnkiRedirect) p).getDestination();
+                logger.info("RECV Redirect {}", target);
                 wasLeaveServerInitiated.set(false);
                 wasLeavePacketSent.set(false);
                 wasLeaveAcknowledged.set(true);

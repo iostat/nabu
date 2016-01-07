@@ -61,5 +61,5 @@ public abstract class ESClient extends Component implements EnkiAddressProvider,
         eSEventListeners.forEach(listener -> listener.onNabuESEvent(event));
     }
 
-    public abstract String getElasticSearchIndentifier();
+    public abstract String getESIdentifier();
 }

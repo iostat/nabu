@@ -125,8 +125,6 @@ class ConnectionImpl implements NabuConnection {
             // im reusing the hearbeat timer since basically else will use it.
             this.heartbeatTimer.schedule(new RedirectorTask(), 1000);
         }
-
-        logger.info("svci constructed");
     }
 
     private Map<String, Serializable> buildDispatchedNabuConfig() {
@@ -414,7 +412,7 @@ class ConnectionImpl implements NabuConnection {
     private class RedirectorTask extends TimerTask {
         @Override
         public void run() {
-            AddressPort electedAP = electedLeaderProvider.getElectedLeaderAP();
+            AddressPort electedAP = electedLeaderProvider.getElectedLeaderData().getAddressPort();
             performRedirect(electedAP);
         }
     }

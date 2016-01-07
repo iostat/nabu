@@ -21,4 +21,9 @@ public abstract class CallbackReducerCallback {
      * Called if all callbacks executed successfully
      */
     public abstract void success();
+
+    /**
+     * Get the name of the callback this CallbackReducerCallback would have reduced.
+     */
+    public abstract String getName();
 }

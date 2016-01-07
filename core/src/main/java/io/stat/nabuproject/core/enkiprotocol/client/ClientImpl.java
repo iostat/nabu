@@ -140,7 +140,6 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
                     shutdown();
                 }
             } finally {
-                logger.info("clientChannel closed");
                 this.clientChannel = null;
             }
         }
@@ -224,6 +223,7 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
 
     @Override
     void setRedirectionTarget(AddressPort ap) {
+        logger.info("Being redirected to: {}", ap);
         wasRedirected.set(true);
         redirectedTo.set(ap);
     }

@@ -1,6 +1,7 @@
 package io.stat.nabuproject.core.util.dispatch;
 
 import io.stat.nabuproject.core.IComponent;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -13,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class ShutdownOnFailureCRC extends CallbackReducerCallback {
     private final IComponent target;
-    private final String name;
+    private final @Getter String name;
 
     public ShutdownOnFailureCRC(IComponent target, String name) {
         this.target = target;

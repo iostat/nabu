@@ -17,9 +17,4 @@ public interface LeaderEventSource {
      * @param listener the lsitener to deregister
      */
     void removeLeaderEventListener(LeaderEventListener listener);
-
-    /**
-     * @return Whether or not this Enki is the current master.
-     */
-    boolean isLeader();
 }

@@ -6,6 +6,7 @@ import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.kafka.KafkaMetadataClient;
 import io.stat.nabuproject.enki.integration.IntegrationSanityChecker;
+import io.stat.nabuproject.enki.integration.LeaderLivenessIntegrator;
 import io.stat.nabuproject.enki.integration.WorkerCoordinator;
 import io.stat.nabuproject.enki.leader.EnkiLeaderElector;
 import io.stat.nabuproject.enki.server.EnkiServer;
@@ -26,8 +27,9 @@ class EnkiImpl extends Enki {
     private final EnkiServer enkiServer;
     private final KafkaMetadataClient metadataClient;
     private final IntegrationSanityChecker sanityChecker;
-    private final WorkerCoordinator workerCoordinator;
     private final EnkiLeaderElector leaderElector;
+    private final LeaderLivenessIntegrator leaderLivenessIntegrator;
+    private final WorkerCoordinator workerCoordinator;
     private final ComponentStarter componentStarter;
 
     @Override @Synchronized
@@ -38,6 +40,7 @@ class EnkiImpl extends Enki {
                 this.metadataClient,
                 this.sanityChecker,
                 this.leaderElector,
+                this.leaderLivenessIntegrator,
                 this.enkiServer,
                 this.workerCoordinator);
 

@@ -2,6 +2,7 @@ package io.stat.nabuproject.core.enkiprotocol.client;
 
 import io.stat.nabuproject.core.enkiprotocol.EnkiAddressProvider;
 import io.stat.nabuproject.core.net.AddressPort;
+import io.stat.nabuproject.core.util.Tuple;
 import lombok.Getter;
 
 import java.util.HashSet;
@@ -36,13 +37,14 @@ final class RetryTrackingAddressProvider implements EnkiAddressProvider {
     }
 
     @Override
-    public List<AddressPort> getDiscoveredEnkis() {
+    public List<Tuple<String, AddressPort>> getDiscoveredEnkis() {
         return provider.getDiscoveredEnkis();
     }
 
     public AddressPort getNextEnki() {
         AddressPort candidate = provider.getDiscoveredEnkis()
                                         .stream()
+                                        .map(Tuple::second)
                                         .filter(not(blacklistedAPs::contains))
                                         .findFirst()
                                         .orElse(null);

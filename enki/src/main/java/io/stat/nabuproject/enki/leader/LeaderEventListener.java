@@ -1,6 +1,6 @@
 package io.stat.nabuproject.enki.leader;
 
-import io.stat.nabuproject.core.net.AddressPort;
+import java.util.List;
 
 /**
  * Something which can respond to Enki leader-election related events
@@ -9,16 +9,11 @@ import io.stat.nabuproject.core.net.AddressPort;
  */
 public interface LeaderEventListener {
     /**
-     * Called when this instance becomes the Enki master.
-     * @return true if the callback completed successfully, false otherwise.
+     * Called when the leader has changed.
+     * @param isSelf whether or not this node is the leader.
+     * @param myData the LeaderData of the new leader
+     * @param allLeaderData the leaderDatas of all the nodes.
+     * @return true if the callback was successful, false otherwise.
      */
-    boolean onSelfElected();
-
-    /**
-     * Called when a new leader was elected, but it was not this instance.
-     * @param leaderID the cluster-wide identifier of the new leader (generally its ES node name)
-     * @param leaderAP the {@link AddressPort} of the new leader.
-     * @return true if the callback completed successfully, false otherwise
-     */
-    boolean onOtherElected(String leaderID, AddressPort leaderAP);
+    boolean onLeaderChange(boolean isSelf, LeaderData myData, List<LeaderData> allLeaderData);
 }

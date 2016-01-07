@@ -1,8 +1,10 @@
 package io.stat.nabuproject.core.util;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 
 import java.io.Serializable;
+import java.util.function.Function;
 
 /**
  * A generic immutable binary tuple.
@@ -55,5 +57,22 @@ public class Tuple<T extends Serializable, U extends Serializable> implements Se
 
         Tuple t = ((Tuple) o);
         return t.first().equals(this.first()) && t.second().equals(this.second());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(first, second);
+    }
+
+    public <NewT extends Serializable> Tuple<NewT, U> xformFirst(Function<T, NewT> converter) {
+        return new Tuple<>(converter.apply(first), second);
+    }
+
+    public <NewU extends Serializable> Tuple<T, NewU> xformSecond(Function<U, NewU> converter) {
+        return new Tuple<>(first, converter.apply(second));
+    }
+
+    public <NT extends Serializable, NU extends Serializable> Tuple<NT, NU> xform(Function<T, NT> convFst, Function<U, NU> convSnd) {
+        return new Tuple<>(convFst.apply(first), convSnd.apply(second));
     }
 }

@@ -19,7 +19,6 @@ public class EnkiClientIO extends SimpleChannelInboundHandler<EnkiPacket> {
 
     public EnkiClientIO(EnkiClient creator, EnkiClientEventListener toNotify) {
         super();
-        logger.info("New EnkiClientIO {} {}", creator, toNotify);
         this.creator  = creator;
         this.toNotify = toNotify;
     }

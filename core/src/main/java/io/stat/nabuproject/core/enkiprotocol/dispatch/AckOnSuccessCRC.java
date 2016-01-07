@@ -3,6 +3,7 @@ package io.stat.nabuproject.core.enkiprotocol.dispatch;
 import io.stat.nabuproject.core.enkiprotocol.EnkiPacketConnection;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -13,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public final class AckOnSuccessCRC extends CallbackReducerCallback {
-    private final String name;
+    private final @Getter String name;
     private final EnkiPacketConnection cnxn;
     private final EnkiPacket packet;
 

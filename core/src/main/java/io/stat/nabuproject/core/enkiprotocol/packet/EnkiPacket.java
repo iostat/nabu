@@ -61,7 +61,6 @@ public abstract class EnkiPacket {
         private final ObjectEncoderExposer exposer;
 
         public Encoder() {
-            logger.info("new EnkiPacket.Encoder()");
             this.exposer = new ObjectEncoderExposer();
         }
 
@@ -133,7 +132,6 @@ public abstract class EnkiPacket {
         private final ObjectDecoderExposer exposer;
 
         public Decoder() {
-            logger.info("new EnkiPacket.Decoder()");
             this.exposer = new ObjectDecoderExposer();
         }
 

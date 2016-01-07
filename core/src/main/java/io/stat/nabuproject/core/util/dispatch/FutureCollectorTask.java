@@ -17,8 +17,10 @@ import java.util.concurrent.Future;
 @Slf4j
 final class FutureCollectorTask implements Callable<Boolean> {
     final List<Future<Boolean>> futuresToCollect;
+    private final String callbackName;
 
-    FutureCollectorTask(List<Future<Boolean>> futuresToCollect) {
+    FutureCollectorTask(String callbackName, List<Future<Boolean>> futuresToCollect) {
+        this.callbackName = callbackName;
         this.futuresToCollect = futuresToCollect;
     }
 
@@ -29,7 +31,7 @@ final class FutureCollectorTask implements Callable<Boolean> {
             try {
                 thisResult = f.get();
             } catch(Exception e) {
-                logger.error("FCT.get() failed for future " + f.toString() + " with exception ", e);
+                logger.error(callbackName + " :: FCT.get() failed for future " + f.toString() + " with exception ", e);
                 throw e;
             }
 

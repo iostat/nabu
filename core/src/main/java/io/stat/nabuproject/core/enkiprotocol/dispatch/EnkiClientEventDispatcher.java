@@ -8,6 +8,7 @@ import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
+import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
@@ -62,22 +63,7 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
                 new NamedThreadFactory("EnkiClientEventDispatcher-Collector")
         );
 
-        this.CALLBACK_FAILED_SHUTDOWNER = new CallbackReducerCallback() {
-            @Override
-            public void failedWithThrowable(Throwable t) {
-                logger.error("Shutting down because some callback(s) failed with: ", t);
-                enkiClient.shutdown();
-            }
-
-            @Override
-            public void failed() {
-                logger.error("Callback(s) failed with no throwable thrown. Shutting down.");
-                enkiClient.shutdown();
-            }
-
-            @Override
-            public void success() {/* no-op */ }
-        };
+        this.CALLBACK_FAILED_SHUTDOWNER = new ShutdownOnFailureCRC(enkiClient, "EnkiClientEventDispatcherFailShutdowner");
         this.dispatcher = new AsyncListenerDispatcher<>(dispatchWorkerExecutor, collectorWorkerExecutor);
     }
 

@@ -95,7 +95,7 @@ public class AsyncListenerDispatcher<T> extends Component {
                             workerExecutorService.submit(() -> callbackCaller.apply(listener)))
                     .collect(Collectors.toList());
 
-            collectorExecutorService.submit(new CallbackReducerRunner(crc, new FutureCollectorTask(futures)));
+            collectorExecutorService.submit(new CallbackReducerRunner(crc, new FutureCollectorTask(crc.getName(), futures)));
         }
     }
 
