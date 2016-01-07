@@ -52,7 +52,6 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     private static final String FULL_ELECTION_PREFIX = ELECTION_PATH + "/" + ELECTION_PREFIX;
 
     private final ZKLeaderConfigProvider config;
-    private final AdvertisedAddressProvider advertisedAddressProvider;
 
     private ZKLeaderData myLeaderData;
 
@@ -61,6 +60,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     private final AtomicReference<LeaderData> electedLeaderData;
 
     private final AtomicLong ownZNodeSequence;
+    private final AtomicReference<String> ownZNodePath;
 
     private ZkClient zkClient;
 
@@ -70,7 +70,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     private final AsyncListenerDispatcher<LeaderEventListener> dispatcher;
 
     /**
-     * For grabbing the root Enki instance.
+     * For shutting down the root Enki instance on callback failure.
      */
     private final Injector injector;
 
@@ -80,7 +80,6 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
                         AdvertisedAddressProvider addressProvider,
                         Injector injector) {
         this.config = config;
-        this.advertisedAddressProvider = addressProvider;
         this.injector = injector;
 
         this.$leaderDataLock = new byte[0];
@@ -88,9 +87,10 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
         this.electedLeaderData = new AtomicReference<>(null);
 
         this.ownZNodeSequence = new AtomicLong(-1);
+        this.ownZNodePath     = new AtomicReference<>("");
         this.myLeaderData =  new ZKLeaderData(
                 esClient.getESIdentifier(),
-                advertisedAddressProvider.getAdvertisedAddress(),
+                addressProvider.getAdvertisedAddress(),
                 0 // seeded at 0, but value is updated after the node has been committed.
         );
 
@@ -122,6 +122,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
             zkClient.subscribeStateChanges(connectionStateListener);
 
             ownZNodeSequence.set(parseSequence(ownLEZNodePath));
+            ownZNodePath.set(ownLEZNodePath);
 
             // now that we know our own ZNode sequence, update myLeaderData!
             myLeaderData = new ZKLeaderData(
@@ -185,7 +186,11 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
 
     private LeaderData getFromChild(String child) {
         long seq = Long.parseLong(child.replaceFirst(ELECTION_PREFIX, ""), 10);
-        return ZKLeaderData.fromBase64(zkClient.readData(ELECTION_PATH + "/" + child), seq);
+        return zkldFromZkPath(ELECTION_PATH + "/" + child, seq);
+    }
+
+    private ZKLeaderData zkldFromZkPath(String path, long seq) {
+        return ZKLeaderData.fromBase64(zkClient.readData(path), seq);
     }
 
     private static long parseSequence(String nodePath) {
@@ -198,6 +203,10 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
             electedLeaderData.set(leader);
         }
 
+        dispatchLeaderChange(isSelf);
+    }
+
+    private void dispatchLeaderChange(boolean isSelf) {
         dispatcher.dispatchListenerCallbacks(l -> l.onLeaderChange(isSelf, electedLeaderData.get(), getLeaderCandidates()),
                 new ShutdownOnFailureCRC(injector.getInstance(Enki.class),
                         "ZKLE" + (isSelf ? "Self" : "Other") +"ElectedCallbackFailed"));
@@ -205,12 +214,33 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
 
     @Override
     public void addLeaderEventListener(LeaderEventListener listener) {
-        dispatcher.addListener(listener);
+        synchronized ($leaderDataLock) {
+            dispatcher.addListener(listener);
+            if(!listener.onLeaderChange(isLeader.get(), myLeaderData, getLeaderCandidates())) {
+                // kill misbehaving listeners before they even become a problem,
+                // as well as seed them.
+                injector.getInstance(Enki.class).shutdown();
+            }
+        }
     }
 
     @Override
     public void removeLeaderEventListener(LeaderEventListener listener) {
         dispatcher.removeListener(listener);
+    }
+
+    private void haltAndCatchFire() {
+        // needs to be a new thread because otherwise it may be inside
+        // ZK's or some other component's thread pool.
+        Thread hcf = new Thread(() -> {
+            logger.error("FATAL: Shutting down Enki.");
+            zkClient.unsubscribeAll();
+            zkClient.close();
+            this.shutdown();
+            injector.getInstance(Enki.class).shutdown();
+        });
+        hcf.setName("ZKLeader-HCF");
+        hcf.start();
     }
 
     // used internally by ElectionPathChildListener to keep a tuple of a nodes pathname and the number within it
@@ -231,20 +261,32 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
         @Override
         public void handleChildChange(String parentPath, List<String> currentChilds) throws Exception {
             synchronized ($leaderDataLock) {
-                Long own = ownZNodeSequence.get();
+                Long ownZnodeSeq = ownZNodeSequence.get();
+                try {
+                    // make sure our own node still exists!
+                    ZKLeaderData ownLookedUpLEData = zkldFromZkPath(ownZNodePath.get(), ownZnodeSeq);
+                    if(!myLeaderData.equals(ownLookedUpLEData)) {
+                        logger.error("FATAL: My leader election data is gone or mismatched from ZK.");
+                        haltAndCatchFire();
+                    }
+                } catch(Exception e) {
+                    logger.error("FATAL: Got an Exception while trying to look up my ZK data", e);
+                    haltAndCatchFire();
+                }
+
                 LDLTuple highestSequenceUpToOwn =
                     currentChilds
                         .stream()
                         .map(PNLTuple::new)
                         .map(pnt -> LDLTuple.of(pnt.xformFirst(ZKLeaderImpl.this::getFromChild)))
-                        .filter(ldl -> ldl.first().isAcceptable() && ldl.second() < own)
+                        .filter(ldl -> ldl.first().isAcceptable() && ldl.second() < ownZnodeSeq)
                         .sorted((a, b) -> Longs.compare(a.second(), b.second()) * -1)
-                        .findFirst().orElse(new LDLTuple(myLeaderData, own));
+                        .findFirst().orElse(new LDLTuple(myLeaderData, ownZnodeSeq));
 
                 LeaderData actualLeadersData  = highestSequenceUpToOwn.first();
                 Long       actualLeadersSeq   = highestSequenceUpToOwn.second();
                 String     leaderSeqFmtd = ELECTION_PREFIX + Strings.padStart(actualLeadersSeq.toString(), 10, '0');
-                boolean amILeader = actualLeadersSeq.equals(own);
+                boolean amILeader = actualLeadersSeq.equals(ownZnodeSeq);
 
                 if (amILeader) {
                     logger.info("A change in the leader election ZNode has been detected, and I am the leader. " +
@@ -279,10 +321,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
         @Override
         public void run() {
             logger.error("ZkConnectionState changed to DISCONNECTED. Shutting down Enki");
-            zkClient.unsubscribeAll();
-            zkClient.close();
-            ZKLeaderImpl.this.shutdown();
-            injector.getInstance(Enki.class).shutdown();
+            haltAndCatchFire();
         }
     }
 }

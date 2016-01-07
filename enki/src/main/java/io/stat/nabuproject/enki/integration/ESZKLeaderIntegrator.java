@@ -40,7 +40,7 @@ import static io.stat.nabuproject.core.util.functional.FluentCompositions.on;
 
 /**
  * Integrates ElasticSearch cluster state and ZooKeeper leader election events
- * to provide a more reliable/current leader state. The implmentations for
+ * to provide a more reliable/current leader state. The implementations for
  * {@link ElectedLeaderProvider} will all block until reliable data is known.
  *
  * todo: there are probably a TON of redundant operations which can be optimized to hell and back
@@ -50,6 +50,9 @@ import static io.stat.nabuproject.core.util.functional.FluentCompositions.on;
  */
 @Slf4j
 class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEventListener, NabuESEventListener {
+    private static final Tuple<Boolean, ESZKNode> FALSE_NULL_TUPLE = new Tuple<>(false, null);
+    private static final String FALSE_NULL_TUPLE_STRING = FALSE_NULL_TUPLE.toString();
+
     // todo: should these be tunable?
     /**
      * Amount of time to sleep before and after each read to allow write operations to happen
@@ -169,8 +172,14 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override
     public LeaderData getOwnLeaderData() {
-        logger.info("ESZKLeaderIntegrator#getOwnLeaderData()");
-        return zkLeaderProvider.getOwnLeaderData();
+        String myESNodeName = esClient.getESIdentifier();
+        return optimisticRead(() ->
+                integratedData.stream()
+                              .filter(n -> n.hasLeaderData() && n.getEsNodeName().equals(myESNodeName))
+                              .findFirst()
+                              .map(ESZKNode::getLeaderData)
+                              .orElse(zkLeaderProvider.getElectedLeaderData())
+                , $integratedDataLock);
     }
 
     @Override @SneakyThrows
@@ -189,7 +198,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
         Set<ESZKNode> copy = optimisticRead(() -> ImmutableSet.copyOf(integratedData), $integratedDataLock);
         logger.error("Couldn't find a valid leader after {} tries... Sending self as leader, but this may be VERY wrong\n" +
-                "My most current data is: ", MAX_LEADER_RETRIES);
+                "My most current data is: {}", MAX_LEADER_RETRIES, copy);
 
         return ret;
     }
@@ -221,7 +230,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     @Override
     public boolean onLeaderChange(boolean isSelf, LeaderData myData, List<LeaderData> allLeaderData) {
         logger.info("ESZKLeaderIntegrator#onLeaderChange({}, {}, {})", isSelf, myData, allLeaderData);
-        LeaderData trueLeader = findTrueLeader(allLeaderData);
+        LeaderData trueLeader = findTrueLeader(zkLeaderProvider.getLeaderCandidates());
         if(isSelf) {
             logger.info("This node is allegedly the leader, and my check says its: {}\nThis: {}\nThat: {}", trueLeader.equals(myData), myData, trueLeader);
             setAsLeader(myData);
@@ -249,10 +258,10 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
             , $integratedDataLock);
 
             Tuple<Boolean, ESZKNode> test = validLeaderIfAvailable();
-            logger.info("Immediate call to validLeaderAvailable returned: {}\n" +
-                    "If the node that just left was the leader, the result should be <false, null>," +
+            logger.info("Immediate call to validLeaderAvailable returned:\n{}\n" +
+                    "If the node that just left was the leader, the result should be {}," +
                     "unless there was a ZK change event fired immediately before this test.\n" +
-                    "If it was not the leader or no ZK event happened, tell a police officer or an MTA employee.", test);
+                    "If it was not the leader or no ZK event happened, tell a police officer or an MTA employee.", test, FALSE_NULL_TUPLE_STRING);
         }
     }
 
@@ -423,7 +432,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      * @return a Tuple containing whether or not there's a valid leader and its data
      */
     private Tuple<Boolean, ESZKNode> validLeaderIfAvailable() {
-        Tuple<Boolean, ESZKNode> def = new Tuple<>(false, null);
+        Tuple<Boolean, ESZKNode> def = FALSE_NULL_TUPLE;
         Tuple<Boolean, ESZKNode> ret = optimisticRead(() ->
                 integratedData.stream()
                               .filter(n -> n.hasLeaderData() && n.isLeader())

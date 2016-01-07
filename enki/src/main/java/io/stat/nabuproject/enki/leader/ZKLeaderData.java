@@ -74,7 +74,7 @@ final class ZKLeaderData extends LeaderData {
     }
 
     @SneakyThrows
-    public static LeaderData fromBase64(String s, long priority) {
+    public static ZKLeaderData fromBase64(String s, long priority) {
         byte[] bytes = java.util.Base64.getDecoder().decode(s);
 
         for(int i = 0; i < MAGIC.length; i++) {
