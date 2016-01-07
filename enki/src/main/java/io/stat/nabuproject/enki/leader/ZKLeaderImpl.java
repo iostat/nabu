@@ -192,31 +192,15 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
         return Integer.parseInt(nodePath.replaceFirst(FULL_ELECTION_PREFIX, ""), 10);
     }
 
-    private void setSelfAsLeader() {
+    private void setLeader(boolean isSelf, LeaderData leader) {
         synchronized ($leaderDataLock) {
-            if(isLeader.get()) {
-                return;
-            }
-
-            isLeader.set(true);
-            electedLeaderData.set(myLeaderData);
+            isLeader.set(isSelf);
+            electedLeaderData.set(leader);
         }
 
-        dispatcher.dispatchListenerCallbacks(l -> l.onLeaderChange(true, myLeaderData, getLeaderCandidates()),
+        dispatcher.dispatchListenerCallbacks(l -> l.onLeaderChange(isSelf, electedLeaderData.get(), getLeaderCandidates()),
                 new ShutdownOnFailureCRC(injector.getInstance(Enki.class),
-                    "ZKLESelfElectedCallbackFailed"));
-
-    }
-
-    private void setOtherAsLeader(LeaderData newLeader) {
-        synchronized ($leaderDataLock) {
-            isLeader.set(false);
-            electedLeaderData.set(newLeader);
-        }
-
-        dispatcher.dispatchListenerCallbacks(l -> l.onLeaderChange(false, myLeaderData, getLeaderCandidates()),
-                new ShutdownOnFailureCRC(injector.getInstance(Enki.class),
-                        "ZKLEOnOtherElectedCallbackFailed"));
+                        "ZKLE" + (isSelf ? "Self" : "Other") +"ElectedCallbackFailed"));
     }
 
     @Override
@@ -260,16 +244,17 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
                 LeaderData actualLeadersData  = highestSequenceUpToOwn.first();
                 Long       actualLeadersSeq   = highestSequenceUpToOwn.second();
                 String     leaderSeqFmtd = ELECTION_PREFIX + Strings.padStart(actualLeadersSeq.toString(), 10, '0');
+                boolean amILeader = actualLeadersSeq.equals(own);
 
-                if (actualLeadersSeq.equals(own)) {
+                if (amILeader) {
                     logger.info("A change in the leader election ZNode has been detected, and I am the leader. " +
                             "({})", leaderSeqFmtd, actualLeadersData);
-                    setSelfAsLeader();
                 } else {
                     logger.info("A change in the leader election path has been detected, and I am NOT the leader. " +
                             "The node before me is {} => {}", leaderSeqFmtd, actualLeadersData);
-                    setOtherAsLeader(actualLeadersData);
                 }
+
+                setLeader(amILeader, actualLeadersData);
             }
         }
     }

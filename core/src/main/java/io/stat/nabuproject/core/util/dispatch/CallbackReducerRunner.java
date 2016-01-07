@@ -6,7 +6,7 @@ package io.stat.nabuproject.core.util.dispatch;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-class CallbackReducerRunner implements Runnable {
+final class CallbackReducerRunner implements Runnable {
     private final CallbackReducerCallback crc;
     private final FutureCollectorTask fct;
 

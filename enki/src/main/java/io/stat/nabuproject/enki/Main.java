@@ -9,7 +9,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.kafka.KafkaModule;
-import io.stat.nabuproject.core.net.SimpleAdvertisementResolverModule;
+import io.stat.nabuproject.core.net.AdvertisedAddressResolverModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.enki.integration.IntegrationModule;
 import io.stat.nabuproject.enki.leader.ZKLeaderElectionModule;
@@ -43,7 +43,7 @@ public class Main {
         this.injector = Guice.createInjector(
                 new EnkiModule(),
                 new ConfigModule(),
-                new SimpleAdvertisementResolverModule(),
+                new AdvertisedAddressResolverModule(AdvertisedAddressResolverModule.Resolver.MOST_ACCESSIBLE),
                 new ESModule(),
                 new KafkaModule(),
                 new ZKLeaderElectionModule(),

@@ -40,7 +40,7 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
 
     @Override
     public void onNabuESEvent(NabuESEvent event) {
-        logger.info("{}", event);
+//        logger.info("{}", event);
         switch(event.getType()){
             case ENKI_JOINED:
                 break;
