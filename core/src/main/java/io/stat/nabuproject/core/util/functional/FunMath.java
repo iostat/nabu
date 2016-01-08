@@ -21,6 +21,7 @@ public final class FunMath {
     public static final BiPredicate<Long, Long> gt  = (a, b) -> a > b;
     public static final BiPredicate<Long, Long> gte = (a, b) -> a >= b;
     public static final BiPredicate<Long, Long> lt  = (a, b) -> a < b;
+    public static final Predicate<Long> lt(long rhs) { return a -> a < rhs; }
     public static final BiPredicate<Long, Long> lte = (a, b) -> a <= b;
     public static final BiPredicate<Long, Long> eq  = (a, b) -> defaultNumber(a) == defaultNumber(b);
     public static final BinaryOperator<Long>    mul = (a, b) -> a * b;

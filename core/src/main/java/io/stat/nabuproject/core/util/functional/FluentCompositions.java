@@ -20,6 +20,10 @@ import java.util.stream.Stream;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 public final class FluentCompositions {
+    /**
+     * Allows a
+     * @param <T>
+     */
     @FunctionalInterface
     public interface ComposableComparator<T> extends BiFunction<T, T, Integer>, Comparator<T>, ToIntBiFunction<T, T> {
         int compare(T a, T B);
@@ -107,6 +111,10 @@ public final class FluentCompositions {
      */
     public static <T> Function<T, T> $() {
         return t -> t;
+    }
+
+    public static <T> ComposableComparator<T> $(Comparator<T> cmp) {
+        return cmp::compare;
     }
 
     /**
@@ -207,22 +215,19 @@ public final class FluentCompositions {
      * @param <U> the type of the second argument
      * @return a Predicate that passes its arg as the first arg, and u as the second arg to the BiPredicate
      */
-    public static <T, U> Predicate<T> curry2(BiPredicate<T, U> bp, U u) {
-        return curry2p(bp, u);
-    }
-
     public static <T, U> Predicate<T> curry2p(BiPredicate<T, U> bp, U u) {
         return t -> bp.test(t, u);
     }
 
-    public static <T, U> Consumer<T> curry2(BiConsumer<T, U> bc, U u) { return t -> bc.accept(t, u); }
+    /**
+     * The {@link Consumer} equivalent of {@link FluentCompositions#curry2(BiFunction, Object)}
+     */
+    public static <T, U> Consumer<T> curry2c(BiConsumer<T, U> bc, U u) { return t -> bc.accept(t, u); }
 
     /**
-     * The BiFunction equivalent of {@link FluentCompositions#curry2(BiPredicate, Object)}
+     * The {@link BiFunction} equivalent of {@link FluentCompositions#curry2p(BiPredicate, Object)}
      */
-    public static <T, U, R> Function<T, R> curry2(BiFunction<? super T, U, R> bf, U u) {
-        return t -> bf.apply(t, u);
-    }
+    public static <T, U, R> Function<T, R> curry2(BiFunction<? super T, U, R> bf, U u) { return t -> bf.apply(t, u); }
 
     /**
      * Composes a predicate to run after a function
@@ -292,6 +297,13 @@ public final class FluentCompositions {
     }
 
     /**
+     * {@link Predicate} equivalent of {@link FluentCompositions#bridge(Function, Function, BiFunction)}
+     */
+    public static <A, B, C> Predicate<A> bridgep(Function<A, B> arg1x, Function<A, C> arg2x, BiPredicate<B, C> original) {
+        return (a1) -> original.test(arg1x.apply(a1), arg2x.apply(a1));
+    }
+
+    /**
      * Apply a function to a single value.
      * @param functor the function to run
      * @param t the value to apply the functor to
@@ -325,6 +337,17 @@ public final class FluentCompositions {
      */
     public static <T, R> Stream<R> fmap(Function<T, R> functor, Collection<T> collection) {
         return collection.stream().map(functor);
+    }
+
+    /**
+     * Runs a consumer as a function, returning the parameter after the consumer
+     * has consumed it. useful for chaining together builder calls, etc.
+     * @param consumer the consumer to masquerade
+     * @param <T> the type that the consumer accepts
+     * @return the parameter to the function, after consumer as accepted it.
+     */
+    public static <T> Function<T, T> masquerade(Consumer<T> consumer) {
+        return t -> { consumer.accept(t); return t; };
     }
 }
 

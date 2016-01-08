@@ -7,6 +7,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Random;
 import java.util.Set;
 
 /**
@@ -25,8 +26,8 @@ public class AssignmentDelta<Context, Assignment> {
     private final @Getter ImmutableSet<Assignment> toStop;
     private final @Getter int weight;
 
-    public static <Context, Assignment> Builder<Context, Assignment> builder(Context c, Set<Assignment> existingTasks) {
-        return new Builder<>(c, ImmutableSet.copyOf(existingTasks));
+    public static <Context, Assignment> Builder<Context, Assignment> builder(Context c, Set<Assignment> existingTasks, Random random) {
+        return new Builder<>(c, ImmutableSet.copyOf(existingTasks), random);
     }
 
     @EqualsAndHashCode
@@ -37,12 +38,14 @@ public class AssignmentDelta<Context, Assignment> {
         private final Set<Assignment> toStart;
         private final Set<Assignment> toStop;
         private @Getter int weightWithChanges;
+        private final @Getter Random random;
 
-        private Builder(Context context, ImmutableSet<Assignment> startedWith) {
+        private Builder(Context context, ImmutableSet<Assignment> startedWith, Random random) {
             this.context = context;
             this.startedWith = startedWith;
             this.toStart = Sets.newHashSet();
             this.toStop  = Sets.newHashSet();
+            this.random  = random;
 
             this.startWeight = this.startedWith.size();
             this.weightWithChanges = this.startWeight;
@@ -128,6 +131,25 @@ public class AssignmentDelta<Context, Assignment> {
             }
 
             weightWithChanges -= 1;
+        }
+
+        /**
+         * Finds the {@literal "best"} task to unassign from this worker.
+         * todo: an actual heuristic
+         * @return the Assignment that was unassigned.
+         */
+        public Assignment unassignBestFit() {
+            assert toStart.size() + startedWith.size() > 0 : "Tried to unassignBestFit from a worker with no assigned tasks!";
+            Assignment candidate;
+            if(!toStart.isEmpty()) {
+                candidate = toStart.stream().skip(random.nextInt(toStart.size())).findFirst().get();
+                assert candidate != null : "Pulling a random candidate from a non-empty start list failed for some inexplicable reason";
+            } else {
+                candidate = startedWith.stream().skip(random.nextInt(startedWith.size())).findFirst().get();
+            }
+
+            unassign(candidate);
+            return candidate;
         }
 
         /**

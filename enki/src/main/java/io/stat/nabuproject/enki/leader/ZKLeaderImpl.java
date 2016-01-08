@@ -1,6 +1,7 @@
 package io.stat.nabuproject.enki.leader;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import io.stat.nabuproject.core.ComponentException;
@@ -15,6 +16,7 @@ import org.I0Itec.zkclient.IZkChildListener;
 import org.I0Itec.zkclient.IZkStateListener;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
+import org.I0Itec.zkclient.exception.ZkNoNodeException;
 import org.apache.zookeeper.Watcher;
 
 import java.util.Iterator;
@@ -62,19 +64,23 @@ import static io.stat.nabuproject.core.util.functional.FunMath.negate;
 class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     // todo: configurable?
     private static final String ELECTION_PATH = "/enki_le";
+    private static final String ELECTION_PATH_SLASH = "/enki_le/";
     private static final String ELECTION_PREFIX = "n_";
-    private static final String FULL_ELECTION_PREFIX = ELECTION_PATH + "/" + ELECTION_PREFIX;
+    private static final String ELECTION_PATH_AND_PREFIX = ELECTION_PATH + "/" + ELECTION_PREFIX;
 
     private final ZKLeaderConfigProvider config;
 
-    private ZKLeaderData myLeaderData;
-
     private final byte[] $leaderDataLock;
-    private final AtomicBoolean isLeader;
+
+    private final AtomicBoolean amILeader;
     private final AtomicReference<LeaderData> electedLeaderData;
 
-    private final AtomicLong ownZNodeSequence;
-    private final AtomicReference<String> ownZNodePath;
+    private final AtomicLong myZNodeSequence;
+    private final AtomicReference<String> myZNodePath;
+    private final AtomicReference<ZKLeaderData> myLeaderData;
+
+    private final AdvertisedAddressProvider addressProvider;
+    private final ESClient esClient;
 
     private ZkClient zkClient;
 
@@ -100,33 +106,33 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
                         Injector injector) {
         this.config = config;
         this.injector = injector;
-
-        this.$leaderDataLock = new byte[0];
-        this.isLeader = new AtomicBoolean(false);
-        this.electedLeaderData = new AtomicReference<>(null);
-
-        this.ownZNodeSequence = new AtomicLong(-1);
-        this.ownZNodePath     = new AtomicReference<>("");
-        this.myLeaderData =  new ZKLeaderData(
-                "<path not yet determined>",
-                esClient.getESIdentifier(),
-                addressProvider.getAdvertisedAddress(),
-                0 // seeded at 0, but value is updated after the node has been committed.
-        );
+        this.esClient = esClient;
+        this.addressProvider = addressProvider;
+        this.dispatcher = new AsyncListenerDispatcher<>("ZKLeaderEventDispatch");
 
         this.electionPathChildListener = new ElectionPathChildListener();
         this.connectionStateListener   = new ConnectionStateListener();
 
-        this.dispatcher = new AsyncListenerDispatcher<>("ZKLeaderEventDispatch");
+        this.$leaderDataLock = new byte[0];
+
+        this.electedLeaderData = new AtomicReference<>(null);
+
+        this.myZNodeSequence = new AtomicLong(-1);
+        this.myZNodePath     = new AtomicReference<>("");
+        this.myLeaderData    = new AtomicReference<>(null);
+        this.amILeader       = new AtomicBoolean(false);
+
+
     }
 
     @Override
     public void start() throws ComponentException {
+        Function<String, String> appendChroot = curry2($(String::concat), config.getLEZKChroot());
         try {
             Iterator<String> chrootedZookeepersIterator =
                     config.getLEZooKeepers()
                             .stream()
-                            .map(zk -> zk + config.getLEZKChroot())
+                            .map(appendChroot)
                             .iterator();
 
             this.zkClient = new ZkClient(
@@ -134,30 +140,12 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
                     config.getLEZKConnTimeout(),
                     new KafkaZKStringSerializerProxy());
 
-            String mldb64 = myLeaderData.toBase64();
-            String ownLEZNodePath = zkClient.createEphemeralSequential(FULL_ELECTION_PREFIX, mldb64);
-            logger.info("created leader election ephemeral + sequential znode at {}{} with {}",
-                    config.getLEZKChroot(), ownLEZNodePath, mldb64);
-
-            zkClient.subscribeStateChanges(connectionStateListener);
-
-            ownZNodeSequence.set(parseFullSequence(ownLEZNodePath));
-            ownZNodePath.set(ownLEZNodePath);
-
-            // now that we know our own ZNode sequence, update myLeaderData!
-            myLeaderData = new ZKLeaderData(
-                    ownLEZNodePath,
-                    myLeaderData.getNodeIdentifier(),
-                    myLeaderData.getAddressPort(),
-                    ownZNodeSequence.get()
-            );
-
-            List<String> children = zkClient.subscribeChildChanges(ELECTION_PATH, electionPathChildListener);
+            createLeaderData();
 
             synchronized ($leaderDataLock) {
                 try {
                     // bootstrap the first connection
-                    electionPathChildListener.handleChildChange(null, children);
+                    electionPathChildListener.handleChildChange(null, ImmutableList.of(myZNodePath.get().replaceFirst(ELECTION_PATH + "/", "")));
                 } catch(Exception e) {
                     throw new ComponentException(true, "Couldn't register the ZK child node change listener!", e);
                 }
@@ -168,6 +156,82 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
             } else {
                 throw new ComponentException(true, "Failed to start the ZK leader election system", e);
             }
+        }
+    }
+
+    private ZKLeaderData getOrCreateOwnNode() {
+        synchronized ($leaderDataLock) {
+            try {
+                // make sure our own node still exists!
+                ZKLeaderData ownLookedUpLEData = getFromFullPath(myZNodePath.get());
+                if (!myLeaderData.get().equals(ownLookedUpLEData)) {
+                    logger.error("FATAL: My leader election data is gone or mismatched from ZK.");
+                    haltAndCatchFire();
+                }
+
+                return ownLookedUpLEData;
+            } catch (ZkNoNodeException zknne) {
+                logger.warn("Received a ZkNoNodeException while attempting to read my own data... recreating leader node", zknne);
+                return createLeaderData();
+            }
+        }
+    }
+
+    // retries for createLeaderData, to prevent
+    // and infinite loop when we go back to sanity check.
+    private static volatile int cLDRetries = 0;
+    private ZKLeaderData createLeaderData() {
+        synchronized ($leaderDataLock){
+            cLDRetries++;
+
+            if(cLDRetries >= 5) {
+                haltAndCatchFire();
+            }
+
+            // pause events for a little bit.
+            zkClient.unsubscribeAll();
+
+            // One important thing to remember is that the path
+            // and the priority (which we cant since we dont know it,
+            // and the priority is just the sequence id ZK assigns to use)
+            // don't actually get serialized to ZK and when other nodes read
+            // the data they fill in the path for themselves
+            // so it's perfectly OK to do this, as long as we remember to update
+            // our own internal data!
+            ZKLeaderData seed = new ZKLeaderData(
+                    "<path not yet determined>",
+                    esClient.getESIdentifier(),
+                    addressProvider.getAdvertisedAddress(),
+                    0 // seeded at 0, but value is updated after the node has been committed.
+            );
+
+            String zkEncodedSeed = seed.toBase64();
+            String newZnodePath = zkClient.createEphemeralSequential(ELECTION_PATH_AND_PREFIX, zkEncodedSeed);
+            long newSequence = parseFromPathAndPrefix(newZnodePath);
+
+            seed = new ZKLeaderData(
+                    newZnodePath,
+                    seed.getNodeIdentifier(),
+                    seed.getAddressPort(),
+                    newSequence
+            );
+
+            myLeaderData.set(seed);
+            myZNodePath.set(newZnodePath);
+            myZNodeSequence.set(newSequence);
+
+            logger.info("created leader election ephemeral + sequential znode at {}{} with {}",
+                    config.getLEZKChroot(), newZnodePath, zkEncodedSeed);
+
+            zkClient.subscribeStateChanges(connectionStateListener);
+            zkClient.subscribeChildChanges(ELECTION_PATH, electionPathChildListener);
+
+            // for the sake of sanity, pull our own data back.
+            ZKLeaderData rePulledData = getOrCreateOwnNode();
+
+            // if we got this far we can re-set cLDRetries
+            cLDRetries = 0;
+            return rePulledData;
         }
     }
 
@@ -185,12 +249,12 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     @Override
     public boolean isSelf() {
         synchronized($leaderDataLock) {
-            return isLeader.get();
+            return amILeader.get();
         }
     }
 
     @Override
-    public LeaderData getOwnLeaderData() { return myLeaderData; }
+    public LeaderData getOwnLeaderData() { return myLeaderData.get(); }
 
     @Override
     public List<LeaderData> getLeaderCandidates() {
@@ -198,20 +262,20 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     }
 
     private List<LeaderData> getLeaderCandidatesFromSubnodeList(List<String> electionSubnodes) {
-        return electionSubnodes.stream().map(this::getFromChild).collect(Collectors.toList());
+        return electionSubnodes.stream().map(this::getFromChildNodeName).collect(Collectors.toList());
     }
 
     private List<String> getElectionSubnodes() {
         return zkClient.getChildren(ELECTION_PATH);
     }
 
-    private ZKLeaderData getFromChild(String child) {
+    private ZKLeaderData getFromChildNodeName(String child) {
         long seq = parseChildSequence(child);
-        return zkldFromZkPath(ELECTION_PATH + "/" + child, seq);
+        return zkldFromZkPath(ELECTION_PATH_SLASH + child, seq);
     }
 
-    private ZKLeaderData getFromPath(String path) {
-        long seq = parseFullSequence(path);
+    private ZKLeaderData getFromFullPath(String path) {
+        long seq = parseFromPathAndPrefix(path);
         return zkldFromZkPath(path, seq);
     }
 
@@ -219,8 +283,8 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
         return ZKLeaderData.fromBase64(zkClient.readData(path), path, seq);
     }
 
-    private static long parseFullSequence(String nodePath) {
-        return Long.parseLong(nodePath.replaceFirst(FULL_ELECTION_PREFIX, ""), 10);
+    private static long parseFromPathAndPrefix(String nodePath) {
+        return Long.parseLong(nodePath.replaceFirst(ELECTION_PATH_AND_PREFIX, ""), 10);
     }
     private static long parseChildSequence(String child) {
         return Long.parseLong(child.replaceFirst(ELECTION_PREFIX, ""), 10);
@@ -228,7 +292,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
 
     private void setLeader(boolean isSelf, LeaderData leader) {
         synchronized ($leaderDataLock) {
-            isLeader.set(isSelf);
+            amILeader.set(isSelf);
             electedLeaderData.set(leader);
         }
 
@@ -245,7 +309,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     public void addLeaderEventListener(LeaderEventListener listener) {
         synchronized ($leaderDataLock) {
             dispatcher.addListener(listener);
-            if(!listener.onLeaderChange(isLeader.get(), myLeaderData, getLeaderCandidates())) {
+            if(!listener.onLeaderChange(amILeader.get(), getElectedLeaderData(), getLeaderCandidates())) {
                 // kill misbehaving listeners before they even become a problem,
                 // as well as seed them.
                 injector.getInstance(Enki.class).shutdown();
@@ -273,57 +337,57 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     }
 
     private final class ElectionPathChildListener implements IZkChildListener {
-        final Function<String, ZKLeaderData> ZKLDLoader = ZKLeaderImpl.this::getFromChild;
+        final Function<String, ZKLeaderData> ZKLDLoader = ZKLeaderImpl.this::getFromChildNodeName;
 
         @Override
         public void handleChildChange(String parentPath, List<String> currentChilds) throws Exception {
             synchronized ($leaderDataLock) {
-
-                try {
-                    // make sure our own node still exists!
-                    ZKLeaderData ownLookedUpLEData = getFromPath(ownZNodePath.get());
-                    if(!myLeaderData.equals(ownLookedUpLEData)) {
-                        logger.error("FATAL: My leader election data is gone or mismatched from ZK.");
-                        haltAndCatchFire();
-                    }
-                } catch(Exception e) {
-                    logger.error("FATAL: Got an Exception while trying to look up my ZK data", e);
+                ZKLeaderData myRefreshedData = getOrCreateOwnNode();
+                if(!myLeaderData.get().equals(myRefreshedData)) {
+                    logger.error("FATAL: mismatch in the data that's cached in the ZKLeaderImpl and what's been pulled from ZK.");
                     haltAndCatchFire();
                 }
 
-                Long ownZnodeSeq = ownZNodeSequence.get();
-                Predicate<ZKLeaderData> previousLeaders =    $(ZKLeaderData::isAcceptable)
-                                                         .and(
-                                                           $_$(ZKLeaderData::getPriority, curry2(lt, ownZnodeSeq)));
-                ZKLeaderData highestLeaderBeforeMe =
-                    currentChilds
-                        .stream()
-                        .map(ZKLDLoader)
-                        .filter(previousLeaders)
-                        .sorted(on(ZKLeaderData::getPriority, lcmp).then(negate))
-                        .findFirst()
-                        .orElse(myLeaderData);
-
-
-                boolean amILeader = highestLeaderBeforeMe.equals(myLeaderData);
-
-                if (amILeader) {
-                    logger.info("A change in the leader election ZNode has been detected, and I am the leader. " +
-                            "({})", myLeaderData.prettyPrint());
-                } else {
-                    logger.info("A change in the leader election path has been detected, and I am NOT the leader. " +
-                            "The node before me is {}", highestLeaderBeforeMe.prettyPrint());
-                }
-
-                setLeader(amILeader, highestLeaderBeforeMe);
+                doChildChange(currentChilds, myRefreshedData);
             }
+        }
+
+        public void doChildChange(List<String> currentChilds, ZKLeaderData myRefreshedData) {
+            long ownZnodeSeq = myRefreshedData.getPriority();
+            Predicate<ZKLeaderData> previousLeaders = $         (ZKLeaderData::isAcceptable)
+            /*  ~~ from keith bankaccounts with love ~~ */ .and(
+                                  $_$                           (ZKLeaderData::getPriority, lt(ownZnodeSeq)));
+
+
+            ZKLeaderData highestLeaderBeforeMe =
+                    currentChilds
+                            .stream()
+                            .map(ZKLDLoader)
+                            .filter(previousLeaders)
+                            .sorted(on(ZKLeaderData::getPriority, lcmp).then(negate))
+                            .findFirst()
+                            .orElse(myLeaderData.get());
+
+
+            boolean amILeader = highestLeaderBeforeMe.equals(myLeaderData.get());
+
+            if (amILeader) {
+                logger.info("A change in the leader election ZNode has been detected, and I am the leader. " +
+                        "({})",highestLeaderBeforeMe.prettyPrint());
+            } else {
+                logger.info("A change in the leader election path has been detected, and I am NOT the leader. " +
+                        "The node before me is {}", highestLeaderBeforeMe.prettyPrint());
+            }
+
+            setLeader(amILeader, highestLeaderBeforeMe);
         }
     }
 
     private final class ConnectionStateListener implements IZkStateListener, Runnable {
         @Override
         public void handleStateChanged(Watcher.Event.KeeperState keeperState) throws Exception {
-            if(keeperState == Watcher.Event.KeeperState.Disconnected) {
+            if(keeperState.equals(Watcher.Event.KeeperState.Disconnected)
+                    || keeperState.equals(Watcher.Event.KeeperState.Expired)) {
                 Thread t = new Thread(this);
                 t.setName("ZKLeaderDisconnectedShutdownThread");
                 t.start();

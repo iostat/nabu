@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Longs;
 import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
@@ -12,6 +13,7 @@ import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.Tuple;
 import io.stat.nabuproject.core.util.concurrent.ResettableCountDownLatch;
+import io.stat.nabuproject.enki.Enki;
 import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.leader.LeaderData;
 import io.stat.nabuproject.enki.leader.LeaderEventListener;
@@ -44,8 +46,9 @@ import java.util.stream.Collectors;
 
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.$;
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.$_$;
-import static io.stat.nabuproject.core.util.functional.FluentCompositions.curry2;
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.curry2c;
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.fmap;
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.masquerade;
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.on;
 import static io.stat.nabuproject.core.util.functional.FunMath.eq;
 import static io.stat.nabuproject.core.util.functional.FunMath.lcmp;
@@ -83,12 +86,12 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     /**
      * Shorthand for unflagging an ESZKNode as the leader inside functional APIs
      */
-    private static final Consumer<ESZKNode> UNSET_LEADER_FLAG = curry2(ESZKNode::setLeader, false);
+    private static final Consumer<ESZKNode> UNSET_LEADER_FLAG = curry2c(ESZKNode::setLeader, false);
 
     /**
      * Shorthand for flagging an ESZKNode as the leader inside functional APIs
      */
-    private static final Consumer<ESZKNode> SET_LEADER_FLAG = curry2(ESZKNode::setLeader, true);
+    private static final Consumer<ESZKNode> SET_LEADER_FLAG = curry2c(ESZKNode::setLeader, true);
 
     // todo: should these be tunable?
     /**
@@ -128,8 +131,15 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      */
     public static final int ES_EVENT_SYNC_DELAY_MINIMUM_GAP = 30;
 
+    /**
+     * How long to allow a cache-buster task to run when ZK says we've been demoted
+     * before considering it too big a risk of split-brain and killing the app.
+     */
+    public static final int MAX_DEMOTION_FAILSAFE_TIMEOUT = 12000;
+
     private final ESClient esClient;
     private final ZKLeaderProvider zkLeaderProvider;
+    private final Injector injector;
     private final StampedLock $integratedDataLock;
     private volatile Set<ESZKNode> integratedData;
 
@@ -140,14 +150,22 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     private final ResettableCountDownLatch esEventSyncDelayLatch;
     private final AtomicLong lastESEventSyncDelayCompleted;
 
-    public static Predicate<LeaderData> existsInES(List<Tuple<String, AddressPort>> knownFromES) {
-        return l -> knownFromES.stream().anyMatch(t -> t.first().equals(l.getNodeIdentifier()));
+    private static Predicate<LeaderData> existsInES(List<Tuple<String, AddressPort>> knownFromES) {      /* **************************** */
+        // for the candidate that we are testing                                             gave u      *          oh noes!            *
+        return candidate -> knownFromES.stream() // see if                        the ES client    s     * theres a leak in the stream  *
+        /*              |  \        */.anyMatch(t -> // any of the    of the tuples     ___________  h   * and the bytes are all wonky! *
+        /*              |   \       **********/t.first() // first elements             // ____h c t\ a   * **************************** *
+        /*              |\   \  ~~ thanks   */.equals(candidate.getNodeIdentifier()));// /  i     \a\v   /
+        //    *****    *\*|   \     chesapeake energy co! ~~                         // /    n g   \me  /
+        // **************\|    \____________________________________________________// /   n a m e s\  /
+        // ***************\___________________________________________________________________________/
     }
 
     @Inject
-    ESZKLeaderIntegrator(ESClient esClient, ZKLeaderProvider zkLeaderProvider) {
+    ESZKLeaderIntegrator(ESClient esClient, ZKLeaderProvider zkLeaderProvider, Injector injector) {
         this.esClient = esClient;
         this.zkLeaderProvider = zkLeaderProvider;
+        this.injector = injector;
         this.$integratedDataLock = new StampedLock();
 
         this.integratedData = Collections.synchronizedSet(Sets.newConcurrentHashSet());
@@ -319,6 +337,50 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     }
 
     @Override
+    public boolean onSelfDemoted(LeaderData lastKnownData) {
+        /**
+         *  as a failsafe, we start a new thread, and clear
+         *  all the caches with it. If the thread takes more
+         *  than MAX_DEMOTION_FAILSAFE_TIMEOUT, we kill the
+         *  the application by returning false and failing
+         *  the callback.
+         */
+        Thread t = new Thread(() -> {
+            long stamp = 0;
+            try {
+                stamp = $integratedDataLock.writeLockInterruptibly();
+                integratedData = integratedData.stream()
+                                               .filter(eszk ->
+                                                   !eszk.getEsNodeName().equals(getOwnLeaderData().getNodeIdentifier())
+                                               )
+                                               .map(masquerade(UNSET_LEADER_FLAG))
+                                               .collect(Collectors.toSet());
+
+            } catch(Exception e) {
+                logger.error("Something went terribly wrong while busting caches after a demotion.", e);
+                injector.getInstance(Enki.class).shutdown();
+            } finally {
+                $integratedDataLock.unlock(stamp);
+            }
+        });
+        t.setName("Demotion-Cachebuster");
+
+        try {
+            Thread.sleep(MAX_DEMOTION_FAILSAFE_TIMEOUT);
+        } catch(InterruptedException e) {
+            logger.error("Caught an interrupt while waiting for the demotion failsafe to finish!", e);
+        } finally {
+            if(t.isAlive()) {
+                t.interrupt();
+                injector.getInstance(Enki.class).shutdown();
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    @Override
     public boolean onNabuESEvent(NabuESEvent event) {
         String nodeName = event.getNode().getName();
         if(event.getType() == NabuESEvent.Type.ENKI_JOINED) {
@@ -333,12 +395,12 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
             logger.info("Enki \"{}\" departed ES cluster.", nodeName);
             performWrite(() -> {
                 performWrite(() -> reconcileQueue.removeIf(nn -> nn.equals(nodeName)), $reconcileQueueLock);
-                logger.info("for shits and giggles :: {}", nodeName);
                 integratedData.removeIf(node -> {
                     if(node.getEsNodeName().equals(nodeName)) {
                         // need to unset the leader flag before removing from integrated data
-                        // because for whatever fucktarded reason java is keep a thread local (true)
-                        // or fucking something. no clue why. but this works.
+                        // because for whatever fucktarded reason java is keeping a thread local (true)
+                        // or fucking something. no clue why. but this works. and none of the volatile or
+                        // synchronized definitions or fucking anything else works.
                         UNSET_LEADER_FLAG.accept(node);
                     }
                     return false;
@@ -348,6 +410,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
             triggerEsEventSyncDelay();
 
             String testLD = validLeaderIfAvailable().map(SHORTEN_ESZKNODE).orElse("null");
+            Thread threadify = new Thread(() -> { logger.info("{}", ESZKLeaderIntegrator.this.getElectedLeaderData()); });
             synchronized(logger) {
                 logger.info("Immediate call to validLeaderAvailable returned: {}", testLD);
                 logger.info("If the node that just left was the leader, the result should be null, " +
@@ -459,7 +522,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
         while(!done.get()) {
             performWrite(() -> {
                 if(reconcileQueue.size() == 0) {
-                    logger.warn("reconcileZk is starting its loop but the queue is empty :/");
+                    return;
                 }
                 List<LeaderData> zkDatas = zkLeaderProvider.getLeaderCandidates();
                 Set<String> completed = new HashSet<>();
