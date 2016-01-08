@@ -19,7 +19,11 @@ public class IntegrationModule extends AbstractModule {
     @Override
     protected void configure() {
         bind(ESZKLeaderIntegrator.class).in(Singleton.class);
+        bind(ESKafkaValidatorImpl.class).in(Singleton.class);
+
         bind(ElectedLeaderProvider.class).to(LeaderLivenessIntegrator.class);
+
+        bind(ESKafkaValidator.class).to(ESKafkaValidatorImpl.class);
         if(useESZKLivenessIntegrator) {
             bind(LeaderLivenessIntegrator.class).to(ESZKLeaderIntegrator.class);
         }

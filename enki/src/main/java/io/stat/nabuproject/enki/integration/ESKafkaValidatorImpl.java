@@ -1,19 +1,26 @@
 package io.stat.nabuproject.enki.integration;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
-import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
-import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
+import io.stat.nabuproject.core.elasticsearch.ESException;
 import io.stat.nabuproject.core.kafka.KafkaMetadataClient;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.IndexNotFoundException;
+
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.$;
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.bridge;
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.fmap;
 
 /**
  * A component which will query ElasticSearch and Kafka and
@@ -27,36 +34,35 @@ import org.elasticsearch.index.IndexNotFoundException;
  */
 @RequiredArgsConstructor(onConstructor=@__(@Inject))
 @Slf4j
-public class IntegrationSanityChecker extends Component {
+class ESKafkaValidatorImpl extends ESKafkaValidator {
     private final ESClient esClient;
     private final ThrottlePolicyProvider config;
     private final KafkaMetadataClient kafkaClient;
+    private @Getter boolean isSane = false;
+    private Map<String, ESKSP> shardCountCache = null;
 
     @Override
     public void start() throws ComponentException {
-        String[] targetedIndicies = config.getThrottlePolicies()
-                                          .stream()
-                                          .map(ThrottlePolicy::getIndexName)
-                                          .toArray(String[]::new);
+        Map<String, ESKSP> esksps = getShardCountCache();
 
-        ImmutableMap.Builder<String, Integer> topicPartitionCountBuilder = ImmutableMap.builder();
         GetIndexResponse indexInfo;
         try {
-            indexInfo = esClient.getESClient()
-                    .admin()
-                    .indices()
-                    .prepareGetIndex().setIndices(targetedIndicies)
-                    .get();
-        } catch (IndexNotFoundException e) {
-            String message = String.format("Index configured for throttling %s does not exist in ElasticSearch", e.getIndex());
-            throw new ComponentException(true, message, e);
-        } catch (Exception e) {
-            throw new ComponentException(true, "Received an unexpected exception when querying index shard counts", e);
+            indexInfo = esClient.getIndexMetadata(fmap(ESKSP::getIndexName, esksps.values())
+                                                      .toArray(String[]::new));
+        } catch(ESException e) {
+            Throwable cause = e.getCause();
+            if(cause instanceof IndexNotFoundException) {
+                IndexNotFoundException realCause = ((IndexNotFoundException)cause);
+                String message = String.format("Index configured for throttling %s does not exist in ElasticSearch", realCause.getIndex());
+                throw new ComponentException(true, message, e);
+            } else {
+                throw new ComponentException(true, "Received an unexpected exception when querying index shard counts", e);
+            }
         }
 
         for(ObjectObjectCursor<String, Settings> cursor : indexInfo.settings()) {
             String indexName = cursor.key;
-            String s_nos = cursor.value.get("index.number_of_shards");
+            String s_nos = cursor.value.get(ESClient.INDEX_NUMBER_OF_PRIMARY_SHARDS_SETTING);
 
             int shardCount;
             try {
@@ -68,13 +74,13 @@ public class IntegrationSanityChecker extends Component {
 
             logger.info("Index {} in ElasticSearch has {} shard(s)", indexName, shardCount);
 
-            topicPartitionCountBuilder.put(indexName, shardCount);
+            esksps.get(indexName).setShards(shardCount);
         }
 
-        ImmutableMap<String, Integer> topicPartitionCounts = topicPartitionCountBuilder.build();
-        for(String indexName : topicPartitionCounts.keySet()) {
-            String topicName = "nabu-"+indexName;
-            int expectedPartitions = topicPartitionCounts.get(indexName);
+        for(ESKSP esksp : esksps.values()) {
+            String topicName = esksp.getTopicName();
+            String indexName = esksp.getIndexName();
+            int expectedPartitions = esksp.getShards();
             int actualPartitions;
             boolean topicExists;
 
@@ -93,22 +99,39 @@ public class IntegrationSanityChecker extends Component {
 
             try {
                 actualPartitions = kafkaClient.topicPartitionsCount(topicName);
+                esksp.setPartitions(actualPartitions);
             } catch(Exception e) {
                 throw new ComponentException(true,
-                        String.format("Failed to look up partition counts for Kafka topic %s exists (for index %s)", topicName, indexName),
+                        String.format("Failed to look up partition counts for Kafka topic %s (for index %s)", topicName, indexName),
                         e);
             }
 
             if(actualPartitions != expectedPartitions) {
                 throw new ComponentException(true,
-                        String.format("Mismatch between shard count for index %s (%d shards) " +
-                                "and partition count for topic %s (%d partitions)",
-                                indexName, expectedPartitions, topicName, actualPartitions));
+                        String.format("Mismatch between shard count for %s",
+                                esksp));
             }
 
-            logger.info("Integration check passed: es:{}[{}] <-> kafka:{}[{}]", indexName, expectedPartitions, topicName, actualPartitions);
+            logger.info("Integration check passed: {}", esksp);
         }
 
+        this.isSane = true;
         logger.info("Integration Sanity Check passed successfully!");
+    }
+
+    @Override
+    Map<String, ESKSP> getShardCountCache() {
+        if(this.shardCountCache == null) {
+            this.shardCountCache = config.getThrottlePolicies()
+                                         .stream()
+                                         .map(bridge(ThrottlePolicy::getIndexName,
+                                                     ThrottlePolicy::getTopicName,
+                                                     ESKSP::new))
+                                         .collect(Collectors.toMap(
+                                                    ESKSP::getIndexName,
+                                                    $()));
+        }
+
+        return this.shardCountCache;
     }
 }

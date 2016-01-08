@@ -109,8 +109,6 @@ class ConnectionImpl implements NabuConnection {
         this.heartbeatTask = this.new HeartbeatTask();
         this.leaveEnforcerTask = this.new LeaveEnforcerTask();
 
-        connectionListener.onNewNabuConnection(this);
-
         logger.info("New ConnectionImpl({}) for {}", this, context);
 
         if(this.electedLeaderProvider.isSelf()) {
@@ -119,6 +117,8 @@ class ConnectionImpl implements NabuConnection {
             // todo: heartbeat timeouts should be configurable.
             // 1 second delay before first run, 3 second delay between runs
             this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 1000, 3000);
+
+            connectionListener.onNewNabuConnection(this);
         } else {
             logger.info("This node IS NOT the leader; sending REDIRECT");
             // have to free up the event loop thread before I can dispatch the redirect.

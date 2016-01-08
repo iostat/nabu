@@ -1,12 +1,12 @@
 package io.stat.nabuproject.enki.leader;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.stat.nabuproject.Version;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.ProtocolHelper;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -17,7 +17,7 @@ import lombok.SneakyThrows;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-@RequiredArgsConstructor
+@RequiredArgsConstructor @EqualsAndHashCode(callSuper=true)
 final class ZKLeaderData extends LeaderData {
     private static final long serialVersionUID = -6197344956374201028L;
 
@@ -25,30 +25,14 @@ final class ZKLeaderData extends LeaderData {
     private static final short ZKLD_MAGIC = 0x01;
     private static final short ZKAP_MAGIC = 0x02;
 
+    private final @Getter String path;
     private final @Getter String version;
     private final @Getter String nodeIdentifier;
     private final @Getter AddressPort addressPort;
     private final @Getter long priority;
 
-    ZKLeaderData(String nodeID, AddressPort ap, long priority) {
-        this(Version.VERSION, nodeID, ap, priority);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(version, nodeIdentifier, addressPort);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if(!(obj instanceof LeaderData)) {
-            return false;
-        }
-
-        LeaderData other = ((LeaderData) obj);
-        return this.getVersion().equals(other.getVersion())
-            && this.getNodeIdentifier().equals(other.getNodeIdentifier())
-            && this.getAddressPort().equals(other.getAddressPort());
+    ZKLeaderData(String path, String nodeID, AddressPort ap, long priority) {
+        this(path, Version.VERSION, nodeID, ap, priority);
     }
 
     @Override
@@ -59,6 +43,15 @@ final class ZKLeaderData extends LeaderData {
                 .add("pri", priority)
                 .add("ap", addressPort)
                 .toString();
+    }
+
+    public String prettyPrint() {
+        return String.format(
+                "%s=>%d[%s/%s:%d]",
+                getPath(), getPriority(),
+                getNodeIdentifier(), getAddressPort().getAddress(),
+                getAddressPort().getPort()
+        );
     }
 
     public String toBase64() {
@@ -74,7 +67,7 @@ final class ZKLeaderData extends LeaderData {
     }
 
     @SneakyThrows
-    public static ZKLeaderData fromBase64(String s, long priority) {
+    public static ZKLeaderData fromBase64(String s, String path, long priority) {
         byte[] bytes = java.util.Base64.getDecoder().decode(s);
 
         for(int i = 0; i < MAGIC.length; i++) {
@@ -100,7 +93,7 @@ final class ZKLeaderData extends LeaderData {
         String address = ProtocolHelper.readStringFromByteBuf(buffer);
         int    port    = buffer.readInt();
 
-        return new ZKLeaderData(version, nodeId, new AddressPort(address, port), priority);
+        return new ZKLeaderData(path, version, nodeId, new AddressPort(address, port), priority);
     }
 
     private static byte[] convertAndRelease(ByteBuf buffer) {

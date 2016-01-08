@@ -2,6 +2,7 @@ package io.stat.nabuproject.enki.leader;
 
 import io.stat.nabuproject.Version;
 import io.stat.nabuproject.core.net.AddressPort;
+import lombok.EqualsAndHashCode;
 
 import java.io.Serializable;
 
@@ -10,6 +11,7 @@ import java.io.Serializable;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
+@EqualsAndHashCode
 public abstract class LeaderData implements Serializable {
     /**
      * Whether or not the leader that this data describes is acceptable for

@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.function.BiPredicate;
 import java.util.function.BinaryOperator;
 import java.util.function.IntUnaryOperator;
+import java.util.function.Predicate;
 
 /**
  * Functional math
@@ -29,7 +30,14 @@ public final class FunMath {
     public static final BinaryOperator<Long>    mod = (a, b) -> a % b;
 
     public static final IntUnaryOperator negate = (a) -> a * -1;
-    public static final Comparator<Long> compare = Longs::compare;
+    public static final Comparator<Long> lcmp = Longs::compare;
 
-    public static final BiPredicate<Object, Object> oeq = (a, b) -> a.equals(b);
+    /**
+     * Generates a pre-curried Object equality tester.
+     * @param src the object to test against.
+     * @return {@code p -> src == p || (src != null && src.equals(p)) }
+     */
+    public static <T> Predicate<?> eq(T src) {
+        return p -> src == p || (src != null && src.equals(p));
+    }
 }

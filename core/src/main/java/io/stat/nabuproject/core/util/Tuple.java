@@ -64,15 +64,18 @@ public class Tuple<T extends Serializable, U extends Serializable> implements Se
         return Objects.hashCode(first, second);
     }
 
-    public <NewT extends Serializable> Tuple<NewT, U> xformFirst(Function<T, NewT> converter) {
+    public <NewT extends Serializable> Tuple<NewT, U> fmap1(Function<T, NewT> converter) {
         return new Tuple<>(converter.apply(first), second);
     }
 
-    public <NewU extends Serializable> Tuple<T, NewU> xformSecond(Function<U, NewU> converter) {
+    public <NewU extends Serializable> Tuple<T, NewU> fmap2(Function<U, NewU> converter) {
         return new Tuple<>(first, converter.apply(second));
     }
 
     public <NT extends Serializable, NU extends Serializable> Tuple<NT, NU> xform(Function<T, NT> convFst, Function<U, NU> convSnd) {
         return new Tuple<>(convFst.apply(first), convSnd.apply(second));
     }
+
+    public static Function<Tuple<?, ?>, ?> fst = Tuple::first;
+    public static Function<Tuple<?, ?>, ?> snd = Tuple::second;
 }

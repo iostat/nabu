@@ -5,7 +5,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.kafka.KafkaMetadataClient;
-import io.stat.nabuproject.enki.integration.IntegrationSanityChecker;
+import io.stat.nabuproject.enki.integration.ESKafkaValidator;
 import io.stat.nabuproject.enki.integration.LeaderLivenessIntegrator;
 import io.stat.nabuproject.enki.integration.WorkerCoordinator;
 import io.stat.nabuproject.enki.leader.EnkiLeaderElector;
@@ -26,7 +26,7 @@ class EnkiImpl extends Enki {
     private final ESClient esClient;
     private final EnkiServer enkiServer;
     private final KafkaMetadataClient metadataClient;
-    private final IntegrationSanityChecker sanityChecker;
+    private final ESKafkaValidator sanityChecker;
     private final EnkiLeaderElector leaderElector;
     private final LeaderLivenessIntegrator leaderLivenessIntegrator;
     private final WorkerCoordinator workerCoordinator;

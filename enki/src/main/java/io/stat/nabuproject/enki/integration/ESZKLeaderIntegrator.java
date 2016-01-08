@@ -1,7 +1,6 @@
 package io.stat.nabuproject.enki.integration;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Longs;
 import com.google.inject.Inject;
@@ -27,16 +26,22 @@ import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.StampedLock;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.$;
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.$_$;
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.fmap;
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.on;
+import static io.stat.nabuproject.core.util.functional.FunMath.eq;
 
 /**
  * Integrates ElasticSearch cluster state and ZooKeeper leader election events
@@ -50,8 +55,19 @@ import static io.stat.nabuproject.core.util.functional.FluentCompositions.on;
  */
 @Slf4j
 class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEventListener, NabuESEventListener {
-    private static final Tuple<Boolean, ESZKNode> FALSE_NULL_TUPLE = new Tuple<>(false, null);
-    private static final String FALSE_NULL_TUPLE_STRING = FALSE_NULL_TUPLE.toString();
+    /**
+     * Helper function to shorten LeaderData into a more readable toString()
+     */
+    private static final Function<LeaderData, String> SHORTEN_LEADER_DATA = ld ->
+            ld == null ? "null" : String.format("%d[%s/%s:%d]",
+                    ld.getPriority(),
+                    ld.getNodeIdentifier(),
+                    ld.getAddressPort().getAddress(),
+                    ld.getAddressPort().getPort());
+    /**
+     * SHORTEN_LEADER_DATA composed to pull LeaderData from an ESZKNode
+     */
+    private static final Function<ESZKNode, String> SHORTEN_ESZKNODE = $_$(ESZKNode::getLeaderData, SHORTEN_LEADER_DATA);
 
     // todo: should these be tunable?
     /**
@@ -63,8 +79,10 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      */
     public static final int SETTLE_DELAY = 100;
 
-    // How long to wait before retrying ZK reconciliation queue
-    // entries if there's no match yet.
+    /**
+     * How long to wait before retrying ZK reconciliation queue
+     * entries if there's no match yet.
+     */
     public static final int ZK_RECONCILE_DELAY = 500;
 
     /**
@@ -113,12 +131,11 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override
     public void start() throws ComponentException {
-        logger.info("ESZKLeaderIntegrator called start()!");
         performWrite(() -> {
             integratedData.clear();
 
             Iterator<Tuple<String, AddressPort>> tupIt = esClient.getDiscoveredEnkis().iterator();
-            // don't start the reconciler until the ES thing has been seeded.
+            // don't start the reconciler until the list of currently known ES nodes has been seeded.
             for(; tupIt.hasNext();) {
                 String nodeName = tupIt.next().first();
                 integratedData.add(new ESZKNode(nodeName, null, false));
@@ -152,9 +169,8 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override
     public boolean isSelf() {
-        logger.info("ESZKLeaderIntegrator#isSelf()");
-        Tuple<Boolean, ESZKNode> tuple = validLeaderIfAvailable();
-        return (tuple.first() && tuple.second().getLeaderData().equals(getOwnLeaderData()));
+//        logger.info("ESZKLeaderIntegrator#isSelf()");
+        return validLeaderIfAvailable().map(l -> l.getLeaderData().equals(getOwnLeaderData())).orElse(false);
     }
 
     @Override
@@ -184,19 +200,19 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override @SneakyThrows
     public LeaderData getElectedLeaderData() {
-        logger.info("ESZKLeaderIntegrator#getElectedLeaderData()");
+//        logger.info("ESZKLeaderIntegrator#getElectedLeaderData()");
         LeaderData ret = getOwnLeaderData();
         int tries = 0;
         while(tries < MAX_LEADER_RETRIES) {
-            Tuple<Boolean, ESZKNode> maybe = validLeaderIfAvailable();
-            if(maybe.first()) {
-                return maybe.second().getLeaderData();
+            Optional<ESZKNode> maybe = validLeaderIfAvailable();
+            if(maybe.isPresent()) {
+                return maybe.get().getLeaderData();
             }
             Thread.sleep(NO_LEADER_RETRY_DELAY);
             tries++;
         }
 
-        Set<ESZKNode> copy = optimisticRead(() -> ImmutableSet.copyOf(integratedData), $integratedDataLock);
+        List<String> copy = optimisticRead(() -> ImmutableList.copyOf(fmap(SHORTEN_ESZKNODE, integratedData).iterator()), $integratedDataLock);
         logger.error("Couldn't find a valid leader after {} tries... Sending self as leader, but this may be VERY wrong\n" +
                 "My most current data is: {}", MAX_LEADER_RETRIES, copy);
 
@@ -210,14 +226,19 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      * @param allLeaders a list of all potential leaders ZK is aware of
      * @return a leader, or null.
      */
-    private LeaderData findTrueLeader(List<LeaderData> allLeaders) {
-        logger.info("ESZKLeaderIntegrator#findTrueLeader()");
-        List<Tuple<String, AddressPort>> knownEsNodes = esClient.getDiscoveredEnkis();
-        return allLeaders.stream()
-                         .filter(existsInES(knownEsNodes))
-                         .sorted(on(LeaderData::getPriority, Longs::compare))
-                         .findFirst()
-                         .orElse(null);
+    private Optional<LeaderData> findTrueLeader(List<LeaderData> allLeaders) {
+//        logger.info("ESZKLeaderIntegrator#findTrueLeader()");
+        return optimisticRead(() -> {
+            List<Tuple<String, AddressPort>> knownEsNodes = esClient.getDiscoveredEnkis();
+            return allLeaders.stream()
+                    .filter((existsInES(knownEsNodes))
+                       .and(al -> (integratedData.stream()
+                                                 .anyMatch(i ->
+                                                         i.getEsNodeName()
+                                                        .equals(al.getNodeIdentifier())))))
+                    .sorted(on(LeaderData::getPriority, Longs::compare))
+                    .findFirst();
+        }, $integratedDataLock);
     }
 
     /**
@@ -229,15 +250,22 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      */
     @Override
     public boolean onLeaderChange(boolean isSelf, LeaderData myData, List<LeaderData> allLeaderData) {
-        logger.info("ESZKLeaderIntegrator#onLeaderChange({}, {}, {})", isSelf, myData, allLeaderData);
-        LeaderData trueLeader = findTrueLeader(zkLeaderProvider.getLeaderCandidates());
-        if(isSelf) {
-            logger.info("This node is allegedly the leader, and my check says its: {}\nThis: {}\nThat: {}", trueLeader.equals(myData), myData, trueLeader);
-            setAsLeader(myData);
-        } else {
-            logger.info("Someone else is allegedly the leader, and my check says its: {}\nThis: {}\nThat: {}", !trueLeader.equals(myData), myData, trueLeader);
-            setAsLeader(trueLeader);
+//        logger.info("ESZKLeaderIntegrator#onLeaderChange({}, {}, {})",
+//                isSelf ? "self" : "other",
+//                fmap(SHORTEN_LEADER_DATA, myData),
+//                fmap(SHORTEN_LEADER_DATA, allLeaderData).toArray());
+
+        LeaderData trueLeader = findTrueLeader(zkLeaderProvider.getLeaderCandidates()).orElse(null);
+        boolean trulyEqual = (trueLeader != null && myData != null && trueLeader.equals(myData)) == isSelf;
+
+        String myDataShort = SHORTEN_LEADER_DATA.apply(myData);
+        String trueLeaderShort = SHORTEN_LEADER_DATA.apply(trueLeader);
+        synchronized (logger) {
+            logger.info("ZK says {} node is allegedly the leader, and my check says its: {}", isSelf ? "this" : "another", trulyEqual);
+            logger.info("{} {} {}", myDataShort, trulyEqual ? "==" : "!=", trueLeaderShort);
         }
+
+        setAsLeader(trueLeader);
 
         return true;
     }
@@ -257,16 +285,19 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
                     integratedData.removeIf(node -> node.getEsNodeName().equals(nodeName))
             , $integratedDataLock);
 
-            Tuple<Boolean, ESZKNode> test = validLeaderIfAvailable();
-            logger.info("Immediate call to validLeaderAvailable returned:\n{}\n" +
-                    "If the node that just left was the leader, the result should be {}," +
-                    "unless there was a ZK change event fired immediately before this test.\n" +
-                    "If it was not the leader or no ZK event happened, tell a police officer or an MTA employee.", test, FALSE_NULL_TUPLE_STRING);
+            String testLD = validLeaderIfAvailable().map(SHORTEN_ESZKNODE).orElse("null");
+            synchronized(logger) {
+                logger.info("Immediate call to validLeaderAvailable returned: {}", testLD);
+                logger.info("If the node that just left was the leader, the result should be null, " +
+                            "unless there was a ZK change event fired immediately before this test.");
+                logger.info("If the node that left was not the leader or no ZK event happened immediately beforehand, " +
+                            "tell a police officer or an MTA employee.");
+            }
         }
     }
 
     private void registerEsNode(String nodeName, boolean scheduleReconciler, boolean startReconciler) {
-        logger.info("ESZKLeaderIntegrator#registerEsNode({}, {}, {})", nodeName, scheduleReconciler, startReconciler);
+//        logger.info("ESZKLeaderIntegrator#registerEsNode({}, {}, {})", nodeName, scheduleReconciler, startReconciler);
         performWrite(() ->
                 integratedData.add(new ESZKNode(nodeName, null, false))
         , $integratedDataLock);
@@ -287,7 +318,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
                         inode.setLeaderData(ld);
                         inode.setLeader(true);
                         seen = true;
-                        logger.info("Reconciled ESZK link for {}", inode);
+                        logger.info("Reconciled ESZK link for {}", SHORTEN_ESZKNODE.apply(inode));
                     }
                 } else {
                     if (inode.getLeaderData().equals(ld)) {
@@ -319,11 +350,10 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     }
 
     private void scheduleZKReconciler(String esNodeName, boolean startThreadIfNeeded) {
-        logger.info("scheduleZKReconciler({}, {})", esNodeName, startThreadIfNeeded);
         performWrite(() -> reconcileQueue.add(esNodeName), $reconcileQueueLock);
         if(zkReconciler.getQueue().size() < 1 && startThreadIfNeeded) {
             zkReconciler.submit(this::reconcileZk);
-            logger.info("zkReconcilerTask submitted!");
+//            logger.info("zkReconcilerTask submitted!");
         }
     }
 
@@ -343,20 +373,26 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
                 List<Tuple<String, AddressPort>> knownESNodes = esClient.getDiscoveredEnkis();
 
                 reconcileQueue.forEach(q -> {
-                    LeaderData maybeData = zkDatas.stream()
-                            .filter(existsInES(knownESNodes))
-                            .filter(LeaderData::isAcceptable)
-                            .filter(ld -> ld.getNodeIdentifier().equals(q))
-                            .findFirst()
-                            .orElse(null);
+                    //noinspection unchecked -> eq is a standard Object equality predicate
+                    Predicate<String> equalsQueued = (Predicate)eq(q);
+                    Optional<LeaderData> maybeData =
+                            zkDatas.stream()
+                                .filter(     (existsInES(knownESNodes))
+                                        .and(LeaderData::isAcceptable)
+                                     .and($_$(LeaderData::getNodeIdentifier, equalsQueued)))
+                                .findFirst();
 
-                    if(maybeData != null) {
+                    if(maybeData.isPresent()) {
+                        LeaderData data = maybeData.get();
                         performWrite(() -> {
                             for (ESZKNode n : integratedData) {
-                                if(n.getEsNodeName().equals(q)) {
-                                    n.setLeaderData(maybeData);
+                                if(equalsQueued.test(n.getEsNodeName())) {
+                                    n.setLeaderData(data);
                                     completed.add(q);
-                                    logger.info("Reconciled {} with {}; {} unreconciled remaining.", q, maybeData, reconcileQueue.size() - completed.size());
+                                    logger.info("Reconciled {} with {}; {} unreconciled remaining.",
+                                            q,
+                                            SHORTEN_LEADER_DATA.apply(data),
+                                            reconcileQueue.size() - completed.size());
                                     break;
                                 }
                             }
@@ -423,25 +459,18 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     }
 
     /**
-     * Returns a tuple containing whether or not a valid leader is current available.
-     * The tuple's first value will be true or false, if it's true, that means there's
-     * a valid leader which can be found in the tuple's second value.
+     * Returns an ESZKNode in the Optional monad
      *
-     * If it's false, it means no valid leaders are currently available.
-     *
-     * @return a Tuple containing whether or not there's a valid leader and its data
+     * @return an {@code Optional<ESZKNode>}
      */
-    private Tuple<Boolean, ESZKNode> validLeaderIfAvailable() {
-        Tuple<Boolean, ESZKNode> def = FALSE_NULL_TUPLE;
-        Tuple<Boolean, ESZKNode> ret = optimisticRead(() ->
+    private Optional<ESZKNode> validLeaderIfAvailable() {
+        return optimisticRead(() ->
                 integratedData.stream()
-                              .filter(n -> n.hasLeaderData() && n.isLeader())
+                              .filter($    (ESZKNode::hasLeaderData)
+                                      .and(
+                                           (ESZKNode::isLeader)))
                               .findFirst()
-                              .map(n -> new Tuple<>(true, n))
-                              .orElse(def)
         , $integratedDataLock);
-
-        return ret == null ? def : ret;
     }
 
     /**

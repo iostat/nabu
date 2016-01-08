@@ -124,3 +124,4 @@ $RECYCLE.BIN/
 # Build-specific ignores
 .gradle/
 build/
+docs/

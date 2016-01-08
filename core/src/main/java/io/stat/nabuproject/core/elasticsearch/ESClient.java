@@ -9,6 +9,7 @@ import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.client.Client;
 
 import java.util.Set;
@@ -26,6 +27,7 @@ import java.util.Set;
 @EqualsAndHashCode(callSuper=true)
 @Slf4j
 public abstract class ESClient extends Component implements EnkiAddressProvider, ESEventSource {
+    public static final String INDEX_NUMBER_OF_PRIMARY_SHARDS_SETTING = "index.number_of_shards";
     /**
      * The Set of {@link NabuESEventListener}s registered to this ESClient.
      */
@@ -61,5 +63,26 @@ public abstract class ESClient extends Component implements EnkiAddressProvider,
         eSEventListeners.forEach(listener -> listener.onNabuESEvent(event));
     }
 
+    /**
+     * Gets the identifier for this client on ElasticSearch. For instance,
+     * the node client's ES identifier would be its name in the cluster
+     * @return the ES client's identifier in ES
+     */
     public abstract String getESIdentifier();
+
+    /**
+     * Requests metadata about a set of indices from ElasticSearch
+     * @param indices the indices to get metadata for
+     * @return a GetIndexResponse containing metadata for all request indices.
+     * @throws ESException if an exception occured performing the request
+     */
+    public abstract GetIndexResponse getIndexMetadata(String... indices) throws ESException;
+
+    /**
+     * Gets the amount of primary shards allocated and assigned for indexName
+     * @param indexName the name of the index to get the number of primary shards for
+     * @return the number of primary shards that indexName has allocated to it
+     * @throws ESException if an error occured while getting the shard count.
+     */
+    public abstract int getShardCount(String indexName) throws ESException;
 }

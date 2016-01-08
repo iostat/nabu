@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.util.Strings;
+import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterService;
@@ -21,12 +22,29 @@ import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * An implementation of {@link ESClient} which is backed by an ElasticSearch NodeClient
  */
 @Slf4j @EqualsAndHashCode(callSuper=true)
 class NodeClientImpl extends ESClient {
+    private static final Supplier<ESException> NOT_READY_SUPPLIER =
+            () -> new ESException(
+                    "The ESClient is not ready to process this request");
+
+    private static final Supplier<ESException> INVALID_METADATA_RESPONSE_SUPPLIER =
+            () -> new ESException(
+                "Metadata request completed successfully, " +
+                "but the response did not have information " +
+                "for the requested index");
+
+    private static final Supplier<ESException> NO_SHARD_COUNT_SUPPLIER =
+            () -> new ESException(
+                    "The metadata response of this index did not " +
+                    "contain a shard count for the requested index");
+
     private Settings.Builder nodeSettingsBuilder;
     private NodeBuilder nodeBuilder;
 
@@ -128,6 +146,41 @@ class NodeClientImpl extends ESClient {
         }
 
         return "NOT AVAILABLE";
+    }
+
+    @Override
+    public GetIndexResponse getIndexMetadata(String... indices) throws ESException{
+        Client client = Optional.of(getESClient())
+                                  .orElseThrow(NOT_READY_SUPPLIER);
+        try {
+            return client
+                    .admin()
+                    .indices()
+                    .prepareGetIndex().setIndices(indices)
+                    .get();
+
+        } catch (Exception e) {
+            throw new ESException(e);
+        }
+    }
+
+    @Override
+    public int getShardCount(String indexName) throws ESException {
+        GetIndexResponse resp = getIndexMetadata(indexName);
+
+        Settings indexSettings = Optional.of(resp.getSettings().getOrDefault(indexName, null))
+                                         .orElseThrow(INVALID_METADATA_RESPONSE_SUPPLIER);
+
+        String shardCountStr = Optional.of(indexSettings.get(INDEX_NUMBER_OF_PRIMARY_SHARDS_SETTING, null))
+                                       .orElseThrow(NO_SHARD_COUNT_SUPPLIER);
+
+        int ret;
+        try {
+            ret = Integer.parseInt(shardCountStr, 10);
+        } catch(Exception e) {
+            throw new ESException("Error while parsing the number of shards returned by ElasticSearch (got: \"" + shardCountStr + "\")", e);
+        }
+        return ret;
     }
 
     /**

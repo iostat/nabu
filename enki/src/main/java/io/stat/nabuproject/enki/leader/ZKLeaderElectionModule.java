@@ -12,7 +12,7 @@ public class ZKLeaderElectionModule extends AbstractModule {
     private final boolean useZKAsElectedLeaderProvider;
 
     /**
-     * calls {@link this#ZKLeaderElectionModule(boolean)} with <tt>false</tt>
+     * Constructs a ZKLeaderElectionModule without binding ZooKeeper as the {@link ElectedLeaderProvider}
      */
     public ZKLeaderElectionModule() {
         this(false);
