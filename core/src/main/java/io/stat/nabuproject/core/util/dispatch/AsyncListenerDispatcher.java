@@ -14,7 +14,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -81,7 +81,7 @@ public class AsyncListenerDispatcher<T> extends Component {
      *                       It will be applied once to each listener on a separate worker thread.
      * @param crc a CallbackReducerCallback that is called when all callbacks have finished running.
      */
-    public void dispatchListenerCallbacks(Function<T, Boolean> callbackCaller, CallbackReducerCallback crc) {
+    public void dispatchListenerCallbacks(Predicate<T> callbackCaller, CallbackReducerCallback crc) {
         synchronized ($executorLock) {
             if(isShuttingDown.get()) {
                 logger.error("This AsyncListenerDispatcher is shutting down and cannot dispatch callbacks!\n" +
@@ -92,7 +92,7 @@ public class AsyncListenerDispatcher<T> extends Component {
             }
             List<Future<Boolean>> futures = listeners.stream()
                     .map(listener ->
-                            workerExecutorService.submit(() -> callbackCaller.apply(listener)))
+                            workerExecutorService.submit(() -> callbackCaller.test(listener)))
                     .collect(Collectors.toList());
 
             collectorExecutorService.submit(new CallbackReducerRunner(crc, new FutureCollectorTask(crc.getName(), futures)));

@@ -136,7 +136,7 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
     }
 
     @Override
-    public void onNabuESEvent(NabuESEvent event) {
+    public boolean onNabuESEvent(NabuESEvent event) {
 //        logger.info("{}", event);
         switch(event.getType()){
             case ENKI_JOINED:
@@ -148,6 +148,8 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
             case NABU_PARTED:
                 break;
         }
+
+        return true;
     }
 
     private static class AssignableNabu {

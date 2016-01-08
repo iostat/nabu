@@ -3,8 +3,10 @@ package io.stat.nabuproject.core.util.functional;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntUnaryOperator;
 import java.util.function.Predicate;
@@ -205,9 +207,15 @@ public final class FluentCompositions {
      * @param <U> the type of the second argument
      * @return a Predicate that passes its arg as the first arg, and u as the second arg to the BiPredicate
      */
-    public static <T, U> Predicate<T> curry2(BiPredicate<T, ? super U> bp, U u) {
+    public static <T, U> Predicate<T> curry2(BiPredicate<T, U> bp, U u) {
+        return curry2p(bp, u);
+    }
+
+    public static <T, U> Predicate<T> curry2p(BiPredicate<T, U> bp, U u) {
         return t -> bp.test(t, u);
     }
+
+    public static <T, U> Consumer<T> curry2(BiConsumer<T, U> bc, U u) { return t -> bc.accept(t, u); }
 
     /**
      * The BiFunction equivalent of {@link FluentCompositions#curry2(BiPredicate, Object)}

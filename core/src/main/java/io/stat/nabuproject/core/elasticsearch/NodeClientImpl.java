@@ -2,10 +2,14 @@ package io.stat.nabuproject.core.elasticsearch;
 
 import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
+import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.Tuple;
+import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
+import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Synchronized;
@@ -24,6 +28,8 @@ import org.elasticsearch.node.NodeBuilder;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.curry2p;
 
 /**
  * An implementation of {@link ESClient} which is backed by an ElasticSearch NodeClient
@@ -58,9 +64,14 @@ class NodeClientImpl extends ESClient {
 
     private final byte[] $clusterStateLock;
 
+    private final AsyncListenerDispatcher<NabuESEventListener> dispatcher;
+
+    private final Injector injector;
+
     @Inject
-    NodeClientImpl(ESConfigProvider configProvider) {
+    NodeClientImpl(ESConfigProvider configProvider, Injector injector) {
         this.config = configProvider;
+        this.injector = injector;
 
         nodeSettingsBuilder = Settings.settingsBuilder()
                 .put("path.home", config.getESHome())
@@ -81,6 +92,8 @@ class NodeClientImpl extends ESClient {
         this.clusterStateListener = this.new ClusterStateListener();
 
         this.$clusterStateLock = new byte[0];
+
+        this.dispatcher = new AsyncListenerDispatcher<NabuESEventListener>("NabuESEvent");
     }
 
     @Override
@@ -101,6 +114,7 @@ class NodeClientImpl extends ESClient {
     @Override
     public void shutdown() throws ComponentException {
         this.esNodeClusterService.remove(clusterStateListener);
+        this.dispatcher.shutdown();
         this.esNode.close();
     }
 
@@ -181,6 +195,21 @@ class NodeClientImpl extends ESClient {
             throw new ESException("Error while parsing the number of shards returned by ElasticSearch (got: \"" + shardCountStr + "\")", e);
         }
         return ret;
+    }
+
+    @Override
+    public void addNabuESEventListener(NabuESEventListener listener) {
+        dispatcher.addListener(listener);
+    }
+
+    @Override
+    public void removeNabuESEventListener(NabuESEventListener listener) {
+        dispatcher.removeListener(listener);
+    }
+
+    private void dispatchNabuEsEvent(NabuESEvent event) {
+        dispatcher.dispatchListenerCallbacks(curry2p(NabuESEventListener::onNabuESEvent, event),
+                new ShutdownOnFailureCRC(this, "NabuESEventCallbackFailedCRC"));
     }
 
     /**

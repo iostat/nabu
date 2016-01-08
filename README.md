@@ -30,7 +30,7 @@ example configuration files will now work.
 
 ## Documentation
 The code is extensively commented with Javadocs. To generate an aggregate of Javadocs across all modules,
-run `./gradlew :aggregateJavadocs` and check `./build/docs/javadocs`
+run `./gradlew docs` and check `./docs/index.html`
 
 
 ---

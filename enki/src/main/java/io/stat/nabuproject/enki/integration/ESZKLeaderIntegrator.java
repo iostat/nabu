@@ -11,6 +11,7 @@ import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.Tuple;
+import io.stat.nabuproject.core.util.concurrent.ResettableCountDownLatch;
 import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.leader.LeaderData;
 import io.stat.nabuproject.enki.leader.LeaderEventListener;
@@ -23,6 +24,7 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -32,16 +34,21 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.$;
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.$_$;
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.curry2;
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.fmap;
 import static io.stat.nabuproject.core.util.functional.FluentCompositions.on;
 import static io.stat.nabuproject.core.util.functional.FunMath.eq;
+import static io.stat.nabuproject.core.util.functional.FunMath.lcmp;
 
 /**
  * Integrates ElasticSearch cluster state and ZooKeeper leader election events
@@ -50,6 +57,10 @@ import static io.stat.nabuproject.core.util.functional.FunMath.eq;
  *
  * todo: there are probably a TON of redundant operations which can be optimized to hell and back
  * but I don't really care for it at the moment. better safe than sorry right?
+ *
+ * Also, there are a lot of delays that may be unecessary, and possibly even contribute to 5s+ delays for leader reelection
+ * I don't really want to focus on fixing it at the moment, as that short moment with no elected leader isn't really THAT frightening.
+ * Might even be a good thing, allowing Nabu's to settle down a bit before reconnecting.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
@@ -69,6 +80,16 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      */
     private static final Function<ESZKNode, String> SHORTEN_ESZKNODE = $_$(ESZKNode::getLeaderData, SHORTEN_LEADER_DATA);
 
+    /**
+     * Shorthand for unflagging an ESZKNode as the leader inside functional APIs
+     */
+    private static final Consumer<ESZKNode> UNSET_LEADER_FLAG = curry2(ESZKNode::setLeader, false);
+
+    /**
+     * Shorthand for flagging an ESZKNode as the leader inside functional APIs
+     */
+    private static final Consumer<ESZKNode> SET_LEADER_FLAG = curry2(ESZKNode::setLeader, true);
+
     // todo: should these be tunable?
     /**
      * Amount of time to sleep before and after each read to allow write operations to happen
@@ -77,7 +98,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      * the integrated leader state prior to a read lock being obtained, or it was updated shortly after the read
      * finished.
      */
-    public static final int SETTLE_DELAY = 100;
+    public static final int SETTLE_DELAY = 1000;
 
     /**
      * How long to wait before retrying ZK reconciliation queue
@@ -89,21 +110,35 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      * How to long to wait before retrying finding
      * a leader while one is not available.
      */
-    public static final int NO_LEADER_RETRY_DELAY = 200;
+    public static final int NO_LEADER_RETRY_DELAY = 2000;
 
     /**
      * Maximum amount of times to retry getting a leader before giving up
      */
     public static final int MAX_LEADER_RETRIES = 10;
 
+    /**
+     * How long to hold any leader requests after a node departs from ES to allow ZK to try and catch up.
+     */
+    public static final int ES_EVENT_SYNC_DELAY = 750;
+
+    /**
+     * How long between when ES_EVENT_SYNC_DELAYs can be re-triggered. Used in order
+     * to prevent a flapping Enki from DoSing provisioning of leaders to Nabus
+     */
+    public static final int ES_EVENT_SYNC_DELAY_MINIMUM_GAP = 30;
+
     private final ESClient esClient;
     private final ZKLeaderProvider zkLeaderProvider;
     private final StampedLock $integratedDataLock;
-    private final Set<ESZKNode> integratedData;
+    private volatile Set<ESZKNode> integratedData;
 
     private final ThreadPoolExecutor zkReconciler;
     private final StampedLock $reconcileQueueLock;
     private final Set<String> reconcileQueue;
+
+    private final ResettableCountDownLatch esEventSyncDelayLatch;
+    private final AtomicLong lastESEventSyncDelayCompleted;
 
     public static Predicate<LeaderData> existsInES(List<Tuple<String, AddressPort>> knownFromES) {
         return l -> knownFromES.stream().anyMatch(t -> t.first().equals(l.getNodeIdentifier()));
@@ -115,7 +150,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
         this.zkLeaderProvider = zkLeaderProvider;
         this.$integratedDataLock = new StampedLock();
 
-        this.integratedData = Sets.newConcurrentHashSet();
+        this.integratedData = Collections.synchronizedSet(Sets.newConcurrentHashSet());
 
         this.zkReconciler = new ThreadPoolExecutor(
                 1, 1,
@@ -125,6 +160,11 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
         );
         this.$reconcileQueueLock = new StampedLock();
         this.reconcileQueue = Sets.newConcurrentHashSet();
+
+        // Reset the latch immediately, to prevent a deadlock.
+        this.esEventSyncDelayLatch = new ResettableCountDownLatch(1);
+        this.esEventSyncDelayLatch.countDown();
+        this.lastESEventSyncDelayCompleted = new AtomicLong(System.currentTimeMillis());
 
         logger.info("ESZKLeaderIntegrator constructed!");
     }
@@ -155,7 +195,6 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override
     public void shutdown() throws ComponentException {
-
         zkLeaderProvider.removeLeaderEventListener(this);
         esClient.removeNabuESEventListener(this);
 
@@ -175,6 +214,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override
     public List<LeaderData> getLeaderCandidates() {
+        waitForEsSyncUnlatch();
         List<LeaderData> resultOfRead = optimisticRead(() ->
                 ImmutableList.copyOf(
                         integratedData.stream()
@@ -188,6 +228,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override
     public LeaderData getOwnLeaderData() {
+        waitForEsSyncUnlatch();
         String myESNodeName = esClient.getESIdentifier();
         return optimisticRead(() ->
                 integratedData.stream()
@@ -224,10 +265,18 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      * which coincidentally is the ZNode number in the only
      * implementation we have
      * @param allLeaders a list of all potential leaders ZK is aware of
-     * @return a leader, or null.
+     * @return {@code Optional<LeaderData>}
      */
     private Optional<LeaderData> findTrueLeader(List<LeaderData> allLeaders) {
 //        logger.info("ESZKLeaderIntegrator#findTrueLeader()");
+
+        // This seek is slightly different from ZKImpls. This finds the lowest priority
+        // (i.e., ZK ZNode sequence) node that's been reconciled with ES,
+        //
+        // sleep a bit to allow ES events to reconcile
+        if(reconcileQueue.size() > 0) {
+            try { Thread.sleep(ES_EVENT_SYNC_DELAY + ZK_RECONCILE_DELAY); } catch (Exception ignored) { }
+        }
         return optimisticRead(() -> {
             List<Tuple<String, AddressPort>> knownEsNodes = esClient.getDiscoveredEnkis();
             return allLeaders.stream()
@@ -243,26 +292,25 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     /**
      * Called by ZK if there's any activity in the leader election ZNode
-     * @param isSelf whether or not this node is the new leader.
-     * @param myData the LeaderData of the new leader
+     * @param isSelf whether or not this node is allegedly the new leader.
+     * @param allegedLeader the LeaderData of the new alleged leader
      * @param allLeaderData the leaderDatas of all the nodes.
      * @return always true
      */
     @Override
-    public boolean onLeaderChange(boolean isSelf, LeaderData myData, List<LeaderData> allLeaderData) {
-//        logger.info("ESZKLeaderIntegrator#onLeaderChange({}, {}, {})",
-//                isSelf ? "self" : "other",
-//                fmap(SHORTEN_LEADER_DATA, myData),
-//                fmap(SHORTEN_LEADER_DATA, allLeaderData).toArray());
-
+    public boolean onLeaderChange(boolean isSelf, LeaderData allegedLeader, List<LeaderData> allLeaderData) {
+        LeaderData myData = getOwnLeaderData();
         LeaderData trueLeader = findTrueLeader(zkLeaderProvider.getLeaderCandidates()).orElse(null);
-        boolean trulyEqual = (trueLeader != null && myData != null && trueLeader.equals(myData)) == isSelf;
 
-        String myDataShort = SHORTEN_LEADER_DATA.apply(myData);
+        boolean trueLeaderEqZkLead = (trueLeader != null && allegedLeader != null && trueLeader.equals(allegedLeader));
+
+        String allegedLeaderShort = SHORTEN_LEADER_DATA.apply(allegedLeader);
         String trueLeaderShort = SHORTEN_LEADER_DATA.apply(trueLeader);
+        String myLeaderDataShort = SHORTEN_LEADER_DATA.apply(myData);
+
         synchronized (logger) {
-            logger.info("ZK says {} node is allegedly the leader, and my check says its: {}", isSelf ? "this" : "another", trulyEqual);
-            logger.info("{} {} {}", myDataShort, trulyEqual ? "==" : "!=", trueLeaderShort);
+            logger.info("ZK says {}:{} is allegedly the leader, and my check says its: {}", isSelf ? "self" : "other", allegedLeaderShort, trueLeaderEqZkLead);
+            logger.info("ESZK:{} {} ZK:{} (self:{})", trueLeaderShort, trueLeaderEqZkLead ? "==" : "!=", allegedLeaderShort, myLeaderDataShort);
         }
 
         setAsLeader(trueLeader);
@@ -271,19 +319,33 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     }
 
     @Override
-    public void onNabuESEvent(NabuESEvent event) {
+    public boolean onNabuESEvent(NabuESEvent event) {
         String nodeName = event.getNode().getName();
         if(event.getType() == NabuESEvent.Type.ENKI_JOINED) {
+            // a node that can be seen joining
+            // joined after this node
+            // and thus would have a later sequence in ZK
+            // thus there is no need to re-validate the leader
+            // as it has no chance to become the leader.
             logger.info("New Enki joined! ({})", nodeName);
             registerEsNode(nodeName, true, true);
         } else if (event.getType() == NabuESEvent.Type.ENKI_PARTED) {
-            logger.info("Enki {} departed ES cluster.", nodeName);
-            performWrite(() ->
-                    reconcileQueue.removeIf(nn -> nn.equals(nodeName))
-            , $reconcileQueueLock);
-            performWrite(() ->
-                    integratedData.removeIf(node -> node.getEsNodeName().equals(nodeName))
-            , $integratedDataLock);
+            logger.info("Enki \"{}\" departed ES cluster.", nodeName);
+            performWrite(() -> {
+                performWrite(() -> reconcileQueue.removeIf(nn -> nn.equals(nodeName)), $reconcileQueueLock);
+                logger.info("for shits and giggles :: {}", nodeName);
+                integratedData.removeIf(node -> {
+                    if(node.getEsNodeName().equals(nodeName)) {
+                        // need to unset the leader flag before removing from integrated data
+                        // because for whatever fucktarded reason java is keep a thread local (true)
+                        // or fucking something. no clue why. but this works.
+                        UNSET_LEADER_FLAG.accept(node);
+                    }
+                    return false;
+                });
+            }, $integratedDataLock);
+
+            triggerEsEventSyncDelay();
 
             String testLD = validLeaderIfAvailable().map(SHORTEN_ESZKNODE).orElse("null");
             synchronized(logger) {
@@ -293,6 +355,38 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
                 logger.info("If the node that left was not the leader or no ZK event happened immediately beforehand, " +
                             "tell a police officer or an MTA employee.");
             }
+        }
+
+        return true;
+    }
+
+    private void triggerEsEventSyncDelay() {
+        synchronized(esEventSyncDelayLatch) {
+            if((System.currentTimeMillis() - lastESEventSyncDelayCompleted.get()) < ES_EVENT_SYNC_DELAY_MINIMUM_GAP) {
+                // flapping Enkis shouldn't lead to ridiculous DoSs by retriggering this latch.
+                return;
+            }
+
+            this.esEventSyncDelayLatch.reset();
+            Thread t = new Thread(() -> {
+                try {
+                    Thread.sleep(ES_EVENT_SYNC_DELAY);
+                } catch (Exception e) {
+                    logger.warn("ES event synchronization delay unlatch() was interrupted!", e);
+                } finally {
+                    this.esEventSyncDelayLatch.countDown();
+                }
+            });
+            t.setName("ESZKIntegrator-ESEventSyncDelayUnlatcher");
+            t.start();
+        }
+    }
+
+    private void waitForEsSyncUnlatch() {
+        try {
+            Thread.sleep(ES_EVENT_SYNC_DELAY);
+        } catch (Exception e) {
+            logger.warn("ES event synchronization delay wait() was interrupted!", e);
         }
     }
 
@@ -316,16 +410,16 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
                     // but the names match.
                     if(inode.getEsNodeName().equals(ld.getNodeIdentifier())) {
                         inode.setLeaderData(ld);
-                        inode.setLeader(true);
+                        SET_LEADER_FLAG.accept(inode);
                         seen = true;
                         logger.info("Reconciled ESZK link for {}", SHORTEN_ESZKNODE.apply(inode));
                     }
                 } else {
                     if (inode.getLeaderData().equals(ld)) {
-                        inode.setLeader(true);
+                        SET_LEADER_FLAG.accept(inode);
                         seen = true;
                     } else {
-                        inode.setLeader(false);
+                        UNSET_LEADER_FLAG.accept(inode);
                     }
                 }
             }
@@ -464,6 +558,8 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      * @return an {@code Optional<ESZKNode>}
      */
     private Optional<ESZKNode> validLeaderIfAvailable() {
+        waitForEsSyncUnlatch();
+        reassertSingleLeader();
         return optimisticRead(() ->
                 integratedData.stream()
                               .filter($    (ESZKNode::hasLeaderData)
@@ -471,6 +567,19 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
                                            (ESZKNode::isLeader)))
                               .findFirst()
         , $integratedDataLock);
+    }
+
+    private void reassertSingleLeader() {
+        performWrite(() -> {
+            List<ESZKNode> foundNodes = (integratedData.stream()
+                                                       .filter(ESZKNode::isLeader)
+                                                       .collect(Collectors.toList()));
+
+            if(foundNodes.size() > 1) {
+                foundNodes.sort(on($_$(ESZKNode::getLeaderData, LeaderData::getPriority), lcmp));
+                foundNodes.stream().skip(1).forEach(UNSET_LEADER_FLAG);
+            }
+        }, $integratedDataLock);
     }
 
     /**

@@ -35,11 +35,27 @@ import static io.stat.nabuproject.core.util.functional.FunMath.lt;
 import static io.stat.nabuproject.core.util.functional.FunMath.negate;
 /**
  * A leader election implementation using ZooKeeper.
+ * One should not that due to the way the idiomatic ZooKeeper leader election strategy is
+ * designed, this implementation will never quite report the "true leader". Rather, it will report
+ * the node in front of it for ascension to leadership. Every a time an Enki reconnects to the
+ * cluster, it will get put in the back of the line. Even if nabus round-robin their connections to
+ * Enki, they will always send REDIRECT down the chain which will stop with whoever is the real leader.
  *
- * todo: Needs to be able to integrate with ElasticSearch cluster events
- *       since there is a bit of a delay between ZooKeeper watch events
- *       and actual node events.
+ * Needless to say it's a little inefficient. Furthermore, ZooKeeper doesn't care about "real time" so
+ * much as "in order". Because of this, we have {@link io.stat.nabuproject.enki.integration.ESZKLeaderIntegrator}
+ * which piggybacks off of this class, and integrates ElasticSearch cluster events which are near real-time to
+ * <ol>
+ *     <li>
+ *         allow a more correct representation of the Nabu/Enki cluster state,
+ *         especially if multiple nodes leave or join within the same timespan
+ *     </li>
+ *     <li>
+ *         save the overhead of a huge redirect chain, especially if you use super-experimental software responsibly,
+ *         and have 20 kubernetes-managed auto restarting Enkis as failovers.
+ *     </li>
+ * </ol>
  *
+ * @see io.stat.nabuproject.enki.integration.ESZKLeaderIntegrator
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
@@ -61,6 +77,11 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     private final AtomicReference<String> ownZNodePath;
 
     private ZkClient zkClient;
+
+    @Override
+    public LeaderData getElectedLeaderData() {
+        return electedLeaderData.get();
+    }
 
     private final IZkChildListener electionPathChildListener;
     private final IZkStateListener connectionStateListener;
