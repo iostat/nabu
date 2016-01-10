@@ -92,6 +92,15 @@ If you're using any other plugins that add custom cluster-wide metadata, you nee
 ## Development
 See the helper scripts in `dev/`. Please read them before running them.
 
+If you wanna run multiple Enki/Nabu instances on the same machine, you can have them bind to different ports.
+In your nabu.yml and enki.yml under `nabu.bind.port` or `enki.bind.port`, you can the port set to a substituted
+variable, such as `${prop:override.server.port:3654}` The way that override works is it checks for a
+`System.getProperty` named `override.server.port`, or otherwise defaults to `3654`
+
+Then, you can run something like `./gradlew :enki:run -Doverride.server.port=365N` in different terminal sessions to
+have multiple nabu/enki nodes bound. It is safe to run them all from the same directory and `es.path.home`, as long as
+that directory isn't a REAL elasticsearch home.
+
 
 ---
 

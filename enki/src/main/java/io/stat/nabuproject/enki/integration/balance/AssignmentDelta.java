@@ -3,10 +3,11 @@ package io.stat.nabuproject.enki.integration.balance;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import lombok.AccessLevel;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+import javax.lang.model.type.NullType;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 
@@ -19,7 +20,7 @@ import java.util.Set;
  *                     equals(Object) and hashCode()
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-@RequiredArgsConstructor(access= AccessLevel.PRIVATE) @EqualsAndHashCode
+@RequiredArgsConstructor(access= AccessLevel.PRIVATE)
 public class AssignmentDelta<Context, Assignment> {
     private final @Getter Context context;
     private final @Getter ImmutableSet<Assignment> toStart;
@@ -30,7 +31,48 @@ public class AssignmentDelta<Context, Assignment> {
         return new Builder<>(c, ImmutableSet.copyOf(existingTasks), random);
     }
 
-    @EqualsAndHashCode
+    /**
+     * like with {@link AssignmentDelta#equals(Object)}, the hash code
+     * should simply be affected by the class of the context.
+     */
+    @Override
+    public int hashCode() {
+        Class<?> ctxClass = (context != null) ? context.getClass() : NullType.class;
+        return Objects.hash(context, ctxClass, AssignmentDelta.class);
+    }
+
+    /**
+     * Equality of a Delta is determined based on the context, since we just
+     * want to restrict Sets of deltas to having only one delta per
+     * context affected.
+     * @param obj the object to compare equality for
+     * @return whether or not this delta affects the same context as obj, if obj
+     * is an AssignmentDelta, otherwise false.
+     */
+    @Override
+    public boolean equals(Object obj) {
+        return this == obj
+                ||    (obj != null
+                    && obj instanceof AssignmentDelta
+                    && this.context.equals(((AssignmentDelta) obj).getContext()));
+    }
+
+    /**
+     * How many start operations this delta involves
+     * @return toStart.size()
+     */
+    public int getStartCount() {
+        return toStart.size();
+    }
+
+    /**
+     * How many stop operations this delta involves
+     * @return toStop.size()
+     */
+    public int getStopCount() {
+        return toStop.size();
+    }
+
     static class Builder<Context, Assignment> {
         private final @Getter Context context;
         private final @Getter int startWeight;
@@ -175,6 +217,50 @@ public class AssignmentDelta<Context, Assignment> {
         public AssignmentDelta<Context, Assignment> build() {
             assert getWeightWithChanges() >= 0 : "Building this AssignmentDelta will result in an AD with negative changes, which is impossible.";
             return new AssignmentDelta<>(context, ImmutableSet.copyOf(toStart), ImmutableSet.copyOf(toStop), weightWithChanges);
+        }
+
+        /**
+         * Equality of a Delta is determined based on the context, since we just
+         * want to restrict Sets of deltas to having only one delta per
+         * context affected.
+         * @param obj the object to compare equality for
+         * @return whether or not this delta affects the same context as obj, if obj
+         * is an AssignmentDelta, otherwise false.
+         */
+        @Override
+        public boolean equals(Object obj) {
+            return this == obj
+                    ||    (obj != null
+                    && obj instanceof AssignmentDelta.Builder
+                    && this.context.equals(((AssignmentDelta.Builder) obj).getContext()));
+        }
+
+        /**
+         * like with {@link AssignmentDelta.Builder#equals(Object)}, the hash code
+         * should simply be affected by the class of the context.
+         */
+        @Override
+        public int hashCode() {
+            Class<?> ctxClass = (context != null) ? context.getClass() : NullType.class;
+            return Objects.hash(context, ctxClass, AssignmentDelta.Builder.class);
+        }
+
+        /**
+         * How many starts will be needed to execute the delta this
+         * builder will build assuming no other changes are applied
+         * @return how many pending starts in the builder
+         */
+        public int getStartCount() {
+            return toStart.size();
+        }
+
+        /**
+         * How many stops will be needed to execute the delta this
+         * builder will build assuming no other changes are applied
+         * @return how many pending stops in the builder
+         */
+        public int getStopCount() {
+            return toStop.size();
         }
     }
 }

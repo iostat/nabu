@@ -34,10 +34,10 @@ import java.util.stream.Stream;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class AssignmentBalancer<Context, Assignment> {
+public class AssignmentBalancer<Context extends AssignmentContext, Assignment> {
     private Map<Integer, Set<AssignmentDelta.Builder<Context, Assignment>>> buckets;
     private static <C, A> Set<AssignmentDelta.Builder<C, A>> CREATE_BUCKET() {
-        return Sets.newHashSet();
+        return Sets.newConcurrentHashSet();
     }
     private boolean isBeingReused;
     private final Random random;
@@ -172,28 +172,30 @@ public class AssignmentBalancer<Context, Assignment> {
      */
     public List<AssignmentDelta<Context, Assignment>> balance(Set<Assignment> unassignedTasks) {
         assertNotBeingReused();
+        int originalUnassignedTasksSize = unassignedTasks.size();
 
         ImmutableMap<Integer, Set<AssignmentDelta.Builder<Context, Assignment>>> copyOfBuckets = ImmutableMap.copyOf(buckets);
 
         Map<Integer, Integer> bucketSizes = Maps.newHashMap();
         int totalWorkers = 0;
-        int totalTasks   = 0;
+        int totalAssignedAtStart   = 0;
 
-        // figure out total number of assigned tasks and workers
+        // step 1) reassign tasks as needed so that pre-existing workload is relatively even.
+        //        1a) figure out total number of assigned tasks and workers
         for(Map.Entry<Integer, Set<AssignmentDelta.Builder<Context, Assignment>>> entry : copyOfBuckets.entrySet()) {
             int taskCount  = entry.getKey();
             int bucketSize = entry.getValue().size();
 
-            totalTasks += (taskCount * bucketSize);
+            totalAssignedAtStart += (taskCount * bucketSize);
             totalWorkers += bucketSize;
 
             bucketSizes.put(taskCount, bucketSize);
         }
 
         // nothing fancy, just a ceil division without floating casts)
-        int idealTasksPerWorker = (totalTasks / totalWorkers + (totalTasks % totalWorkers == 0 ? 0 : 1));
+        int idealTasksPerWorker = (totalAssignedAtStart / totalWorkers + (totalAssignedAtStart % totalWorkers == 0 ? 0 : 1));
 
-        // pre-un-assign all tasks from workers who have more than the ideal amount
+        //        1b) remove tasks from workers who have more than the average pre-existing-workload amount.
         List<Assignment> pulledFromAboveIdeal = Lists.newLinkedList();
         for(Map.Entry<Integer, Set<AssignmentDelta.Builder<Context, Assignment>>> entry : copyOfBuckets.entrySet()) {
             if(entry.getKey() > idealTasksPerWorker) {
@@ -209,7 +211,7 @@ public class AssignmentBalancer<Context, Assignment> {
             }
         }
 
-        // now give the tasks to the less-loaded
+        //        1c) distribute the work pulled from above-average workers to below average ones
         // figure out how much each less-loaded worker needs to have
         // so they're all even.
         AtomicInteger workersBelowIdealAI = new AtomicInteger(0);
@@ -227,27 +229,39 @@ public class AssignmentBalancer<Context, Assignment> {
                          keptLessLoadedBucketsBuilder.addAll(keptBucket);
                      });
 
+        // sum total outstanding tasks to be given to the below-average workers
         int totalLTIWGoalTasks = tasksInWorkersLTIAI.get() + pulledFromAboveIdeal.size();
+        // get how many workers are below average in total
         int workersBelowIdeal  = workersBelowIdealAI.get();
-        int targetTasksForLessLoadedWorkers = (totalLTIWGoalTasks / workersBelowIdeal + (totalLTIWGoalTasks % workersBelowIdeal == 0 ? 0 : 1));
-        Set<AssignmentDelta.Builder<Context, Assignment>> keptLessLoadedBuckets = keptLessLoadedBucketsBuilder.build();
-        for(AssignmentDelta.Builder<Context, Assignment> worker : keptLessLoadedBuckets) {
-            int tasksToAssign = targetTasksForLessLoadedWorkers - worker.getWeightWithChanges();
-            operateOnAD(worker, ad -> {
-                for(int i = 0; i < tasksToAssign && pulledFromAboveIdeal.size() != 0; i++) {
-                    Assignment randomAssgn = pulledFromAboveIdeal.remove(random.nextInt(pulledFromAboveIdeal.size()));
-                    ad.assign(randomAssgn);
-                }
-            });
+
+        // either there's at least one worker below the ideal, or there are
+        // were no tasks plucked from the "above average" bucket.
+        assert (totalLTIWGoalTasks == 0 && workersBelowIdeal == 0) || (workersBelowIdeal >= 1) : "Math has lost all meaning.";
+
+        // sometimes you'll have an optimal distribution, in this case you can be sure
+        if(workersBelowIdeal != 0) {
+            int targetTasksForLessLoadedWorkers = (totalLTIWGoalTasks / workersBelowIdeal + (totalLTIWGoalTasks % workersBelowIdeal == 0 ? 0 : 1));
+            Set<AssignmentDelta.Builder<Context, Assignment>> keptLessLoadedBuckets = keptLessLoadedBucketsBuilder.build();
+            for(AssignmentDelta.Builder<Context, Assignment> worker : keptLessLoadedBuckets) {
+                int tasksToAssign = targetTasksForLessLoadedWorkers - worker.getWeightWithChanges();
+                operateOnAD(worker, ad -> {
+                    for(int i = 0; i < tasksToAssign && pulledFromAboveIdeal.size() != 0; i++) {
+                        Assignment randomAssgn = pulledFromAboveIdeal.remove(random.nextInt(pulledFromAboveIdeal.size()));
+                        ad.assign(randomAssgn);
+                    }
+                });
+            }
         }
 
-        assert pulledFromAboveIdeal.size() == 0 : "Leftover pulledFromAboveIdeal tasks????";
+
+        // this should never happen at this point
+        assert pulledFromAboveIdeal.size() == 0 : "tasks pulled from above average workers, but there are no workers below average!";
 
         // from this point on, we can work in a round-robin manner, wherein we just take the remaining tasks, and put them into a node
         // with the smallest amount of tasks assigned to it, but not backed by an immutable map, so we always have the closest packing
-        // the only remaining tasks are tasks that
+        // the only remaining tasks unassigned are tasks that were unassigned at the start of the rebalance.
         List<Assignment> unassignedAsList = Lists.newArrayList(unassignedTasks);
-        while(unassignedTasks.size() != 0) {
+        while(unassignedAsList.size() != 0) {
             Assignment nextUnassigned = unassignedAsList.remove(random.nextInt(unassignedAsList.size()));
 
             Set<AssignmentDelta.Builder<Context, Assignment>> smallestBucket = buckets.get(Collections.min(buckets.keySet()));
@@ -262,18 +276,26 @@ public class AssignmentBalancer<Context, Assignment> {
             });
         }
 
-        StringBuilder sb = new StringBuilder("LOAD DISTRIBUTION\n");
+        StringBuilder sb = new StringBuilder("\nSTARTED WITH ").append(originalUnassignedTasksSize).append(" UNASSIGNED TASKS\n");
+        sb.append(totalAssignedAtStart).append(" ASSIGNED AT START AND ").append(totalWorkers).append(" TOTAL WORKERS\n");
+        sb.append("LOAD DISTRIBUTION\n");
+        sb.append(Strings.padStart("WORKER NAME", 60, ' '));
         sb.append(Strings.padStart("TASK COUNT", 20, ' '));
-        sb.append(Strings.padStart("WORKER COUNT", 20, ' '));
+        sb.append(Strings.padStart("DELTA +", 10, ' '));
+        sb.append(Strings.padStart("DELTA -", 10, ' '));
         sb.append("\n");
 
-        buckets.keySet().stream().sorted().sorted().forEach(key -> {
+        buckets.keySet().stream().sorted().forEach(key -> {
             int taskCount = key;
-            int workersAssigned = buckets.get(key).size();
+            Set<AssignmentDelta.Builder<Context, Assignment>> workersInBucket = buckets.get(key);
 
-            sb.append(Strings.padStart(Integer.toString(taskCount), 20, ' '))
-              .append(Strings.padStart(Integer.toString(workersAssigned), 20, ' '))
-              .append("\n");
+            workersInBucket.forEach(builder -> {
+                sb.append(Strings.padStart(builder.getContext().getDescription(), 60, ' '))
+                        .append(Strings.padStart(Integer.toString(taskCount), 20, ' '))
+                        .append(Strings.padStart(Integer.toString(builder.getStartCount()), 10, ' '))
+                        .append(Strings.padStart(Integer.toString(builder.getStopCount()), 10, ' '))
+                        .append("\n");
+            });
         });
 
         logger.info(sb.toString());

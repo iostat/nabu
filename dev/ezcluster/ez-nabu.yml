@@ -1,0 +1,38 @@
+# ~/.tmuxinator/ez-nabu.yml
+# Put this file there ^^^^
+
+name: ez-nabu
+# set this to where you 
+root: ~/sr/nabuproject
+
+# Optional tmux socket
+# socket_name: foo
+
+# Runs before everything. Use it to start daemons etc.
+# pre: sudo /etc/rc.d/mysqld start
+
+# Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
+# pre_window: rbenv shell 2.0.0-p247
+
+# Pass command line options to tmux. Useful for specifying a different tmux.conf.
+# tmux_options: -f ~/.tmux.mac.conf
+
+# Change the command to call tmux.  This can be used by derivatives/wrappers like byobu.
+# tmux_command: byobu
+
+# Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
+# startup_window: logs
+
+# Controls whether the tmux session should be attached to automatically. Defaults to true.
+# attach: false
+
+# Runs after everything. Use it to attach to tmux with custom options etc.
+# post: tmux -CC attach -t ezcluster
+
+windows:
+  - nabu1: ./gradlew :nabu:run -Doverride.server.port=10041 
+  - nabu2: ./gradlew :nabu:run -Doverride.server.port=10042 
+  - nabu3: ./gradlew :nabu:run -Doverride.server.port=10043
+  - nabu4: ./gradlew :nabu:run -Doverride.server.port=10044
+  - nabu5: ./gradlew :nabu:run -Doverride.server.port=10045 
+  
