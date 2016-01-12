@@ -10,5 +10,5 @@ import java.util.Set;
  */
 public interface AssignmentContext<T> {
     String getDescription();
-    String collateAssignmentsReadably(Set<T> allAssignments);
+    String collateAssignmentsReadably(Set<T> existing, Set<T> start, Set<T> stop);
 }

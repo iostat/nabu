@@ -120,7 +120,6 @@ final class SingleTPConsumer extends Component {
         this.consumerThread = new Thread(this::runConsumer);
         this.friendlyTPString = String.format("SingleTPConsumer(%s[%d])", throttlePolicy.getIndexName(), partitionToSubscribe);
         this.consumerThread.setName(this.friendlyTPString);
-
     }
 
     private void runConsumer() {

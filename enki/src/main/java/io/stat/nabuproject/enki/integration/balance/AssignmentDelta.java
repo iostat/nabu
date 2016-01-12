@@ -85,8 +85,8 @@ public class AssignmentDelta<Context extends AssignmentContext<Assignment>, Assi
         private Builder(Context context, ImmutableSet<Assignment> startedWith, Random random) {
             this.context = context;
             this.startedWith = startedWith;
-            this.toStart = Sets.newHashSet();
-            this.toStop  = Sets.newHashSet();
+            this.toStart = Sets.newConcurrentHashSet();
+            this.toStop  = Sets.newConcurrentHashSet();
             this.random  = random;
 
             this.startWeight = this.startedWith.size();
@@ -269,10 +269,7 @@ public class AssignmentDelta<Context extends AssignmentContext<Assignment>, Assi
          * @return
          */
         public String collateAssignmentsReadably() {
-            Set<Assignment> collated = Sets.newHashSet(startedWith);
-            collated.addAll(toStart);
-            collated.removeAll(toStop);
-            return context.collateAssignmentsReadably(collated);
+            return context.collateAssignmentsReadably(startedWith, toStart, toStop);
         }
     }
 }

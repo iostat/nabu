@@ -42,22 +42,22 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
 
         // todo: make these configurable?
         // 5 min ThreadPool size
-        // 30 max threads
+        // 120 max threads
         // 60 second timeout
         // backed by a SynchronousQueue.
         // with thread names starting with NCLDWorker
         ExecutorService dispatchWorkerExecutor = new ThreadPoolExecutor(
-                5, 30,
+                5, 120,
                 60, TimeUnit.SECONDS,
                 new SynchronousQueue<>(),
                 new NamedThreadFactory("EnkiClientEventDispatcher-Worker")
         );
 
-        // 20 fixed pool size.
+        // 60 fixed pool size.
         // 5 minute timeout
         // with thread names starting with NCLDCollector
         ExecutorService collectorWorkerExecutor = new ThreadPoolExecutor(
-                20, 20,
+                60, 60,
                 5, TimeUnit.MINUTES,
                 new SynchronousQueue<>(),
                 new NamedThreadFactory("EnkiClientEventDispatcher-Collector")

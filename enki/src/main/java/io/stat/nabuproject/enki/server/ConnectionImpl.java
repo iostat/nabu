@@ -253,6 +253,7 @@ class ConnectionImpl implements NabuConnection {
         }
 
         context.close();
+        connectionListener.onNabuDisconnected(this, EnkiConnection.DisconnectCause.BLOODY_MURDER, leaveAcknowledged.get());
     }
 
     /**
@@ -316,7 +317,7 @@ class ConnectionImpl implements NabuConnection {
             f.complete(packet);
         } else {
             if (sequence == lastIncomingSequence.get() + 1L) {
-                logger.info("Wow! received a fantastic packet: {}", packet);
+                logger.debug("Wow! received a fantastic packet: {}", packet);
 
                 if(packet.getType() == EnkiPacket.Type.LEAVE) {
                     nabuLeaving(false);

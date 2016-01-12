@@ -67,7 +67,7 @@ public final class EnkiServerIO extends SimpleChannelInboundHandler<EnkiPacket> 
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         // todo: no comment....
         logger.error("EXCEPTION_CAUGHT: {}", cause);
-        getNabu(ctx).leaveGracefully();
+        getNabu(ctx).killConnection();
     }
 
     @Override

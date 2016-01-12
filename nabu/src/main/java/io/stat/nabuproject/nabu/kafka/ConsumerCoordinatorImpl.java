@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -176,6 +177,14 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
             kafkaGroup.set(null);
             kafkaBrokers.set(null);
             throttlePolicies.set(null);
+
+            synchronized ($consumerMapLock) {
+                Iterator<Map.Entry<TopicPartition, SingleTPConsumer>> it = consumerMap.entrySet().iterator();
+                while (it.hasNext()) {
+                    it.next().getValue().shutdown();
+                    it.remove();
+                }
+            }
         }
         return true;
     }

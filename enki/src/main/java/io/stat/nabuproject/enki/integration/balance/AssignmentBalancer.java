@@ -280,7 +280,8 @@ public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, A
         sb.append(totalAssignedAtStart).append(" ASSIGNED AT START AND ").append(totalWorkers).append(" TOTAL WORKERS\n");
         sb.append("CALCULATED TASK DISTRIBUTION\n");
         sb.append(Strings.padStart("WORKER NAME", 60, ' '));
-        sb.append(Strings.padStart("TASK COUNT", 20, ' '));
+        sb.append(Strings.padStart("FINAL TASK COUNT", 20, ' '));
+        sb.append(Strings.padStart("START", 10, ' '));
         sb.append(Strings.padStart("DELTA +", 10, ' '));
         sb.append(Strings.padStart("DELTA -", 10, ' '));
         sb.append("      TASKS");
@@ -293,6 +294,7 @@ public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, A
             workersInBucket.forEach(builder ->
                 sb.append(Strings.padStart(builder.getContext().getDescription(), 60, ' '))
                         .append(Strings.padStart(Integer.toString(taskCount), 20, ' '))
+                        .append(Strings.padStart(Integer.toString(builder.getStartWeight()), 10, ' '))
                         .append(Strings.padStart(Integer.toString(builder.getStartCount()), 10, ' '))
                         .append(Strings.padStart(Integer.toString(builder.getStopCount()), 10, ' '))
                         .append("      ")

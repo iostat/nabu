@@ -20,6 +20,7 @@ public interface EnkiConnection extends EnkiPacketConnection {
         REDIRECT,
         SERVER_LEAVE_REQUEST,
         CLIENT_LEAVE_REQUEST,
-        CONNECTION_RESET
+        CONNECTION_RESET,
+        BLOODY_MURDER
     };
 }

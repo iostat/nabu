@@ -72,6 +72,8 @@ class ConnectionImpl implements EnkiConnection {
         wasRedirected = new AtomicBoolean(false);
 
         afterClientLeaveAcked = new CompletableFuture<>();
+
+        logger.info("ConnectionImpl created as {}", prettyName());
     }
 
     @Override
