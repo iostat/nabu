@@ -21,6 +21,6 @@ final class ESKSP {
 
     @Override
     public String toString() {
-        return String.format("ESKSP<es:%s[%s], kf:%s[%s]>", getIndexName(), getShards(), getTopicName(), getPartitions());
+        return String.format("ESKSP<es:%s[%s], kp:%s[%s]>", getIndexName(), getShards(), getTopicName(), getPartitions());
     }
 }

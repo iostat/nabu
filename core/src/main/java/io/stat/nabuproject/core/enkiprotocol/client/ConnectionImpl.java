@@ -11,10 +11,10 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiLeave;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiNak;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.net.AddressPort;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.common.TopicPartition;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
@@ -110,7 +110,8 @@ class ConnectionImpl implements EnkiConnection {
                 break;
             case CONFIGURE:
                 lastConfigTimestamp.set(System.currentTimeMillis());
-                toNotify.onConfigurationReceived(this, ((EnkiConfigure)p).getOptions());
+                toNotify.onConfigurationReceived(this, ((EnkiConfigure)p));
+                dispatchPacket(new EnkiAck(p.getSequenceNumber()));
                 break;
             case LEAVE:
                 // todo: LEAVE
@@ -139,13 +140,12 @@ class ConnectionImpl implements EnkiConnection {
             case ASSIGN:
             case UNASSIGN:
                 EnkiAssign packet = ((EnkiAssign) p);
-                TopicPartition tp = new TopicPartition(packet.getIndexName(), packet.getPartitionNumber());
                 boolean isAssign = (p.getType() == EnkiPacket.Type.ASSIGN);
 
                 if(isAssign) {
-                    toNotify.onTaskAssigned(this, tp);
+                    toNotify.onTaskAssigned(this, packet);
                 } else {
-                    toNotify.onTaskUnassigned(this, tp);
+                    toNotify.onTaskUnassigned(this, ((EnkiUnassign)packet));
                 }
                 break;
         }

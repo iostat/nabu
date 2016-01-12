@@ -3,7 +3,10 @@ package io.stat.nabuproject.core.enkiprotocol.dispatch;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiClient;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAssign;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
@@ -11,10 +14,7 @@ import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
 import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.common.TopicPartition;
 
-import java.io.Serializable;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -78,29 +78,29 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
     }
 
     @Override
-    public boolean onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config) {
-        logger.info("onConfigurationReceived({}, {})", enki, config);
+    public boolean onConfigurationReceived(EnkiConnection enki, EnkiConfigure packet) {
+        logger.info("onConfigurationReceived({}, {})", enki, packet);
         dispatcher.dispatchListenerCallbacks(
-                listener -> listener.onConfigurationReceived(enki, config),
-                CALLBACK_FAILED_SHUTDOWNER);
+                listener -> listener.onConfigurationReceived(enki, packet),
+                new AckOrDieCRC("onConfigurationReceived", enki, packet));
         return true;
     }
 
     @Override
-    public boolean onTaskAssigned(EnkiConnection enki, TopicPartition topicPartition) {
-        logger.info("onTaskAssigned({}, {})", enki, topicPartition);
+    public boolean onTaskAssigned(EnkiConnection enki, EnkiAssign packet) {
+        logger.info("onTaskAssigned({}, {})", enki, packet);
         dispatcher.dispatchListenerCallbacks(
-                listener -> listener.onTaskAssigned(enki, topicPartition),
-                CALLBACK_FAILED_SHUTDOWNER);
+                listener -> listener.onTaskAssigned(enki, packet),
+                new AckOrDieCRC("onTaskAssigned", enki, packet));
         return true;
     }
 
     @Override
-    public boolean onTaskUnassigned(EnkiConnection enki, TopicPartition topicPartition) {
-        logger.info("onUnTaskAssigned({}, {})", enki, topicPartition);
+    public boolean onTaskUnassigned(EnkiConnection enki, EnkiUnassign packet) {
+        logger.info("onTaskUnassigned({}, {})", enki, packet);
         dispatcher.dispatchListenerCallbacks(
-                listener -> listener.onTaskUnassigned(enki, topicPartition),
-                CALLBACK_FAILED_SHUTDOWNER);
+                listener -> listener.onTaskUnassigned(enki, packet),
+                new AckOrDieCRC("onTaskUnassigned", enki, packet));
         return true;
     }
 
@@ -115,11 +115,13 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
 
     @Override
     public void addEnkiClientEventListener(EnkiClientEventListener ecel) {
+        logger.info("Registered ECEL :: {}", ecel);
         dispatcher.addListener(ecel);
     }
 
     @Override
     public void removeEnkiClientEventListener(EnkiClientEventListener ecel) {
+        logger.info("Deregistered ECEL :: {}", ecel);
         dispatcher.removeListener(ecel);
     }
 }

@@ -9,12 +9,14 @@ import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAck;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAssign;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiHeartbeat;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiLeave;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiNak;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.ConnectionLostException;
@@ -25,6 +27,7 @@ import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
 import java.net.InetSocketAddress;
@@ -113,7 +116,7 @@ class ConnectionImpl implements NabuConnection {
 
         if(this.electedLeaderProvider.isSelf()) {
             logger.info("This node is the leader; sending CONFIGURE");
-            dispatchConfigure(buildDispatchedNabuConfig()).complete(null);
+            dispatchConfigure(buildDispatchedNabuConfig()).thenAcceptAsync(this::confirmConnection);
             // todo: heartbeat timeouts should be configurable.
             // 1 second delay before first run, 3 second delay between runs
             this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 1000, 3000);
@@ -148,6 +151,15 @@ class ConnectionImpl implements NabuConnection {
     private CompletableFuture<EnkiPacket> dispatchKick() { return dispatchPacket(new EnkiLeave(assignSequence())); }
     private CompletableFuture<EnkiPacket> dispatchConfigure(Map<String, Serializable> configPacketData) {
         return dispatchPacket(new EnkiConfigure(assignSequence(), configPacketData));
+    }
+
+    private void confirmConnection(EnkiPacket ep) {
+        logger.info("confirmCnxn {}", ep);
+        if(ep.getType() == EnkiPacket.Type.ACK) {
+            connectionListener.onNabuReady(this);
+        } else {
+            killConnection();
+        }
     }
 
     private void performRedirect(AddressPort ap) {
@@ -300,8 +312,8 @@ class ConnectionImpl implements NabuConnection {
         long sequence = packet.getSequenceNumber();
         CompletableFuture<EnkiPacket> f = promises.getOrDefault(sequence, null);
         if(f != null) {
-            f.complete(packet);
             promises.remove(sequence);
+            f.complete(packet);
         } else {
             if (sequence == lastIncomingSequence.get() + 1L) {
                 logger.info("Wow! received a fantastic packet: {}", packet);
@@ -310,15 +322,27 @@ class ConnectionImpl implements NabuConnection {
                     nabuLeaving(false);
                     dispatchAck(packet.getSequenceNumber());
                 } else {
-                    // todo: client shouldn't be sending anything else. what to do?
-                    // logger.error("RECEIVED A PACKET THAT CLIENTS SHOULDNT BE SENDING :: {}", packet);
-                    // todo: dispatch that motherfucker.
+                    if(packet.getType() != EnkiPacket.Type.ACK && packet.getType() != EnkiPacket.Type.NAK) {
+                        // todo: client shouldn't be sending anything else. what to do?
+                        logger.error("RECEIVED A PACKET THAT CLIENTS SHOULDNT BE SENDING :: {}", packet);
+                        // todo: dispatch that motherfucker.
+                    }
                 }
             } else {
                 logger.error("RECEIVED AN UNEXPECTED PACKET (sequence out of order) :: {}", packet);
                 // todo: leaveGracefully the client?
             }
         }
+    }
+
+    @Override
+    public CompletableFuture<EnkiPacket> sendAssign(TopicPartition assignment) {
+        return dispatchPacket(new EnkiAssign(assignSequence(), assignment.topic(), assignment.partition()));
+    }
+
+    @Override
+    public CompletableFuture<EnkiPacket> sendUnassign(TopicPartition assignment) {
+        return dispatchPacket(new EnkiUnassign(assignSequence(), assignment.topic(), assignment.partition()));
     }
 
     @Override @Synchronized

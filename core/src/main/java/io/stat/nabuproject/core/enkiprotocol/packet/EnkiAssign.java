@@ -16,7 +16,7 @@ public class EnkiAssign extends EnkiPacket {
     private final @Getter String indexName;
     private final @Getter int partitionNumber;
 
-    EnkiAssign(long sequenceNumber, String indexName, int partitionNumber) {
+    public EnkiAssign(long sequenceNumber, String indexName, int partitionNumber) {
         super(sequenceNumber);
         this.indexName = indexName;
         this.partitionNumber = partitionNumber;

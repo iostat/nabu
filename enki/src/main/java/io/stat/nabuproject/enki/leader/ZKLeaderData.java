@@ -63,7 +63,7 @@ final class ZKLeaderData extends LeaderData {
         ProtocolHelper.writeStringToByteBuf(getAddressPort().getAddress(), buffer);
         buffer.writeInt(getAddressPort().getPort());
 
-        return java.util.Base64.getEncoder().encodeToString(convertAndRelease(buffer));
+        return java.util.Base64.getEncoder().encodeToString(ProtocolHelper.convertAndRelease(buffer));
     }
 
     @SneakyThrows
@@ -96,11 +96,4 @@ final class ZKLeaderData extends LeaderData {
         return new ZKLeaderData(path, version, nodeId, new AddressPort(address, port), priority);
     }
 
-    private static byte[] convertAndRelease(ByteBuf buffer) {
-        byte[] dest = new byte[buffer.readableBytes()];
-        buffer.getBytes(0, dest);
-        buffer.release();
-
-        return dest;
-    }
 }

@@ -5,8 +5,10 @@ import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
 import kafka.admin.AdminUtils;
 import kafka.api.TopicMetadata;
+import kafka.utils.ZkUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.I0Itec.zkclient.ZkClient;
+import org.I0Itec.zkclient.ZkConnection;
 
 import java.util.Iterator;
 
@@ -20,7 +22,9 @@ import java.util.Iterator;
 @Slf4j
 final class KafkaMetadataClientImpl extends KafkaMetadataClient {
     private final KafkaZkConfigProvider config;
+    private ZkUtils zkUtils;
     private ZkClient zkClient;
+    private ZkConnection zkConnection;
     private final Object[] $zkClientLock;
 
     @Inject
@@ -37,39 +41,45 @@ final class KafkaMetadataClientImpl extends KafkaMetadataClient {
                       .map(zk -> zk + config.getKafkaZkChroot())
                       .iterator();
 
+        this.zkConnection = new ZkConnection(Joiner.on(',').join(chrootedZookeepersIterator));
         this.zkClient = new ZkClient(
-                Joiner.on(',').join(chrootedZookeepersIterator),
+                this.zkConnection,
                 config.getKafkaZkConnTimeout());
-
         this.zkClient.setZkSerializer(new KafkaZKStringSerializerProxy());
+
+        this.zkUtils = new ZkUtils(this.zkClient, this.zkConnection, false); // todo: yeah that false.. yeah... seriously...
     }
 
     @Override
     public void shutdown() throws ComponentException {
+        if(this.zkUtils != null) {
+            this.zkUtils.close();
+        }
+
         if(this.zkClient != null) {
             this.zkClient.close();
         }
     }
 
-    private ZkClient getZkClient() {
+    private ZkUtils getZkUtils() {
         if(!wasStarted() || wasStopped()) {
             throw new IllegalStateException("Attempted to call KafkaMetadataClientImpl::getZkClient in a stopped state!");
         } else {
-            return zkClient;
+            return zkUtils;
         }
     }
 
     @Override
     public boolean topicExists(String topicName) {
         synchronized ($zkClientLock) {
-            return AdminUtils.topicExists(getZkClient(), topicName);
+            return AdminUtils.topicExists(getZkUtils(), topicName);
         }
     }
 
     @Override
     public int topicPartitionsCount(String topicName) {
         synchronized ($zkClientLock) {
-            TopicMetadata topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topicName, getZkClient());
+            TopicMetadata topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topicName, getZkUtils());
             return topicMetadata.partitionsMetadata().size();
         }
     }

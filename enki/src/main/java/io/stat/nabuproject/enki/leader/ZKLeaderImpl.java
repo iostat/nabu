@@ -397,6 +397,12 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
         @Override
         public void handleNewSession() throws Exception { /* no-op */ }
 
+        @Override
+        public void handleSessionEstablishmentError(Throwable error) throws Exception {
+            logger.error("[FATAL] Session establishment error", error);
+            haltAndCatchFire();
+        }
+
         /**
          * Performs the full enki shutdown from outside the ZK Event loop
          * (since the ZK client will get stopped in the case of a disconnect)

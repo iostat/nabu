@@ -12,10 +12,16 @@ import io.stat.nabuproject.nabu.common.NabuCommand;
  * {@link CommandDecoder} on the other end.
  */
 public class CommandEncoder extends MessageToByteEncoder<NabuCommand> {
+    public byte[] performEncode(NabuCommand command) throws Exception {
+        ByteBuf out = Unpooled.buffer();
+        encode(null, command, out);
+        return ProtocolHelper.convertAndRelease(out);
+    }
+
     @Override
     protected void encode(ChannelHandlerContext ctx, NabuCommand msg, ByteBuf out) throws Exception {
         ByteBuf commandData = Unpooled.buffer();
-        commandData.writeByte(msg.shouldUpdateIndex() ? 1 : 0);
+        commandData.writeByte(msg.shouldRefresh() ? 1 : 0);
         ProtocolHelper.writeStringToByteBuf(msg.getIndex(), commandData);
         ProtocolHelper.writeStringToByteBuf(msg.getDocumentType(), commandData);
 

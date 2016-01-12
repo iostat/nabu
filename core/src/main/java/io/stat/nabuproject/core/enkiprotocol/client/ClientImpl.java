@@ -15,6 +15,7 @@ import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventDispatcher;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventListener;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventSource;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
@@ -22,7 +23,6 @@ import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.Serializable;
 import java.net.ConnectException;
 import java.util.List;
 import java.util.Map;
@@ -83,9 +83,7 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
         this.reconnector.setName("EnkiClientReconnector");
         this.reconnector.setUncaughtExceptionHandler((t, e) -> {
             logger.warn("Reconnect loop stopped!", e);
-            if(this.getStarter() != null) {
-                this.getStarter().shutdown();
-            }
+            shutDownEverything();
         });
 
         addEnkiClientEventListener(this);
@@ -199,12 +197,12 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
     }
 
     @Override
-    public boolean onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config) {
-        logger.info("Received configuration from Enki! {}", config);
+    public boolean onConfigurationReceived(EnkiConnection enki, EnkiConfigure packet) {
+        logger.info("Received configuration from Enki! {}", packet.getOptions());
         provider.connectionSuccessful();
         synchronized ($enkiSourcedConfigLock) {
             wasEnkiSourcedConfigSet = true;
-            enkiSourcedConfigs = ImmutableMap.copyOf(config);
+            enkiSourcedConfigs = ImmutableMap.copyOf(packet.getOptions());
         }
 
         return true;
@@ -226,5 +224,13 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
         logger.info("Being redirected to: {}", ap);
         wasRedirected.set(true);
         redirectedTo.set(ap);
+    }
+
+    @Override
+    void shutDownEverything() {
+        if(this.getStarter() != null) {
+            this.getStarter().shutdown();
+            // todo: figure out a better to way to SHUT DOWN EVERYTHING
+        }
     }
 }

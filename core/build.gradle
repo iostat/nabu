@@ -56,8 +56,8 @@ project(":core") {
         compile(group: 'net.java.dev.jna', name: 'jna', version: '4.2.1')
 
         // also duh
-        compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.8.2.2')
-        compile(group: 'org.apache.kafka', name: 'kafka_2.10', version: '0.8.2.2')
+        compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.9.0.0')
+        compile(group: 'org.apache.kafka', name: 'kafka_2.10', version: '0.9.0.0')
     }
 
     // lololololololololol (for JVMHackery)

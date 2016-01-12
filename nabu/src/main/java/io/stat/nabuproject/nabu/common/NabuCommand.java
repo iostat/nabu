@@ -11,21 +11,23 @@ public abstract class NabuCommand {
 
     @Getter final String index;
     @Getter final String documentType;
-    final boolean shouldUpdate;
+    final boolean shouldRefresh;
 
-    public boolean shouldUpdateIndex() { return shouldUpdate; }
+    public boolean shouldRefresh() {
+        return shouldRefresh;
+    }
 
     public abstract NabuCommandType getType();
 
-    public NabuCommand(String index, String documentType, boolean shouldUpdate) {
+    public NabuCommand(String index, String documentType, boolean shouldRefresh) {
         this.index = index;
         this.documentType = documentType;
-        this.shouldUpdate = shouldUpdate;
+        this.shouldRefresh = shouldRefresh;
     }
 
     public NabuCommand(NabuCommand base) {
         this.index = base.index;
         this.documentType = base.documentType;
-        this.shouldUpdate = base.shouldUpdate;
+        this.shouldRefresh = base.shouldRefresh;
     }
 }

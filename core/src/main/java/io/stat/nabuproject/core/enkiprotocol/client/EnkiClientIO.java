@@ -45,6 +45,7 @@ public class EnkiClientIO extends SimpleChannelInboundHandler<EnkiPacket> {
         // todo: no comment....
         logger.error("EXCEPTION_CAUGHT: {}", cause);
         getEnki(ctx).leaveGracefully();
+        creator.shutdown();
     }
 
     @Override

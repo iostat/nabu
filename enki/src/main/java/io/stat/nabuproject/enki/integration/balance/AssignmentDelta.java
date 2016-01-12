@@ -21,13 +21,13 @@ import java.util.Set;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @RequiredArgsConstructor(access= AccessLevel.PRIVATE)
-public class AssignmentDelta<Context, Assignment> {
+public class AssignmentDelta<Context extends AssignmentContext<Assignment>, Assignment> {
     private final @Getter Context context;
     private final @Getter ImmutableSet<Assignment> toStart;
     private final @Getter ImmutableSet<Assignment> toStop;
     private final @Getter int weight;
 
-    public static <Context, Assignment> Builder<Context, Assignment> builder(Context c, Set<Assignment> existingTasks, Random random) {
+    public static <Context extends AssignmentContext<Assignment>, Assignment> Builder<Context, Assignment> builder(Context c, Set<Assignment> existingTasks, Random random) {
         return new Builder<>(c, ImmutableSet.copyOf(existingTasks), random);
     }
 
@@ -73,7 +73,7 @@ public class AssignmentDelta<Context, Assignment> {
         return toStop.size();
     }
 
-    static class Builder<Context, Assignment> {
+    static class Builder<Context extends AssignmentContext<Assignment>, Assignment> {
         private final @Getter Context context;
         private final @Getter int startWeight;
         private final ImmutableSet<Assignment> startedWith;
@@ -261,6 +261,18 @@ public class AssignmentDelta<Context, Assignment> {
          */
         public int getStopCount() {
             return toStop.size();
+        }
+
+        /**
+         * Collates all assignments represented by this Delta builder
+         * into a readable stirng
+         * @return
+         */
+        public String collateAssignmentsReadably() {
+            Set<Assignment> collated = Sets.newHashSet(startedWith);
+            collated.addAll(toStart);
+            collated.removeAll(toStop);
+            return context.collateAssignmentsReadably(collated);
         }
     }
 }

@@ -82,7 +82,7 @@ public class Main {
 
     private void registerSignalHandlers() {
         JVMHackery.addJvmSignalHandler("INT", signal -> {
-            logger.info("Received a SIGINT. Shutting down Nabu.");
+            logger.info("Received a SIGINT. Shutting down Enki.");
             try {
                 if(enki == null) {
                     int spins = 1;

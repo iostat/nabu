@@ -22,4 +22,11 @@ public abstract class EnkiClient extends Component implements
      * @param ap the AddressPort of the redirection target.
      */
     abstract void setRedirectionTarget(AddressPort ap);
+
+    /**
+     * Called in the extreme circumstance that an inexplicable exception happened in the protocol.
+     * For the safety of everyone, this should perform an action that causes the entire Nabu
+     * instance to shut down.
+     */
+    abstract void shutDownEverything();
 }

@@ -12,10 +12,8 @@ import io.netty.handler.codec.serialization.ClassResolvers;
 import io.netty.handler.codec.serialization.ObjectDecoder;
 import io.netty.handler.codec.serialization.ObjectEncoder;
 import io.stat.nabuproject.core.util.ProtocolHelper;
-import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
@@ -172,10 +170,13 @@ public abstract class EnkiPacket {
             // or REST_OF_PACKET_SIZE and PARTITION_NUMBER (2x int)
             if(packetType == Type.ACK) {
                 out.add(new EnkiAck(sequenceNumber));
+                return;
             } else if (packetType == Type.NAK) {
                 out.add(new EnkiNak(sequenceNumber));
+                return;
             } else if (packetType == Type.LEAVE) {
                 out.add(new EnkiLeave(sequenceNumber));
+                return;
             } else if(packetType == Type.HEARTBEAT) {
                 if(in.readableBytes() < 8) {
                     in.resetReaderIndex();
@@ -183,7 +184,12 @@ public abstract class EnkiPacket {
                 }
 
                 out.add(new EnkiHeartbeat(sequenceNumber, in.readLong()));
+                return;
             } else {
+                if(in.readableBytes() < 4) { // need int for LENGTH
+                    in.resetReaderIndex();
+                    return;
+                }
                 int restOfPacketSize = in.readInt();
                 if(in.readableBytes() < restOfPacketSize) {
                     in.resetReaderIndex();
@@ -227,7 +233,6 @@ public abstract class EnkiPacket {
      *
      * @author Ilya Ostrovskiy (https://github.com/iostat/)
      */
-    @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
     public enum Type {
         /**
          * @see EnkiHeartbeat
@@ -268,6 +273,10 @@ public abstract class EnkiPacket {
         private final @Getter int code;
 
         private static final Map<Integer, Type> _LUT;
+
+        Type(int code) {
+            this.code = code;
+        }
 
         static {
             ImmutableMap.Builder<Integer, Type> lutBuilder = ImmutableMap.builder();

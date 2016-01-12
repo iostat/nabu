@@ -65,4 +65,12 @@ public interface NabuConnectionListener {
      * @return whether or not this callback ran successfullyw
      */
     boolean onPacketReceived(NabuConnection cnxn, EnkiPacket packet);
+
+    /**
+     * Called when a connection has received CONFIGURE and ACK'd it, and is thus ready
+     * to be served assignments.
+     * @param cnxn the NabuConnection
+     * @return whether or not this callback ran successfully.
+     */
+    boolean onNabuReady(NabuConnection cnxn);
 }

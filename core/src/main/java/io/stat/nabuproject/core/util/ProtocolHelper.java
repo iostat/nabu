@@ -58,4 +58,19 @@ public class ProtocolHelper {
 
         return stringBuf.toString(UTF_8);
     }
+
+    /**
+     * Convert a Netty ByteBuf into a byte[], and then release the ByteBuf.
+     * As release implies, do not attempt to use the buffer afterwards as you
+     * will have a bad day.
+     * @param buffer The ByteBuf to convert
+     * @return A byte[] containing the ByteBuf's contents.
+     */
+    public static byte[] convertAndRelease(ByteBuf buffer) {
+        byte[] dest = new byte[buffer.readableBytes()];
+        buffer.getBytes(0, dest);
+        buffer.release();
+
+        return dest;
+    }
 }

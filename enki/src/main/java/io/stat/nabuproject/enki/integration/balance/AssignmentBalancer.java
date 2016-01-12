@@ -34,9 +34,9 @@ import java.util.stream.Stream;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class AssignmentBalancer<Context extends AssignmentContext, Assignment> {
+public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, Assignment> {
     private Map<Integer, Set<AssignmentDelta.Builder<Context, Assignment>>> buckets;
-    private static <C, A> Set<AssignmentDelta.Builder<C, A>> CREATE_BUCKET() {
+    private static <C extends AssignmentContext<A>, A> Set<AssignmentDelta.Builder<C, A>> CREATE_BUCKET() {
         return Sets.newConcurrentHashSet();
     }
     private boolean isBeingReused;
@@ -278,24 +278,27 @@ public class AssignmentBalancer<Context extends AssignmentContext, Assignment> {
 
         StringBuilder sb = new StringBuilder("\nSTARTED WITH ").append(originalUnassignedTasksSize).append(" UNASSIGNED TASKS\n");
         sb.append(totalAssignedAtStart).append(" ASSIGNED AT START AND ").append(totalWorkers).append(" TOTAL WORKERS\n");
-        sb.append("LOAD DISTRIBUTION\n");
+        sb.append("CALCULATED TASK DISTRIBUTION\n");
         sb.append(Strings.padStart("WORKER NAME", 60, ' '));
         sb.append(Strings.padStart("TASK COUNT", 20, ' '));
         sb.append(Strings.padStart("DELTA +", 10, ' '));
         sb.append(Strings.padStart("DELTA -", 10, ' '));
+        sb.append("      TASKS");
         sb.append("\n");
 
         buckets.keySet().stream().sorted().forEach(key -> {
             int taskCount = key;
             Set<AssignmentDelta.Builder<Context, Assignment>> workersInBucket = buckets.get(key);
 
-            workersInBucket.forEach(builder -> {
+            workersInBucket.forEach(builder ->
                 sb.append(Strings.padStart(builder.getContext().getDescription(), 60, ' '))
                         .append(Strings.padStart(Integer.toString(taskCount), 20, ' '))
                         .append(Strings.padStart(Integer.toString(builder.getStartCount()), 10, ' '))
                         .append(Strings.padStart(Integer.toString(builder.getStopCount()), 10, ' '))
-                        .append("\n");
-            });
+                        .append("      ")
+                        .append(builder.collateAssignmentsReadably())
+                        .append("\n")
+            );
         });
 
         logger.info(sb.toString());

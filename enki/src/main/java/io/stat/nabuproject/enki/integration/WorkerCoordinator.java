@@ -1,15 +1,14 @@
 package io.stat.nabuproject.enki.integration;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
-import io.stat.nabuproject.core.elasticsearch.ESEventSource;
-import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
-import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
@@ -26,11 +25,14 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 
@@ -44,7 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class WorkerCoordinator extends Component implements NabuESEventListener {
+public class WorkerCoordinator extends Component {
     /**
      * How frequently should the rebalancer run. (currently every 30s)
      * todo: definitely make this tunable?
@@ -61,7 +63,6 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
     private final ThrottlePolicyProvider config;
     private final ESKafkaValidator validator;
     private final ESClient esClient;
-    private final ESEventSource esEventSource;
     private final EnkiServer enkiServer;
     private final NabuConnectionEventSource nabuConnectionEventSource;
     private final CnxnListener cnxnListener;
@@ -86,14 +87,12 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
     public WorkerCoordinator(ThrottlePolicyProvider config,
                              ESKafkaValidator validator,
                              ESClient esClient,
-                             ESEventSource esEventSource,
                              EnkiServer enkiServer,
                              NabuConnectionEventSource nabuConnectionEventSource,
                              Injector injector) {
         this.config = config;
         this.validator = validator;
         this.esClient = esClient;
-        this.esEventSource = esEventSource;
         this.enkiServer = enkiServer;
         this.nabuConnectionEventSource = nabuConnectionEventSource;
         this.injector = injector;
@@ -115,8 +114,7 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
                     Thread.sleep(REBALANCE_PERIOD);
 
                     try {
-                        if(true) { // always rebalance for testing...
-                        //if(needsRebalance.get()) {
+                        if(needsRebalance.get()) {
                             synchronized ($assignmentLock) {
                                 rebalanceAssignments();
                                 needsRebalance.set(false);
@@ -143,7 +141,6 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
     @Override
     public void start() throws ComponentException {
         logger.info("WorkerCoordinator start");
-        esEventSource.addNabuESEventListener(this);
         nabuConnectionEventSource.addNabuConnectionListener(cnxnListener);
 
         synchronized ($assignmentLock) {
@@ -176,10 +173,9 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
                 this.rebalanceThread.interrupt();
                 this.rebalanceThread.stop();
             }
-            esEventSource.removeNabuESEventListener(this);
             nabuConnectionEventSource.addNabuConnectionListener(cnxnListener);
+            logger.info("WorkerCoordinator shutdown complete");
         }
-        logger.info("WorkerCoordinator shutdown complete");
     }
 
     private void haltAndCatchFire() {
@@ -207,34 +203,72 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
 
                     List<AssignmentDelta<AssignableNabu, TopicPartition>> deltas = balancer.balance($unclaimedAssignments);
 
-                    // todo: execute the AssignmentDeltas!
-                    logger.info("deltas.size() => {}", deltas.size());
-                    logger.info("and this is where dreams go to die");
-
-
+                    // this is where assignmentdeltas actually get executed
                     for (AssignmentDelta<AssignableNabu, TopicPartition> delta : deltas) {
-                        // todo: yeah... this is where they get executed.
-                        // todo: currently emulated.
-                        Set<TopicPartition> newWorkerSet = Sets.newHashSet();
-                        // it already has all the assignments it had before...
-                        newWorkerSet.addAll(delta.getContext().getAssignments());
+                        int totalStopsNeeded = delta.getStopCount();
+                        CountDownLatch stopCDL = new CountDownLatch(totalStopsNeeded);
+                        AtomicBoolean allStopsSucceeded = new AtomicBoolean(true);
 
-                        // pretend to start the assignment
-                        for(TopicPartition tp : delta.getToStart()) {
-                            // try to start
-                            newWorkerSet.add(tp);
-
-                            // if success remove from unclaimed
-                            $unclaimedAssignments.remove(tp);
-                        }
+                        AssignableNabu n = delta.getContext();
 
                         for(TopicPartition tp : delta.getToStop()) {
-                            // try to remove
-                            newWorkerSet.remove(tp);
+                            // Kick off a stop. A successful stop will trip by the countdown latch by one.
+                            // If there's a failure anywhere, allStopsSucceeded will be set to false.
+                            // At that point, all of the tasks pending starts will be moved to the
+                            // unclaimed queue, to be rebalanced on the next cycle.
+                            n.getCnxn().sendUnassign(tp).whenCompleteAsync((response, throwable) -> {
+                                logger.debug("{}=>STOP {} :: {}/{}", n.getDescription(), tp, response, throwable);
+                                if(throwable != null || response.getType() != EnkiPacket.Type.ACK) {
+                                    allStopsSucceeded.set(false);
+                                    // trip the countdown latch
+                                } else {
+                                    n.getAssignments().remove(tp);
+                                }
+
+                                // finally trip the stop countdown latch by one
+                                stopCDL.countDown();
+                            });
                         }
 
-                        delta.getContext().setAssignments(ImmutableSet.copyOf(newWorkerSet));
+                        // wait for all the stop ops to succeed or fail.
+                        stopCDL.await();
+
+                        if(!allStopsSucceeded.get()) {
+                            n.getCnxn().killConnection();
+                            $unclaimedAssignments.addAll(delta.getToStart());
+                            // all of the pre-existing assignment will get reaped
+                            // into unclaimed assignments when onNabuDisconnected callback
+                            // is called after the connection is dropped.
+                        } else {
+                            int totalStartsNeeded = delta.getStartCount();
+                            CountDownLatch startCDL = new CountDownLatch(totalStartsNeeded);
+                            AtomicBoolean allStartsSucceeded = new AtomicBoolean(true);
+                            Set<TopicPartition> pendingStarts = Sets.newHashSet(delta.getToStart());
+
+                            for(TopicPartition tp : pendingStarts) {
+                                n.getCnxn().sendAssign(tp).whenCompleteAsync((response, throwable) -> {
+                                    logger.debug("{}=>START {} :: {}/{}", n.getDescription(), tp, response, throwable);
+                                    if(throwable != null || response.getType() != EnkiPacket.Type.ACK) {
+                                        allStartsSucceeded.set(false);
+                                    } else {
+                                        pendingStarts.remove(tp);
+                                        n.getAssignments().add(tp);
+                                    }
+
+                                    // finally, trip the countdown latch by one
+                                    startCDL.countDown();
+                                });
+                            }
+
+                            startCDL.await();
+                            if(!allStartsSucceeded.get()) {
+                                n.getCnxn().killConnection();
+                                $unclaimedAssignments.addAll(pendingStarts);
+                            }
+                        }
                     }
+
+                    logger.info("Rebalance cycle finished.");
                 }
             } catch(AssertionError | Exception e) {
                 logger.error("[FATAL] something went wrong when rebalancing the workload", e);
@@ -244,24 +278,27 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
         }
     }
 
-    public void coordinateJoin(NabuESEvent evt) {
+    public void coordinateJoin(NabuConnection cnxn) {
         synchronized($workerLock) {
-            AssignableNabu n = new AssignableNabu(evt.getNode().getName(), null);
+            AssignableNabu n = new AssignableNabu(cnxn);
             confirmedWorkers.add(n);
-
             needsRebalance.set(true);
         }
     }
 
-    public void coordinatePart(NabuESEvent evt) {
+    public void coordinatePart(NabuConnection cnxn) {
         synchronized($workerLock) {
             boolean shouldRebalanceAfter = false;
             Iterator<AssignableNabu> workers = confirmedWorkers.iterator();
             while (workers.hasNext()) {
                 AssignableNabu worker = workers.next();
-                if(worker.getEsNodeName().startsWith(evt.getNode().getName())) {
-                    $unclaimedAssignments.addAll(worker.getAssignments());
+                if(worker.getCnxn() == cnxn) { // yes, testing reference equality.
+                    synchronized ($assignmentLock) {
+                        Set<TopicPartition> assns = worker.getAssignments();
+                        $unclaimedAssignments.addAll(assns);
+                    }
                     workers.remove();
+                    shouldRebalanceAfter = true;
                 }
             }
             if(shouldRebalanceAfter) {
@@ -270,52 +307,68 @@ public class WorkerCoordinator extends Component implements NabuESEventListener 
         }
     }
 
-    @Override
-    public boolean onNabuESEvent(NabuESEvent event) {
-//        logger.info("{}", event);
-        switch(event.getType()){
-            case NABU_JOINED:
-                coordinateJoin(event);
-                break;
-            case NABU_PARTED:
-                coordinatePart(event);
-                break;
-        }
-
-        return true;
-    }
-
-    private static class AssignableNabu implements AssignmentContext {
-        private final @Getter String esNodeName;
+    private static class AssignableNabu implements AssignmentContext<TopicPartition> {
         private final @Getter NabuConnection cnxn;
         private @Getter @Setter Set<TopicPartition> assignments;
 
-        AssignableNabu(String esNodeName, NabuConnection connection) {
-            this.esNodeName = esNodeName;
-            this.cnxn = connection;
-            this.assignments = ImmutableSet.of();
+        AssignableNabu(NabuConnection cnxn) {
+            this.cnxn = cnxn;
+            this.assignments = Sets.newHashSet();
         }
 
         @Override
         public String getDescription() {
-            return getEsNodeName();
+            return cnxn.prettyName();
+        }
+
+        @Override
+        public String collateAssignmentsReadably(Set<TopicPartition> allAssignments) {
+            Map<String, List<Integer>> collateMap = Maps.newHashMap();
+            allAssignments.forEach(assn -> {
+                String topic = assn.topic();
+                int part = assn.partition();
+                if (collateMap.containsKey(topic)) {
+                    collateMap.get(topic).add(part);
+                } else {
+                    collateMap.put(topic, Lists.newArrayList(part));
+                }
+            });
+            List<String> collatedStrings = Lists.newArrayList();
+            collateMap.forEach((k, v) -> {
+                v.sort(Comparator.naturalOrder());
+                String joined = k + "[" + Joiner.on(',').join(v) + "]";
+                collatedStrings.add(joined);
+            });
+
+            return Joiner.on(", ").join(collatedStrings);
         }
     }
 
     private class CnxnListener implements NabuConnectionListener {
         @Override
-        public boolean onNewNabuConnection(NabuConnection cnxn) { return true; }
+        public boolean onNewNabuConnection(NabuConnection cnxn) {
+            return true;
+        }
 
         @Override
         public boolean onNabuLeaving(NabuConnection cnxn, boolean serverInitiated) { return true; }
 
         @Override
-        public boolean onNabuDisconnected(NabuConnection cnxn, EnkiConnection.DisconnectCause cause, boolean wasAcked) { return true; }
+        public boolean onNabuDisconnected(NabuConnection cnxn, EnkiConnection.DisconnectCause cause, boolean wasAcked) {
+            coordinatePart(cnxn);
+            return true;
+        }
 
         @Override
         public boolean onPacketDispatched(NabuConnection cnxn, EnkiPacket packet, CompletableFuture<EnkiPacket> future) { return true; }
 
         @Override
         public boolean onPacketReceived(NabuConnection cnxn, EnkiPacket packet) { return true; }
+
+        @Override
+        public boolean onNabuReady(NabuConnection cnxn) {
+            WorkerCoordinator.this.coordinateJoin(cnxn);
+            return true;
+        }
     }
 }

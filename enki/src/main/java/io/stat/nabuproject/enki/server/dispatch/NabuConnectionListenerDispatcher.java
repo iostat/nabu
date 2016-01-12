@@ -105,6 +105,14 @@ public final class NabuConnectionListenerDispatcher implements NabuConnectionLis
     }
 
     @Override
+    public boolean onNabuReady(NabuConnection cnxn) {
+        dispatcher.dispatchListenerCallbacks(
+                listener -> listener.onNabuReady(cnxn),
+                new KillCnxnOnFailCRC("onNabuDisconnected", cnxn));
+        return true;
+    }
+
+    @Override
     public void addNabuConnectionListener(NabuConnectionListener listener) {
         dispatcher.addListener(listener);
     }

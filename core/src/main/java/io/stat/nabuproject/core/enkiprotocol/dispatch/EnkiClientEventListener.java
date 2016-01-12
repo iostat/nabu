@@ -2,11 +2,11 @@ package io.stat.nabuproject.core.enkiprotocol.dispatch;
 
 import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAssign;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
+import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.net.AddressPort;
 import org.apache.kafka.common.TopicPartition;
-
-import java.io.Serializable;
-import java.util.Map;
 
 /**
  * Something which can receive Enki protocol events.
@@ -30,21 +30,21 @@ public interface EnkiClientEventListener {
     /**
      * A callback that is sent when Enki sends new configuration data.
      * @param enki a high-level interface to the connected enki
-     * @param config the config map that was received.
+     * @param packet the EnkiConfigure packet that was received
      * @return whether or not this callback ran successfully.
      * @see EnkiSourcedConfigKeys for the kind of keys you would expect to find in config.
      */
-    default boolean onConfigurationReceived(EnkiConnection enki, Map<String, Serializable> config) {
+    default boolean onConfigurationReceived(EnkiConnection enki, EnkiConfigure packet) {
         return true;
     }
 
     /**
      * A callback that is sent when Enki assigns a topic and partition to write in a throttled manner.
      * @param enki a high-level interface to the connected enki.
-     * @param topicPartition a Kafka {@link TopicPartition} that was assigned to this Nabu by Enki
+     * @param packet the EnkiAssign packet that was sent to this Nabu
      * @return whether or not this callback ran successfully
      */
-    default boolean onTaskAssigned(EnkiConnection enki, TopicPartition topicPartition) {
+    default boolean onTaskAssigned(EnkiConnection enki, EnkiAssign packet) {
         return true;
     }
 
@@ -52,10 +52,10 @@ public interface EnkiClientEventListener {
      * A callback that is sent when Enki requests that this Nabu stop performing throttled write operations
      * for a specific Kafka {@link TopicPartition}
      * @param enki a high-level interface to the connected Enki
-     * @param topicPartition the Kafka {@link TopicPartition} that this Nabu should stop throttled-writing
+     * @param packet the EnkiUnassign packet that was sent to this Nabu
      * @return whether or not this callback ran successfully
      */
-    default boolean onTaskUnassigned(EnkiConnection enki, TopicPartition topicPartition) {
+    default boolean onTaskUnassigned(EnkiConnection enki, EnkiUnassign packet) {
         return true;
     }
 
