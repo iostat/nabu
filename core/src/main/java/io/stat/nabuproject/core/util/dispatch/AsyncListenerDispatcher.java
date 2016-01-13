@@ -4,6 +4,7 @@ import com.google.common.collect.Sets;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.util.NamedThreadFactory;
+import io.stat.nabuproject.core.util.NamedThreadPoolExecutor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -11,7 +12,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
@@ -46,17 +46,17 @@ public class AsyncListenerDispatcher<T> extends Component {
      */
     public AsyncListenerDispatcher(String name) {
         this(
-                new ThreadPoolExecutor(
-                    2, 10,
-                    20, TimeUnit.SECONDS,
-                    new SynchronousQueue<>(),
-                    new NamedThreadFactory(name + "-Worker")),
+                new NamedThreadPoolExecutor(
+                        name + "-Worker",
+                        2, 10,
+                        20, TimeUnit.SECONDS,
+                        new SynchronousQueue<>()),
 
-                new ThreadPoolExecutor(
-                    2, 10,
-                    20, TimeUnit.SECONDS,
-                    new SynchronousQueue<>(),
-                    new NamedThreadFactory(name + "-Collector"))
+                new NamedThreadPoolExecutor(
+                        name + "-Collector",
+                        2, 10,
+                        20, TimeUnit.SECONDS,
+                        new SynchronousQueue<>())
         );
     }
 

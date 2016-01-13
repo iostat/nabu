@@ -8,7 +8,7 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.net.AddressPort;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
+import io.stat.nabuproject.core.util.NamedThreadPoolExecutor;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
 import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
@@ -16,9 +16,6 @@ import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * An adapter for dispatching {@link EnkiClientEventListener} events asynchronously.
@@ -46,22 +43,12 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
         // 60 second timeout
         // backed by a SynchronousQueue.
         // with thread names starting with NCLDWorker
-        ExecutorService dispatchWorkerExecutor = new ThreadPoolExecutor(
-                5, 120,
-                60, TimeUnit.SECONDS,
-                new SynchronousQueue<>(),
-                new NamedThreadFactory("EnkiClientEventDispatcher-Worker")
-        );
+        ExecutorService dispatchWorkerExecutor = new NamedThreadPoolExecutor("EnkiClientEventDispatcher-Worker");
 
         // 60 fixed pool size.
         // 5 minute timeout
         // with thread names starting with NCLDCollector
-        ExecutorService collectorWorkerExecutor = new ThreadPoolExecutor(
-                60, 60,
-                5, TimeUnit.MINUTES,
-                new SynchronousQueue<>(),
-                new NamedThreadFactory("EnkiClientEventDispatcher-Collector")
-        );
+        ExecutorService collectorWorkerExecutor = new NamedThreadPoolExecutor("EnkiClientEventDispatcher-Collector");
 
         this.CALLBACK_FAILED_SHUTDOWNER = new ShutdownOnFailureCRC(enkiClient, "EnkiClientEventDispatcherFailShutdowner");
         this.dispatcher = new AsyncListenerDispatcher<>(dispatchWorkerExecutor, collectorWorkerExecutor);

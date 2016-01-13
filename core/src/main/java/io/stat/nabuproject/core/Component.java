@@ -79,5 +79,5 @@ public abstract class Component implements IComponent {
         void _dispatchShutdown();
     }
 
-    private @Getter @Setter ComponentStarter starter;
+    private @Getter @Setter IComponent starter;
 }

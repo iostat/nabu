@@ -20,6 +20,7 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
+import io.stat.nabuproject.core.util.NamedThreadFactory;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,6 +54,8 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
     private final AtomicReference<AddressPort> redirectedTo;
 
     private final Thread reconnector;
+    private final Thread shutdowner;
+    private final AtomicBoolean shutdownStarted;
 
     @Inject
     public ClientImpl(EnkiAddressProvider provider) {
@@ -79,12 +82,17 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
                                 new Class[] { EnkiClient.class, EnkiClientEventListener.class }
                         );
 
-        this.reconnector = new Thread(this::clientReconnectLoop);
-        this.reconnector.setName("EnkiClientReconnector");
+        this.shutdownStarted = new AtomicBoolean(false);
+
+        this.reconnector = new NamedThreadFactory("EnkiClientReconnector").newThread(this::clientReconnectLoop);
         this.reconnector.setUncaughtExceptionHandler((t, e) -> {
-            logger.warn("Reconnect loop stopped!", e);
-            shutDownEverything();
+            logger.warn("Reconnect loop stopped due to uncaught exception!", e);
+            if(!this.shutdownStarted.get()) {
+                shutDownEverything();
+            }
         });
+
+        this.shutdowner = new NamedThreadFactory("EnkiClientShutdowner").newThread(this::doShutdown);
 
         addEnkiClientEventListener(this);
     }
@@ -135,7 +143,7 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
                     throw new ComponentException(true, e);
                 } else {
                     logger.error("Unhandled exception in client reconnect loop!", e);
-                    shutdown();
+                    getStarter().shutdown();
                 }
             } finally {
                 this.clientChannel = null;
@@ -158,16 +166,27 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
 
     @Override
     public void shutdown() throws ComponentException {
+        if(!this.shutdownStarted.get()) {
+            this.shutdownStarted.set(true);
+            this.shutdowner.start();
+        }
+    }
+
+    public void doShutdown() throws ComponentException {
+        logger.info("EnkiClient shutting down...");
         dispatcher.shutdown();
 
         if(this.clientChannel != null) { this.clientChannel.close().syncUninterruptibly(); }
         if(this.eventLoopGroup != null) { this.eventLoopGroup.shutdownGracefully(); }
 
         try {
-            reconnector.join();
+            reconnector.interrupt();
+            reconnector.join(10000);
         } catch (InterruptedException ie) {
-            throw new ComponentException("InterruptedException when joining reconnector thread...", ie);
+            reconnector.stop();
         }
+
+        logger.info("EnkiClient shutdown complete...");
     }
 
     @Override
@@ -229,8 +248,12 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
     @Override
     void shutDownEverything() {
         if(this.getStarter() != null) {
+            logger.error("getStarter() is {}", this.getStarter());
             this.getStarter().shutdown();
             // todo: figure out a better to way to SHUT DOWN EVERYTHING
+        } else {
+            logger.error("getStarter() doesn't exist! calling System.exit as a last resort!");
+            System.exit(66);
         }
     }
 }

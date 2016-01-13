@@ -17,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -52,7 +51,7 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
         this.kafkaGroup = new AtomicReference<>(null);
         this.$sourcedConfigLock = new byte[0];
 
-        this.consumerMap = Maps.newConcurrentMap();
+        this.consumerMap = Maps.newHashMap();
         this.$consumerMapLock = new byte[0];
 
         this.sskbcp = this.new SessionSourcedKafkaBrokerCP();
@@ -60,38 +59,36 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
 
     @Override
     public boolean onConfigurationReceived(EnkiConnection enki, EnkiConfigure packet) {
-        synchronized ($consumerMapLock) {
-            synchronized ($sourcedConfigLock) {
-                if(throttlePolicies.get() != null) {
-                    logger.error("Tried to reconfigure throttle policies in the same session. This is currently unsupported.");
-                    return false;
-                }
-
-                if(kafkaBrokers.get() != null) {
-                    logger.error("Tried to reconfigure Kafka brokers in the same session. This is currently unsupported.");
-                    return false;
-                }
-
-                if(kafkaGroup.get() != null) {
-                    logger.error("Tried to reconfigure Kafka group in the same session. This is currently unsupported.");
-                    return false;
-                }
-
-                Map<String, Serializable> sourcedConfigs = packet.getOptions();
-
-                //noinspection unchecked we all know what's really happening here...
-                throttlePolicies.set((List<ThrottlePolicy>)
-                        sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.THROTTLE_POLICIES, ImmutableList.of()));
-
-                //noinspection unchecked ditto
-                kafkaBrokers.set(
-                    (List<String>) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_BROKERS, ImmutableList.of())
-                );
-
-                kafkaGroup.set((String) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_GROUP, ""));
-
-                logger.info("Initialized session-sourced configs");
+        synchronized ($sourcedConfigLock) {
+            if(throttlePolicies.get() != null) {
+                logger.error("Tried to reconfigure throttle policies in the same session. This is currently unsupported.");
+                return false;
             }
+
+            if(kafkaBrokers.get() != null) {
+                logger.error("Tried to reconfigure Kafka brokers in the same session. This is currently unsupported.");
+                return false;
+            }
+
+            if(kafkaGroup.get() != null) {
+                logger.error("Tried to reconfigure Kafka group in the same session. This is currently unsupported.");
+                return false;
+            }
+
+            Map<String, Serializable> sourcedConfigs = packet.getOptions();
+
+            //noinspection unchecked we all know what's really happening here...
+            throttlePolicies.set((List<ThrottlePolicy>)
+                    sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.THROTTLE_POLICIES, ImmutableList.of()));
+
+            //noinspection unchecked ditto
+            kafkaBrokers.set(
+                (List<String>) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_BROKERS, ImmutableList.of())
+            );
+
+            kafkaGroup.set((String) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_GROUP, ""));
+
+            logger.info("Initialized session-sourced configs");
         }
         return true;
     }
@@ -153,18 +150,16 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     public boolean onTaskUnassigned(EnkiConnection enki, EnkiUnassign packet) {
         synchronized ($consumerMapLock) {
             TopicPartition tp = new TopicPartition(packet.getIndexName(), packet.getPartitionNumber());
-
-            synchronized ($consumerMapLock) {
-                if(!consumerMap.containsKey(tp)) {
-                    logger.error("Tried to unassign a task that's never been assigned in the first place.");
+            if(!consumerMap.containsKey(tp)) {
+                logger.error("Tried to unassign a task that's never been assigned in the first place.");
+                return false;
+            } else {
+                try {
+                    consumerMap.get(tp).shutdown();
+                    consumerMap.remove(tp);
+                } catch(Exception e) {
+                    logger.error("Something went wrong when trying to stop consumer for {}. Halting and catching fire.", e);
                     return false;
-                } else {
-                    try {
-                        consumerMap.get(tp).shutdown();
-                    } catch(Exception e) {
-                        logger.error("Something went wrong when trying to stop consumer for {}. Halting and catching fire.", e);
-                        return false;
-                    }
                 }
             }
         }
@@ -179,11 +174,10 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
             throttlePolicies.set(null);
 
             synchronized ($consumerMapLock) {
-                Iterator<Map.Entry<TopicPartition, SingleTPConsumer>> it = consumerMap.entrySet().iterator();
-                while (it.hasNext()) {
-                    it.next().getValue().shutdown();
-                    it.remove();
+                for(SingleTPConsumer tpc : consumerMap.values()) {
+                    tpc.shutdown();
                 }
+                consumerMap.clear();
             }
         }
         return true;

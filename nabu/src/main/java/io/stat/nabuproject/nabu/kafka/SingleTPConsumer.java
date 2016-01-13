@@ -31,6 +31,8 @@ import org.elasticsearch.script.ScriptService;
 
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -95,6 +97,11 @@ final class SingleTPConsumer extends Component {
      */
     private final AtomicLong nextFlushTime;
 
+    /**
+     * Used to make starting this consumer synchronous
+     */
+    private final CountDownLatch readyLatch;
+
 
     public SingleTPConsumer(ESClient esClient,
                             ThrottlePolicy throttlePolicy,
@@ -120,11 +127,14 @@ final class SingleTPConsumer extends Component {
         this.consumerThread = new Thread(this::runConsumer);
         this.friendlyTPString = String.format("SingleTPConsumer(%s[%d])", throttlePolicy.getIndexName(), partitionToSubscribe);
         this.consumerThread.setName(this.friendlyTPString);
+
+        this.readyLatch = new CountDownLatch(1);
     }
 
     private void runConsumer() {
         try {
             consumer.assign(ImmutableList.of(targetTopicPartition));
+            this.readyLatch.countDown();
             List<NabuCommand> consumptionQueue = Lists.newArrayListWithExpectedSize(throttlePolicy.getMaxBatchSize());
             long lastConsumedOffset;
             while(!isStopped.get()) {
@@ -232,14 +242,13 @@ final class SingleTPConsumer extends Component {
 
     @Override
     public void start() throws ComponentException {
-        logger.info("Starting {}", friendlyTPString);
         this.consumerThread.start();
+        try { this.readyLatch.await(1, TimeUnit.SECONDS); } catch(Exception e) { throw new ComponentException(e); }
         logger.info("Started {}", friendlyTPString);
     }
 
     @Override
     public void shutdown() throws ComponentException {
-        logger.info("Stopping {}", friendlyTPString);
         this.isStopped.set(true);
         this.consumer.wakeup();
 
@@ -247,7 +256,7 @@ final class SingleTPConsumer extends Component {
         int attempts = 1;
         while(!joined) {
             try {
-                logger.info("Joining ConsumerThread as part of shutdown of {}, attempt {}/5", friendlyTPString, attempts);
+                logger.debug("Joining ConsumerThread as part of shutdown of {}, attempt {}/5", friendlyTPString, attempts);
                 this.consumerThread.join();
                 joined = true;
             } catch(InterruptedException e) {

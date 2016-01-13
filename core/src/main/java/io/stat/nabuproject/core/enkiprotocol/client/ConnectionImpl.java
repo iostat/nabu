@@ -17,6 +17,7 @@ import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -50,6 +51,8 @@ class ConnectionImpl implements EnkiConnection {
 
     private final CompletableFuture<ConnectionImpl> afterClientLeaveAcked;
 
+    private final long createdOn;
+
     public ConnectionImpl(ChannelHandlerContext ctx,
                           EnkiClient creator,
                           EnkiClientEventListener toNotify) {
@@ -72,6 +75,8 @@ class ConnectionImpl implements EnkiConnection {
         wasRedirected = new AtomicBoolean(false);
 
         afterClientLeaveAcked = new CompletableFuture<>();
+
+        createdOn = System.nanoTime();
 
         logger.info("ConnectionImpl created as {}", prettyName());
     }
@@ -188,7 +193,33 @@ class ConnectionImpl implements EnkiConnection {
 
     @Override
     public String prettyName() {
-        InetSocketAddress remoteAddress = ((InetSocketAddress) ctx.channel().remoteAddress());
-        return remoteAddress.getAddress() + ":" + remoteAddress.getPort();
+        InetSocketAddress local = ((InetSocketAddress) ctx.channel().localAddress());
+        return local.getAddress() + ":" + local.getPort();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(obj == null) {
+            return false;
+        }
+
+        if(!(obj instanceof ConnectionImpl)) {
+            return false;
+        }
+
+        ConnectionImpl other = ((ConnectionImpl) obj);
+
+        if(ctx == null) {
+            if(other.ctx != null) {
+                return false;
+            }
+        }
+
+        return this.createdOn == other.createdOn && this.ctx.equals(other.ctx);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(createdOn, ctx);
     }
 }

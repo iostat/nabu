@@ -11,6 +11,8 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 
+import static io.stat.nabuproject.core.util.functional.FluentCompositions.not;
+
 /**
  * Describes a combination of assignments and unassignments of AssignmentType,
  * which Context can consume.
@@ -20,7 +22,7 @@ import java.util.Set;
  *                     equals(Object) and hashCode()
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-@RequiredArgsConstructor(access= AccessLevel.PRIVATE)
+@RequiredArgsConstructor(access=AccessLevel.PRIVATE)
 public class AssignmentDelta<Context extends AssignmentContext<Assignment>, Assignment> {
     private final @Getter Context context;
     private final @Getter ImmutableSet<Assignment> toStart;
@@ -54,7 +56,9 @@ public class AssignmentDelta<Context extends AssignmentContext<Assignment>, Assi
         return this == obj
                 ||    (obj != null
                     && obj instanceof AssignmentDelta
-                    && this.context.equals(((AssignmentDelta) obj).getContext()));
+                    &&   ((this.context == null && (((AssignmentDelta) obj).getContext() == null))
+                       || (this.context != null && this.context.equals(((AssignmentDelta) obj).getContext()))
+        ));
     }
 
     /**
@@ -76,17 +80,17 @@ public class AssignmentDelta<Context extends AssignmentContext<Assignment>, Assi
     static class Builder<Context extends AssignmentContext<Assignment>, Assignment> {
         private final @Getter Context context;
         private final @Getter int startWeight;
-        private final ImmutableSet<Assignment> startedWith;
-        private final Set<Assignment> toStart;
-        private final Set<Assignment> toStop;
+        private final @Getter ImmutableSet<Assignment> startedWith;
+        private final @Getter Set<Assignment> toStart;
+        private final @Getter Set<Assignment> toStop;
         private @Getter int weightWithChanges;
         private final @Getter Random random;
 
         private Builder(Context context, ImmutableSet<Assignment> startedWith, Random random) {
             this.context = context;
             this.startedWith = startedWith;
-            this.toStart = Sets.newConcurrentHashSet();
-            this.toStop  = Sets.newConcurrentHashSet();
+            this.toStart = Sets.newHashSet();
+            this.toStop  = Sets.newHashSet();
             this.random  = random;
 
             this.startWeight = this.startedWith.size();
@@ -181,13 +185,14 @@ public class AssignmentDelta<Context extends AssignmentContext<Assignment>, Assi
          * @return the Assignment that was unassigned.
          */
         public Assignment unassignBestFit() {
-            assert toStart.size() + startedWith.size() > 0 : "Tried to unassignBestFit from a worker with no assigned tasks!";
+            assert toStart.size() + startedWith.size() - toStop.size() > 0 : "Tried to unassignBestFit from a worker with no assigned tasks!";
             Assignment candidate;
             if(!toStart.isEmpty()) {
-                candidate = toStart.stream().skip(random.nextInt(toStart.size())).findFirst().get();
-                assert candidate != null : "Pulling a random candidate from a non-empty start list failed for some inexplicable reason";
+                candidate = toStart.stream().findFirst().orElse(null);
+                assert candidate != null : "Pulling the first candidate from a non-empty toStart set failed for some inexplicable reason";
             } else {
-                candidate = startedWith.stream().skip(random.nextInt(startedWith.size())).findFirst().get();
+                candidate = startedWith.stream().filter(not(toStop::contains)).findFirst().orElse(null);
+                assert candidate != null : "Pulling the first candidate from a non-empty startedWith set failed for some inexplicable reason";
             }
 
             unassign(candidate);

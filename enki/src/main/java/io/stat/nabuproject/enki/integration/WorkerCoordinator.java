@@ -1,6 +1,7 @@
 package io.stat.nabuproject.enki.integration;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -24,6 +25,7 @@ import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
@@ -75,8 +77,7 @@ public class WorkerCoordinator extends Component {
     // Get the injector this was created with so we can nuke enki when we halt and catch fire.
     private final Injector injector;
 
-    private final byte[] $assignmentLock;
-    private final byte[] $workerLock;
+    private final byte[] $lock;
 
     private final Set<AssignableNabu> confirmedWorkers;
     private final AtomicBoolean needsRebalance;
@@ -106,11 +107,10 @@ public class WorkerCoordinator extends Component {
 
         this.cnxnListener = new CnxnListener();
 
-        this.$assignmentLock = new byte[0];
-        this.$workerLock     = new byte[0];
+        this.$lock = new byte[0];
 
         this.$allAssignments = null;
-        this.confirmedWorkers = Sets.newConcurrentHashSet();
+        this.confirmedWorkers = Sets.newHashSet();
         this.needsRebalance = new AtomicBoolean(false);
 
         this.random = new Random(System.nanoTime());
@@ -121,22 +121,29 @@ public class WorkerCoordinator extends Component {
                     Thread.sleep(REBALANCE_PERIOD);
 
                     try {
-                        if(needsRebalance.get()) {
-                            synchronized ($assignmentLock) {
+                        while(needsRebalance.get()) {
+                            synchronized ($lock) {
                                 rebalanceAssignments();
-                                needsRebalance.set(false);
+                            }
+                            if(needsRebalance.get()) {
+                                // backoff for re-rebalance
+                                // 1 second to grab the worker set lock to coordinate a join.
+                                Thread.sleep(1000);
                             }
                         }
                     } catch (Exception e) {
                         //noinspection ConstantConditions sometimes static analysis is NOT the answer
-                        if(!this.isShuttingDown.get() || !(e instanceof InterruptedException)) {
+                        if(!(this.isShuttingDown.get() && (e instanceof InterruptedException))) {
                             logger.error("Received an unexpected exception while performing a rebalance!", e);
+                            throw e;
                         }
                     }
-                } catch(InterruptedException e) {
-                    if(isShuttingDown.get()) {
+                } catch(Exception e) {
+                    if(isShuttingDown.get() && e instanceof InterruptedException) {
                         logger.info("Received an InterruptedException, but it looks like I'm shutting down.");
                         return;
+                    } else {
+                        logger.error("Unexpected Exception!", e);
                     }
                 }
             }
@@ -150,7 +157,7 @@ public class WorkerCoordinator extends Component {
         logger.info("WorkerCoordinator start");
         nabuConnectionEventSource.addNabuConnectionListener(cnxnListener);
 
-        synchronized ($assignmentLock) {
+        synchronized ($lock) {
             ImmutableSet.Builder<TopicPartition> allAssnBuilder = ImmutableSet.builder();
             validator.getShardCountCache().values().forEach(esksp -> {
                 String topic   = esksp.getTopicName();
@@ -195,106 +202,132 @@ public class WorkerCoordinator extends Component {
     }
 
     private void rebalanceAssignments() {
-        synchronized ($assignmentLock) {
+        synchronized ($lock) {
             try {
-                synchronized ($workerLock) {
-                    Set<TopicPartition> $unclaimedAssignments = Sets.newConcurrentHashSet($allAssignments);
+                Set<TopicPartition> unclaimedAssignments = Sets.newHashSet($allAssignments);
+                boolean hadReaps = false;
 
-                    if (confirmedWorkers.isEmpty()) {
-                        logger.warn("Need to balance {} tasks across 0 workers, what do you actually want from me?", $unclaimedAssignments.size());
-                        return;
-                    }
+                if (confirmedWorkers.isEmpty()) {
+                    logger.warn("Need to balance {} tasks across 0 workers, what do you actually want from me?", unclaimedAssignments.size());
+                    return;
+                }
 
-                    AssignmentBalancer<AssignableNabu, TopicPartition> balancer = new AssignmentBalancer<>(random);
-                    for (AssignableNabu worker : confirmedWorkers) {
-                        for(TopicPartition assignment : worker.getAssignments()) {
-                            $unclaimedAssignments.remove(assignment);
-                        }
-                        balancer.addWorker(worker, worker.getAssignments());
-                    }
+                AssignmentBalancer<AssignableNabu, TopicPartition> balancer = new AssignmentBalancer<>(random);
+                for (AssignableNabu worker : confirmedWorkers) {
+                    worker.getAssignments().forEach(unclaimedAssignments::remove);
+                    balancer.addWorker(worker, worker.getAssignments());
+                }
 
-                    List<AssignmentDelta<AssignableNabu, TopicPartition>> deltas = balancer.balance($unclaimedAssignments);
+                @RequiredArgsConstructor
+                class ContextAssignment {
+                    private final AssignableNabu context;
+                    private final TopicPartition assignment;
+                }
 
-                    // at this point, all unclaimed assignments have been balanced, thus this set can be cleared.
+                List<AssignmentDelta<AssignableNabu, TopicPartition>> deltas = balancer.balance(unclaimedAssignments);
+                List<ContextAssignment> allStops = Lists.newArrayList();
+                List<ContextAssignment> allStarts = Lists.newArrayList();
 
-                    // this is where assignmentdeltas actually get executed
-                    for (AssignmentDelta<AssignableNabu, TopicPartition> delta : deltas) {
-                        int totalStopsNeeded = delta.getStopCount();
-                        CountDownLatch stopCDL = new CountDownLatch(totalStopsNeeded);
-                        AtomicBoolean allStopsSucceeded = new AtomicBoolean(true);
+                deltas.forEach(delta -> {
+                    delta.getToStart().forEach(start ->
+                        allStarts.add(new ContextAssignment(delta.getContext(), start))
+                    );
 
-                        AssignableNabu n = delta.getContext();
+                    delta.getToStop().forEach(stop ->
+                        allStops.add(new ContextAssignment(delta.getContext(), stop))
+                    );
+                });
 
-                        for (TopicPartition tp : delta.getToStop()) {
-                            // Kick off a stop. A successful stop will trip by the countdown latch by one.
-                            // If there's a failure anywhere, allStopsSucceeded will be set to false.
-                            // At that point, all of the tasks pending starts will be moved to the
-                            // unclaimed queue, to be rebalanced on the next cycle.
-                            n.getCnxn().sendUnassign(tp).whenCompleteAsync((response, throwable) -> {
-                                logger.debug("{}=>STOP {} :: {}/{}", n.getDescription(), tp, response, throwable);
-                                if (throwable != null || response.getType() != EnkiPacket.Type.ACK) {
-                                    allStopsSucceeded.set(false);
-                                    // trip the countdown latch
-                                } else {
-                                    n.getAssignments().remove(tp);
-                                }
-
-                                // finally trip the stop countdown latch by one
-                                stopCDL.countDown();
-                            });
-                        }
-
-                        // wait for all the stop ops to succeed or fail.
-                        try {
-                            stopCDL.await(10, TimeUnit.SECONDS);
-                        } catch(InterruptedException e) {
-                            logger.warn("Countdown latch timed out waiting for stop operations. Killing connection");
-                            allStopsSucceeded.set(false);
-                        }
-
-                        if (!allStopsSucceeded.get()) {
-                            n.getCnxn().killConnection();
-                            n.getAssignments().clear();
-                            // all of the pre-existing assignment will get reaped
-                            // into unclaimed assignments when onNabuDisconnected callback
-                            // is called after the connection is dropped and the unclaimed assignment
-                            // set is rebuilt on the next rebalance.
-                        } else {
-                            int totalStartsNeeded = delta.getStartCount();
-                            CountDownLatch startCDL = new CountDownLatch(totalStartsNeeded);
-                            AtomicBoolean allStartsSucceeded = new AtomicBoolean(true);
-                            Set<TopicPartition> pendingStarts = Sets.newConcurrentHashSet(delta.getToStart());
-
-                            for (TopicPartition tp : pendingStarts) {
-                                n.getCnxn().sendAssign(tp).whenCompleteAsync((response, throwable) -> {
-                                    logger.debug("{}=>START {} :: {}/{}", n.getDescription(), tp, response, throwable);
-                                    if (throwable != null || response.getType() != EnkiPacket.Type.ACK) {
-                                        allStartsSucceeded.set(false);
-                                    } else {
-                                        pendingStarts.remove(tp);
-                                        n.getAssignments().add(tp);
-                                    }
-
-                                    // finally, trip the countdown latch by one
-                                    startCDL.countDown();
-                                });
+                for(ContextAssignment ca : allStops) {
+                    AssignableNabu n = ca.context;
+                    TopicPartition tp = ca.assignment;
+                    CountDownLatch latch = new CountDownLatch(1);
+                    AtomicBoolean stopSucceeded = new AtomicBoolean(true);
+                    n.getCnxn().sendUnassign(tp).whenCompleteAsync((response, throwable) -> {
+                        synchronized (n.$workerAssignmentLock) {
+                            logger.debug("{}=>STOP {} :: {}/{}", n.getDescription(), tp, response, throwable);
+                            if (throwable != null || response.getType() != EnkiPacket.Type.ACK) {
+                                stopSucceeded.set(false);
                             }
 
-                            try {
-                                startCDL.await(10, TimeUnit.SECONDS);
-                            } catch(InterruptedException e) {
-                                logger.warn("Countdown latch timed out waiting for start operations. Killing connection");
-                                allStartsSucceeded.set(false);
-                            }
-
-                            if (!allStartsSucceeded.get()) {
-                                n.getCnxn().killConnection();
-                                n.getAssignments().clear();
-                            }
+                            // always remove the assignment, as even if the worker gets reaped
+                            // it's going to not have the assignment anyway by the time
+                            // the next rebalance starts
+                            n.getAssignments().remove(tp);
+                            // finally trip the stop countdown latch by one
+                            latch.countDown();
                         }
+                    });
+
+                    try {
+                        latch.await(5, TimeUnit.SECONDS);
+                    } catch(InterruptedException e) {
+                        logger.warn("Countdown latch timed out waiting for a stop operation. Killing connection");
+                        stopSucceeded.set(false);
                     }
 
+                    if(!stopSucceeded.get()) {
+                        reapMisbehavingWorker(n);
+                        hadReaps = true;
+                    }
+                }
+
+                for(ContextAssignment ca : allStarts) {
+                    AssignableNabu n = ca.context;
+                    TopicPartition tp = ca.assignment;
+                    CountDownLatch latch = new CountDownLatch(1);
+                    AtomicBoolean startSucceeded = new AtomicBoolean(true);
+                    n.getCnxn().sendAssign(tp).whenCompleteAsync((response, throwable) -> {
+                        synchronized (n.$workerAssignmentLock) {
+                            logger.debug("{}=>STOP {} :: {}/{}", n.getDescription(), tp, response, throwable);
+                            if (throwable != null || response.getType() != EnkiPacket.Type.ACK) {
+                                startSucceeded.set(false);
+                            }
+
+                            // always add the assignment, as even if the worker gets reaped
+                            // it's going to not have the assignment anyway by the time
+                            // the next rebalance starts
+                            n.getAssignments().add(tp);
+                            // finally trip the stop countdown latch by one
+                            latch.countDown();
+                        }
+                    });
+
+                    try {
+                        latch.await(5, TimeUnit.SECONDS);
+                    } catch(InterruptedException e) {
+                        logger.warn("Countdown latch timed out waiting for a start operation. Killing connection");
+                        startSucceeded.set(false);
+                    }
+
+                    if(!startSucceeded.get()) {
+                        reapMisbehavingWorker(n);
+                        hadReaps = true;
+                    }
+                }
+
+                needsRebalance.set(hadReaps);
+
+                StringBuilder sb = new StringBuilder("\nEXECUTED TASK DISTRIBUTION\n");
+                sb.append(Strings.padStart("WORKER NAME", 60, ' '))
+                  .append(Strings.padStart("FINAL TASK COUNT", 20, ' '))
+                  .append("      TASKS")
+                  .append("\n");
+
+                confirmedWorkers.forEach(worker ->
+                            sb.append(Strings.padStart(worker.getDescription(), 60, ' '))
+                              .append(Strings.padStart(Integer.toString(worker.getAssignments().size()), 20, ' '))
+                              .append("      ")
+                              .append(worker.collateAssignmentsReadably(worker.getAssignments(), ImmutableSet.of(), ImmutableSet.of()))
+                              .append("\n")
+                );
+
+                logger.info(sb.toString());
+
+                if(!hadReaps) {
                     logger.info("Rebalance cycle finished.");
+                } else {
+                    logger.info("Misbehaving workers were reaped during this cycle. Restarting it.");
                 }
             } catch (AssertionError | Exception e) {
                 logger.error("[FATAL] something went wrong when rebalancing the workload", e);
@@ -304,67 +337,54 @@ public class WorkerCoordinator extends Component {
         }
     }
 
+    private void reapMisbehavingWorker(AssignableNabu n) {
+        synchronized ($lock) {
+            n.getCnxn().killConnection();
+            confirmedWorkers.removeIf(p -> {
+                if(n.getCnxn().prettyName().equals(p.getCnxn().prettyName())) {
+                    logger.warn("REAPING MISBEHAVING WORKER: {}", n);
+                    return true;
+                }
+                return false;
+            });
+        }
+    }
+
     public void coordinateJoin(NabuConnection cnxn) {
-        if(elp.isSelf()) {
-            logger.info("cj-elp-is");
-            synchronized($workerLock) {
+        synchronized($lock) {
+            if(elp.isSelf()) {
                 AssignableNabu n = new AssignableNabu(cnxn);
                 confirmedWorkers.add(n);
-                logger.info("cj-cw-a");
                 needsRebalance.set(true);
             }
         }
     }
 
     public void coordinatePart(NabuConnection cnxn) {
-        logger.info("cp-prelock");
-        synchronized($workerLock) {
-            logger.info("cp-inlock");
+        synchronized($lock) {
             Iterator<AssignableNabu> workers = confirmedWorkers.iterator();
             while (workers.hasNext()) {
                 AssignableNabu worker = workers.next();
-                logger.info("loop:\n{}\n{}\n", cnxn, worker.getCnxn());
                 if(worker.getCnxn().prettyName().equals(cnxn.prettyName())) {
-                    int preSize = confirmedWorkers.size();
-                    confirmedWorkers.remove(worker);
+                    workers.remove();
                     needsRebalance.set(true);
-
-                    int postSize = confirmedWorkers.size();
-
-                    if(preSize == postSize) {
-                        logger.error("!!!!!!!!!!!!!!!!!!!!! WAT !!!!!!!!!!!!!!!!!!!!!");
-                        logger.error("!!!!!!!!!!!!!!!!!!!!! WAT !!!!!!!!!!!!!!!!!!!!!");
-                        logger.error("!!!!!!!!!!!!!!!!!!!!! WAT !!!!!!!!!!!!!!!!!!!!!");
-                        System.out.println(String.format("%s\n%s", cnxn, worker.getCnxn()));
-                        System.out.println(String.format("%s\n%s", cnxn.hashCode(), worker.getCnxn().hashCode()));
-                        System.out.println(String.format("%s\n%s", cnxn.prettyName(), worker.getCnxn().prettyName()));
-                        System.out.println(String.format("%s\n%s", cnxn.equals(worker.getCnxn()), confirmedWorkers.contains(worker)));
-                        logger.error("!!!!!!!!!!!!!!!!!!!!! WAT !!!!!!!!!!!!!!!!!!!!!");
-                        logger.error("!!!!!!!!!!!!!!!!!!!!! WAT !!!!!!!!!!!!!!!!!!!!!");
-                        logger.error("!!!!!!!!!!!!!!!!!!!!! WAT !!!!!!!!!!!!!!!!!!!!!");
-                    }
 
                     return;
                 }
             }
-
-            logger.error("COULDNT FIND PARTED CNXN\nT:{}\n{}",
-                    cnxn,
-                    Joiner.on("\n").join(
-                        confirmedWorkers.stream()
-                                        .map(w -> "W:" + w.getCnxn().toString())
-                                        .toArray()));
         }
     }
 
-    @EqualsAndHashCode
+    @EqualsAndHashCode(exclude={"assignments", "$workerAssignmentLock"})
     private static class AssignableNabu implements AssignmentContext<TopicPartition> {
         private final @Getter NabuConnection cnxn;
         private volatile @Getter @Setter Set<TopicPartition> assignments;
+        private final byte[] $workerAssignmentLock;
 
         AssignableNabu(NabuConnection cnxn) {
             this.cnxn = cnxn;
-            this.assignments = Sets.newConcurrentHashSet();
+            this.assignments = Sets.newHashSet();
+            this.$workerAssignmentLock = new byte[0];
         }
 
         @Override

@@ -5,7 +5,7 @@ import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.AckOnSuccessCRC;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.KillCnxnOnFailCRC;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
+import io.stat.nabuproject.core.util.NamedThreadPoolExecutor;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.enki.server.NabuConnection;
 import lombok.experimental.Delegate;
@@ -13,9 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Dispatches callbacks to any {@link NabuConnectionListener}s registered to it asynchronously.
@@ -40,22 +37,14 @@ public final class NabuConnectionListenerDispatcher implements NabuConnectionLis
         // 60 second timeout
         // backed by a SynchronousQueue.
         // with thread names starting with NCLDWorker
-        ExecutorService dispatchWorkerExecutor = new ThreadPoolExecutor(
-                5, 60,
-                60, TimeUnit.SECONDS,
-                new SynchronousQueue<>(),
-                new NamedThreadFactory("NabuCnxnDispatcher-Worker")
-        );
+        ExecutorService dispatchWorkerExecutor = new NamedThreadPoolExecutor(
+                "NabuCnxnLsnrDispatcher-Worker");
 
         // 20 fixed pool size.
         // 5 minute timeout
         // with thread names starting with NCLDCollector
-        ExecutorService collectorWorkerExecutor = new ThreadPoolExecutor(
-                20, 20,
-                5, TimeUnit.MINUTES,
-                new SynchronousQueue<>(),
-                new NamedThreadFactory("NabuCnxnDispatcher-Collector")
-        );
+        ExecutorService collectorWorkerExecutor = new NamedThreadPoolExecutor(
+                "NabuCnxnLsnrDispatcher-Collector");
 
         this.dispatcher = new AsyncListenerDispatcher<>(dispatchWorkerExecutor, collectorWorkerExecutor);
     }

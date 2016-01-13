@@ -18,6 +18,7 @@ import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionEventSource;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
@@ -41,6 +42,8 @@ class ServerImpl extends EnkiServer {
     private int workerThreads;
     private final AddressPort listenBinding;
 
+    private final NamedThreadFactory nioThreadFactory;
+
     private EventLoopGroup acceptorGroup;
     private EventLoopGroup workerGroup;
 
@@ -60,8 +63,10 @@ class ServerImpl extends EnkiServer {
         this.workerThreads   = config.getWorkerThreads();
         this.listenBinding   = config.getListenBinding();
 
-        this.acceptorGroup = new NioEventLoopGroup(acceptorThreads);
-        this.workerGroup = new NioEventLoopGroup(workerThreads);
+        this.nioThreadFactory = new NamedThreadFactory("EnkiServerNIO");
+
+        this.acceptorGroup = new NioEventLoopGroup(acceptorThreads, nioThreadFactory);
+        this.workerGroup = new NioEventLoopGroup(workerThreads, nioThreadFactory);
 
         this.dispatcher = new NabuConnectionListenerDispatcher();
 

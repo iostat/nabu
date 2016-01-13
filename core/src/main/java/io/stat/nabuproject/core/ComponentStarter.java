@@ -59,5 +59,9 @@ public final class ComponentStarter extends Component {
         while(rit.hasNext()) {
             rit.next()._dispatchShutdown();
         }
+
+        if(getStarter() != null) {
+            getStarter().shutdown();
+        }
     }
 }

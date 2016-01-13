@@ -11,6 +11,8 @@ import lombok.AllArgsConstructor;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * The actual Nabu core implementation.
  *
@@ -25,6 +27,8 @@ class NabuImpl extends Nabu {
     private final NabuServer nabuServer;
     private final AssignedConsumptionCoordinator assignedConsumptionCoordinator;
     private final ComponentStarter componentStarter;
+
+    private final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
 
     @Override @Synchronized
     public void start() throws ComponentException {
@@ -43,6 +47,7 @@ class NabuImpl extends Nabu {
                 enkiClient,
                 nabuServer);
 
+        componentStarter.setStarter(this);
         componentStarter.start();
 
         logger.info("Nabu is up like Donald Trump!");
@@ -50,6 +55,9 @@ class NabuImpl extends Nabu {
 
     @Override @Synchronized
     public void shutdown() throws ComponentException {
-        componentStarter.shutdown();
+        if(!this.isShuttingDown.get()) {
+            this.isShuttingDown.set(true);
+            componentStarter.shutdown();
+        }
     }
 }

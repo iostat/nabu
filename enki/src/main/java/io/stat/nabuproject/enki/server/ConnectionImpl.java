@@ -23,6 +23,7 @@ import io.stat.nabuproject.core.net.ConnectionLostException;
 import io.stat.nabuproject.core.net.NodeLeavingException;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.Synchronized;
@@ -32,9 +33,11 @@ import org.apache.kafka.common.TopicPartition;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -70,11 +73,15 @@ class ConnectionImpl implements NabuConnection {
     private final AtomicBoolean wasLeaveServerInitiated;
     private final AtomicBoolean leaveAcknowledged;
 
-    private final TimerTask heartbeatTask;
-    private final TimerTask leaveEnforcerTask;
+    private final Runnable heartbeatTask;
+    private final Runnable leaveEnforcerTask;
 
-    private final Timer heartbeatTimer;
-    private final Timer leaveEnforcerTimer;
+    private final NamedThreadFactory timerTaskThreadFactory;
+
+    private final ScheduledExecutorService heartbeatSES;
+    private final ScheduledExecutorService leaveEnforcerSES;
+
+    private final long createdOn;
 
     public ConnectionImpl(ChannelHandlerContext context,
                           NabuConnectionListener connectionListener,
@@ -106,11 +113,14 @@ class ConnectionImpl implements NabuConnection {
 
         this.promises = Maps.newConcurrentMap();
 
-        this.heartbeatTimer = new Timer(String.format("NabuConnection-Heartbeat-%s", prettyName()));
-        this.leaveEnforcerTimer = new Timer(String.format("NabuConnection-LeaveEnforcer-%s", prettyName()));
+        this.timerTaskThreadFactory = new NamedThreadFactory("NabuConnection" + prettyName());
+        this.heartbeatSES = Executors.newSingleThreadScheduledExecutor(timerTaskThreadFactory.buildGroupedTFWithConstantName("Heartbeat"));
+        this.leaveEnforcerSES = Executors.newSingleThreadScheduledExecutor(timerTaskThreadFactory.buildGroupedTFWithConstantName("LeaveEnforcer"));
 
         this.heartbeatTask = this.new HeartbeatTask();
         this.leaveEnforcerTask = this.new LeaveEnforcerTask();
+
+        this.createdOn = System.nanoTime();
 
         logger.info("New ConnectionImpl({}) for {}", this, context);
 
@@ -119,14 +129,15 @@ class ConnectionImpl implements NabuConnection {
             dispatchConfigure(buildDispatchedNabuConfig()).thenAcceptAsync(this::confirmConnection);
             // todo: heartbeat timeouts should be configurable.
             // 1 second delay before first run, 3 second delay between runs
-            this.heartbeatTimer.scheduleAtFixedRate(this.heartbeatTask, 1000, 3000);
+
+            this.heartbeatSES.scheduleAtFixedRate(this.heartbeatTask, 1, 3, TimeUnit.SECONDS);
 
             connectionListener.onNewNabuConnection(this);
         } else {
             logger.info("This node IS NOT the leader; sending REDIRECT");
             // have to free up the event loop thread before I can dispatch the redirect.
             // im reusing the hearbeat timer since basically else will use it.
-            this.heartbeatTimer.schedule(new RedirectorTask(), 1000);
+            this.heartbeatSES.schedule(new RedirectorTask(), 1, TimeUnit.SECONDS);
         }
     }
 
@@ -228,7 +239,7 @@ class ConnectionImpl implements NabuConnection {
         nabuLeaving(true);
 
         // todo: leave enforcer timeout should be configurable.
-        leaveEnforcerTimer.schedule(leaveEnforcerTask, 5000);
+        leaveEnforcerSES.schedule(leaveEnforcerTask, 5, TimeUnit.SECONDS);
 
         dispatchKick().whenCompleteAsync((packet, exception) -> {
             if(exception != null && !(exception instanceof ConnectionLostException)) {
@@ -251,9 +262,10 @@ class ConnectionImpl implements NabuConnection {
         if(!suppressWarning) {
             logger.warn("killConnection() called. This is going to be ugly.");
         }
+        isDisconnecting.set(true); // just in case
 
         context.close();
-        connectionListener.onNabuDisconnected(this, EnkiConnection.DisconnectCause.BLOODY_MURDER, leaveAcknowledged.get());
+        onDisconnected(EnkiConnection.DisconnectCause.BLOODY_MURDER);
     }
 
     /**
@@ -263,7 +275,7 @@ class ConnectionImpl implements NabuConnection {
      */
     private void nabuLeaving(boolean serverInitiated) {
         isDisconnecting.set(true);
-        heartbeatTimer.cancel();
+        heartbeatSES.shutdown();
         int outstandingPromises = promises.size();
         if(outstandingPromises != 0) {
             logger.warn("{} has {} outstanding promises! NodeLeavingEx'ing them all!", this, outstandingPromises);
@@ -281,6 +293,12 @@ class ConnectionImpl implements NabuConnection {
 
     @Override @Synchronized
     public void onDisconnected() {
+        onDisconnected(null);
+    }
+
+    @Synchronized
+    public void onDisconnected(EnkiConnection.DisconnectCause claimedCause) {
+        isDisconnecting.set(true); // just in case
         int outstandingPromises = promises.size();
         if(outstandingPromises != 0) {
             logger.warn("{} has {} outstanding promises! ConnectionLostEx'ing them all!", this, outstandingPromises);
@@ -291,18 +309,20 @@ class ConnectionImpl implements NabuConnection {
                             "has been lost (sequence " + seq + ")")));
         }
 
-        heartbeatTimer.cancel();
-        leaveEnforcerTimer.cancel();
+        heartbeatSES.shutdown();
+        leaveEnforcerSES.shutdown();
 
-        EnkiConnection.DisconnectCause cause;
-        if(wasLeavePacketSent.get()) {
-            if(wasLeaveServerInitiated.get()) {
-                cause = EnkiConnection.DisconnectCause.SERVER_LEAVE_REQUEST;
+        EnkiConnection.DisconnectCause cause = claimedCause;
+        if(claimedCause == null) {
+            if(wasLeavePacketSent.get()) {
+                if(wasLeaveServerInitiated.get()) {
+                    cause = EnkiConnection.DisconnectCause.SERVER_LEAVE_REQUEST;
+                } else {
+                    cause = EnkiConnection.DisconnectCause.CLIENT_LEAVE_REQUEST;
+                }
             } else {
-                cause = EnkiConnection.DisconnectCause.CLIENT_LEAVE_REQUEST;
+                cause = EnkiConnection.DisconnectCause.CONNECTION_RESET;
             }
-        } else {
-            cause = EnkiConnection.DisconnectCause.CONNECTION_RESET;
         }
         connectionListener.onNabuDisconnected(this, cause, leaveAcknowledged.get());
     }
@@ -382,7 +402,7 @@ class ConnectionImpl implements NabuConnection {
     /**
      * A task that sends out heartbeats, and boots the client if too many are missed.
      */
-    private class HeartbeatTask extends TimerTask {
+    private class HeartbeatTask implements Runnable {
         @Override
         public void run() {
             if(waitingForHeartbeat.get()) {
@@ -420,7 +440,7 @@ class ConnectionImpl implements NabuConnection {
      * A task that gets started when the Enki server initiates a leave request, that ensures that
      * the client has disconnected.
      */
-    private class LeaveEnforcerTask extends TimerTask {
+    private class LeaveEnforcerTask implements Runnable {
         @Override
         public void run() {
             if(!ConnectionImpl.this.leaveAcknowledged.get()) {
@@ -434,11 +454,43 @@ class ConnectionImpl implements NabuConnection {
         }
     }
 
-    private class RedirectorTask extends TimerTask {
+    private class RedirectorTask implements Runnable {
         @Override
         public void run() {
             AddressPort electedAP = electedLeaderProvider.getElectedLeaderData().getAddressPort();
             performRedirect(electedAP);
         }
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if(obj == null) {
+            return false;
+        }
+
+        if(!(obj instanceof ConnectionImpl)) {
+            return false;
+        }
+
+        ConnectionImpl other = ((ConnectionImpl) obj);
+
+        if(this.createdOn != other.createdOn) {
+            return false;
+        }
+
+        if(this.context == null) {
+            if (other.context != null) {
+                return false;
+            }
+        } else {
+            return this.context.equals(other.context);
+        }
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(createdOn, context);
     }
 }
