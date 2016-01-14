@@ -8,16 +8,14 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.MessageToByteEncoder;
-import io.netty.handler.codec.serialization.ClassResolvers;
-import io.netty.handler.codec.serialization.ObjectDecoder;
-import io.netty.handler.codec.serialization.ObjectEncoder;
-import io.stat.nabuproject.core.util.ProtocolHelper;
+import io.stat.nabuproject.core.net.ObjectDecoderExposer;
+import io.stat.nabuproject.core.net.ObjectEncoderExposer;
+import io.stat.nabuproject.core.net.ProtocolHelper;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -50,11 +48,6 @@ public abstract class EnkiPacket {
 
     @Slf4j
     public static final class Encoder extends MessageToByteEncoder<EnkiPacket> {
-        private static final class ObjectEncoderExposer extends ObjectEncoder {
-            void exposeEncode(ChannelHandlerContext c, Serializable o, ByteBuf out) throws Exception {
-                encode(c, o, out);
-            }
-        }
 
         private final ObjectEncoderExposer exposer;
 
@@ -95,9 +88,7 @@ public abstract class EnkiPacket {
                     break;
                 case CONFIGURE:
                     ImmutableMap<String, Serializable> configure = ((EnkiConfigure) msg).getOptions();
-
-                    exposer.exposeEncode(ctx, configure, restOfPacket);
-
+                    ProtocolHelper.writeSerializableToByteBuf(configure, restOfPacket);
                     break;
                 case REDIRECT:
                     EnkiRedirect redir = ((EnkiRedirect) msg);
@@ -113,19 +104,13 @@ public abstract class EnkiPacket {
             out.writeLong(msg.getSequenceNumber());
             out.writeInt(restOfPacket.readableBytes());
             out.writeBytes(restOfPacket);
+
+            restOfPacket.release();
         }
     }
 
     @Slf4j
     public static final class Decoder extends ByteToMessageDecoder {
-        private static final class ObjectDecoderExposer extends ObjectDecoder {
-            ObjectDecoderExposer() {
-                super(ClassResolvers.softCachingConcurrentResolver(null));
-            }
-            void exposeDecode(ChannelHandlerContext c, ByteBuf in, List<Object> out) throws Exception {
-                decode(c, in, out);
-            }
-        }
 
         private final ObjectDecoderExposer exposer;
 
@@ -208,10 +193,8 @@ public abstract class EnkiPacket {
                         );
                         return;
                     case CONFIGURE:
-                        List<Object> decodedList = new ArrayList<>(1);
-                        exposer.exposeDecode(ctx, in, decodedList);
-
-                        out.add(new EnkiConfigure(sequenceNumber, (Map)(decodedList.get(0))));
+                        ImmutableMap<String, Serializable> decoded = ProtocolHelper.readSerializableFromByteBuf(in);
+                        out.add(new EnkiConfigure(sequenceNumber, decoded));
 
                         return;
                     case REDIRECT:
@@ -294,4 +277,5 @@ public abstract class EnkiPacket {
             return ret;
         }
     }
+
 }

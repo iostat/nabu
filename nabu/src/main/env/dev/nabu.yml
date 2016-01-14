@@ -87,7 +87,7 @@ nabu:
     # Port to bind the API server to
     #
     # OPTIONAL, defaults to 6228
-    port: ${prop:override.server.port:3654}
+    port: ${prop:override.server.port:6228}
     # NIO threading parameters
     #
     # OPTIONAL

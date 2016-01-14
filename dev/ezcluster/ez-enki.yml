@@ -9,7 +9,7 @@ root: ~/sr/nabuproject
 # socket_name: foo
 
 # Runs before everything. Use it to start daemons etc.
-# pre: sudo /etc/rc.d/mysqld start
+pre: ./gradlew :enki:shadowJar
 
 # Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
 # pre_window: rbenv shell 2.0.0-p247
@@ -27,12 +27,12 @@ root: ~/sr/nabuproject
 # attach: false
 
 # Runs after everything. Use it to attach to tmux with custom options etc.
-# post: tmux -CC attach -t ezcluster
+# post: tmux -CC attach -t ez-enki
 
 windows:
-  - enki1: ./gradlew :enki:run -Doverride.server.port=10001 
-  - enki2: ./gradlew :enki:run -Doverride.server.port=10002 
-  - enki3: ./gradlew :enki:run -Doverride.server.port=10003
-  - enki4: ./gradlew :enki:run -Doverride.server.port=10004
-  - enki5: ./gradlew :enki:run -Doverride.server.port=10005 
+  - enki1: java -Doverride.server.port=10001 -jar enki/build/libs/enki-dev-0.1-SNAPSHOT-all.jar
+  - enki2: java -Doverride.server.port=10002 -jar enki/build/libs/enki-dev-0.1-SNAPSHOT-all.jar
+  - enki3: java -Doverride.server.port=10003 -jar enki/build/libs/enki-dev-0.1-SNAPSHOT-all.jar
+  - enki4: java -Doverride.server.port=10004 -jar enki/build/libs/enki-dev-0.1-SNAPSHOT-all.jar
+  - enki5: java -Doverride.server.port=10005 -jar enki/build/libs/enki-dev-0.1-SNAPSHOT-all.jar
   

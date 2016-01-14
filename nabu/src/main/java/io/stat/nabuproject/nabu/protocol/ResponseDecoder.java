@@ -4,7 +4,14 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.CorruptedFrameException;
-import io.stat.nabuproject.nabu.common.NabuResponse;
+import io.netty.handler.codec.DecoderException;
+import io.stat.nabuproject.core.net.ProtocolHelper;
+import io.stat.nabuproject.nabu.common.response.FailResponse;
+import io.stat.nabuproject.nabu.common.response.IDResponse;
+import io.stat.nabuproject.nabu.common.response.NabuResponse;
+import io.stat.nabuproject.nabu.common.response.OKResponse;
+import io.stat.nabuproject.nabu.common.response.QueuedResponse;
+import io.stat.nabuproject.nabu.common.response.RetryResponse;
 
 import java.util.List;
 
@@ -16,8 +23,9 @@ public class ResponseDecoder extends ByteToMessageDecoder {
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         // a response is 3 bytes,
         // 2 bytes MAGIC (short)
-        // and 1 byte response code (NabuResponse)
-        if(in.readableBytes() < 3) {
+        // 1 byte response code (Type)
+        // and 8 bytes sequence. (long)
+        if(in.readableBytes() < 11) {
             return;
         }
 
@@ -28,13 +36,48 @@ public class ResponseDecoder extends ByteToMessageDecoder {
             in.resetReaderIndex();
             throw new CorruptedFrameException("Invalid response magic. " +
                     "Received 0x" + Integer.toHexString(magic)
-                    + " but expected" + NabuResponse.MAGIC_HEX_STRING);
+                    + " but expected " + NabuResponse.MAGIC_HEX_STRING);
         }
 
         byte respCode = in.readByte();
+        long sequence = in.readLong();
+
         try {
-            NabuResponse response = NabuResponse.ofCode(respCode);
-            out.add(response);
+            NabuResponse.Type type = NabuResponse.Type.ofCode(respCode);
+            switch(type) {
+                case OK:
+                    out.add(new OKResponse(sequence));
+                    return;
+                case QUEUED:
+                    out.add(new QueuedResponse(sequence));
+                    return;
+                case RETRY:
+                    out.add(new RetryResponse(sequence));
+                    return;
+                case FAIL:
+                    out.add(new FailResponse(sequence));
+                    return;
+                case ID:
+                    String idString;
+
+                    try {
+                        idString = ProtocolHelper.readStringFromByteBuf(in);
+                    } catch(DecoderException de) {
+                        if(de.getMessage().equals(ProtocolHelper.READ_STRING_NO_SIZE)
+                                || de.getMessage().equals(ProtocolHelper.READ_STRING_TOO_SHORT)) {
+                            // thrown inside ProtocolHelper when there's not enough data to read the String.
+                            in.resetReaderIndex();
+                            return;
+                        } else {
+                            throw de;
+                        }
+                    }
+
+                    out.add(new IDResponse(sequence, idString));
+                    return;
+                default:
+                    throw new IllegalArgumentException("Cannot handle NabuResponse of type " + type.toString());
+            }
         } catch(IllegalArgumentException iae) {
             in.resetReaderIndex();
             throw new CorruptedFrameException("Cannot decode NabuResponse", iae);

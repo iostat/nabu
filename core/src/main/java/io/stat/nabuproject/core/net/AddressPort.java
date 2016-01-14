@@ -4,6 +4,7 @@ import com.google.common.base.MoreObjects;
 import io.stat.nabuproject.core.util.Tuple;
 
 import java.io.Serializable;
+import java.net.InetSocketAddress;
 import java.util.Objects;
 
 /**
@@ -38,5 +39,14 @@ public class AddressPort extends Tuple<String, Integer> implements Serializable 
     @Override
     public int hashCode() {
         return Objects.hash(first(), second());
+    }
+
+    /**
+     * Create an {@link InetSocketAddress} equivalent to the data in this
+     * AddressPort
+     * @return an InetSocketAddress pointing to the address and port specified in this tuple.
+     */
+    public InetSocketAddress toInetSocketAddress() {
+        return new InetSocketAddress(getAddress(), getPort());
     }
 }

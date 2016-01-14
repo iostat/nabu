@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventSource;
@@ -13,6 +12,7 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
+import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
 
@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     private final EnkiClientEventSource eces;
-    private final ESClient esClient;
+    private final NabuCommandESWriter esWriter;
     private final Map<TopicPartition, SingleTPConsumer> consumerMap;
     private final byte[] $consumerMapLock;
 
@@ -42,8 +42,8 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     private final SessionSourcedKafkaBrokerCP sskbcp;
 
     @Inject
-    ConsumerCoordinatorImpl(ESClient esClient, EnkiClientEventSource eces) {
-        this.esClient = esClient;
+    ConsumerCoordinatorImpl(NabuCommandESWriter esWriter, EnkiClientEventSource eces) {
+        this.esWriter = esWriter;
         this.eces = eces;
 
         this.throttlePolicies = new AtomicReference<>(null);
@@ -134,7 +134,7 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
                         logger.error("Tried to assign a topic to consume for which this Nabu did not receive a ThrottlePolicy");
                         return false;
                     } else {
-                        SingleTPConsumer stpc = new SingleTPConsumer(esClient, maybeTP, packet.getPartitionNumber(), sskbcp);
+                        SingleTPConsumer stpc = new SingleTPConsumer(esWriter, maybeTP, packet.getPartitionNumber(), sskbcp);
 
                         stpc.start();
 

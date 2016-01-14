@@ -65,8 +65,8 @@ class ServerImpl extends EnkiServer {
 
         this.nioThreadFactory = new NamedThreadFactory("EnkiServerNIO");
 
-        this.acceptorGroup = new NioEventLoopGroup(acceptorThreads, nioThreadFactory);
-        this.workerGroup = new NioEventLoopGroup(workerThreads, nioThreadFactory);
+        this.acceptorGroup = new NioEventLoopGroup(acceptorThreads, nioThreadFactory.childFactory("EnkiSrvAcceptor"));
+        this.workerGroup = new NioEventLoopGroup(workerThreads, nioThreadFactory.childFactory("EnkiSrvWorker"));
 
         this.dispatcher = new NabuConnectionListenerDispatcher();
 

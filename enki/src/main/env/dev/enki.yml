@@ -161,6 +161,9 @@ enki:
     # OPTIONAL
     policies:
     - index: "test-1-shard"
+      target: 100
+      max_batch: 500
+
     - index: "test-5-shards"
     - index: "test-10-shards"
     - index: "test-20-shards"

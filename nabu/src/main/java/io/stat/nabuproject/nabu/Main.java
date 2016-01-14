@@ -10,12 +10,14 @@ import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiClientModule;
 import io.stat.nabuproject.core.util.JVMHackery;
+import io.stat.nabuproject.nabu.elasticsearch.CommandESWriterModule;
 import io.stat.nabuproject.nabu.kafka.KafkaModule;
 import io.stat.nabuproject.nabu.router.RouterModule;
 import io.stat.nabuproject.nabu.server.ServerModule;
 import lombok.Getter;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.common.ESExtractorModule;
 
 import java.io.File;
 import java.io.PrintWriter;
@@ -28,7 +30,7 @@ public class Main {
     private @Getter @Delegate Nabu nabu;
     private @Getter Injector injector;
 
-    private Main(boolean doDeps) throws ComponentException {
+    private Main(boolean doDeps) throws Exception {
         registerSignalHandlers();
 
         int pid = JVMHackery.getPid();
@@ -40,13 +42,15 @@ public class Main {
         logger.info("$PWD: {}", System.getenv("PWD"));
 
         this.injector = Guice.createInjector(
+                new ESExtractorModule(),
                 new NabuModule(),
-                new EnkiClientModule(),
+                new EnkiClientModule(true, true),
                 new ConfigModule(),
                 new ESModule(),
                 new KafkaModule(),
                 new RouterModule(),
-                new ServerModule()
+                new ServerModule(),
+                new CommandESWriterModule()
         );
 
         if(doDeps) {

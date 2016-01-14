@@ -218,7 +218,7 @@ public class WorkerCoordinator extends Component {
                     balancer.addWorker(worker, worker.getAssignments());
                 }
 
-                @RequiredArgsConstructor
+                @RequiredArgsConstructor @EqualsAndHashCode
                 class ContextAssignment {
                     private final AssignableNabu context;
                     private final TopicPartition assignment;
@@ -255,13 +255,19 @@ public class WorkerCoordinator extends Component {
                             // the next rebalance starts
                             n.getAssignments().remove(tp);
                             // finally trip the stop countdown latch by one
-                            latch.countDown();
                         }
+                        latch.countDown();
                     });
 
+                    boolean stopLatchTimedOut = false;
                     try {
-                        latch.await(5, TimeUnit.SECONDS);
+                        stopLatchTimedOut = !latch.await(5, TimeUnit.SECONDS);
                     } catch(InterruptedException e) {
+                        logger.warn("Countdown latch interrupted waiting for a stop operation. Killing connection");
+                        stopSucceeded.set(false);
+                    }
+
+                    if(stopLatchTimedOut) {
                         logger.warn("Countdown latch timed out waiting for a stop operation. Killing connection");
                         stopSucceeded.set(false);
                     }
@@ -293,9 +299,15 @@ public class WorkerCoordinator extends Component {
                         }
                     });
 
+                    boolean startLatchTimedOut = false;
                     try {
-                        latch.await(5, TimeUnit.SECONDS);
+                        startLatchTimedOut = !latch.await(5, TimeUnit.SECONDS);
                     } catch(InterruptedException e) {
+                        logger.warn("Countdown latch interrupted waiting for a start operation. Killing connection");
+                        startSucceeded.set(false);
+                    }
+
+                    if(startLatchTimedOut) {
                         logger.warn("Countdown latch timed out waiting for a start operation. Killing connection");
                         startSucceeded.set(false);
                     }

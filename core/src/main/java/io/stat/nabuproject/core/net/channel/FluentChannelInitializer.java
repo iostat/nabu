@@ -51,7 +51,7 @@ public class FluentChannelInitializer extends ChannelInitializer<SocketChannel> 
 
     /**
      * Similar to {@link FluentChannelInitializer#addHandler(ChannelHandler)}, except allows you
-     * to specify a callback to run after the instance is added to the pipeline.
+     * to specify a callback to run before the instance is added to the pipeline.
      * @param ch the ChannelHandler
      * @param cb the {@link ChannelHandlerCallback}
      * @param <T> the type of ChannelHandler this handler is
@@ -88,48 +88,95 @@ public class FluentChannelInitializer extends ChannelInitializer<SocketChannel> 
         return addHandler(chc, null);
     }
 
-    public final <T extends ChannelHandler> FluentChannelInitializer addHandler(Class<T> chc,
+    /**
+     * Similar to {@link FluentChannelInitializer#addHandler(Class)}, except it allows you to
+     * specify a callback to call after the class is instatiated but before it is added to the pipeline
+     * @param chKlass the {@link java.lang.Class} of the class to instantiate
+     * @param callback the callback to call after chKlass is instantitated but before it is added to the pipeline
+     * @param <T> the type of class chKlass is
+     * @return this
+     */
+    public final <T extends ChannelHandler> FluentChannelInitializer addHandler(Class<T> chKlass,
                                                                                 ChannelHandlerCallback<T, ?> callback) {
-        return addHandler(chc, callback, null);
+        return addHandler(chKlass, callback, null);
     }
 
-    public final <T extends ChannelHandler, U> FluentChannelInitializer addHandler(Class<T> chc,
+    /**
+     * Similar to {@link FluentChannelInitializer#addHandler(ChannelHandler, ChannelHandlerCallback, Object)}
+     * except rather than reusing the specified instance of the ChannelHandler, it constructs a new one using
+     * the default nullary constructor.
+     * @param chKlass the {@link java.lang.Class} of the class to instantiate
+     * @param callback the callback to call after chKlass is instantitated but before it is added to the pipeline
+     * @param cbArgs any additional arguments you want to pass to the callback
+     * @param <T> the type of class chKlass is
+     * @param <U> the type of cbArgs
+     * @return this
+     */
+    public final <T extends ChannelHandler, U> FluentChannelInitializer addHandler(Class<T> chKlass,
                                                                                    ChannelHandlerCallback<T, U> callback,
-                                                                                   U args) {
-        return addHandler(chc, null, null, callback, args);
+                                                                                   U cbArgs) {
+        return addHandler(chKlass, null, null, callback, cbArgs);
     }
 
-    public final <T extends ChannelHandler> FluentChannelInitializer addHandler(Class<T> chc, Object[] args, Class<?>[] argClasses) {
-        return addHandler(chc, args, argClasses, null);
-    }
-    public final <T extends ChannelHandler> FluentChannelInitializer addHandler(Class<T> chc,
-                                                                                Object[] args,
-                                                                                Class<?>[] argClasses,
-                                                                                ChannelHandlerCallback<T, ?> cb) {
-        return addHandler(chc, args, argClasses, cb, null);
+    /**
+     * Adds a class to instantiate for each channel that this FluentChannelInitializer initializes, except you are also
+     * able to pass custom arguments to the class. Variadic arguments should be treated as an array themselves (i.e., if
+     * the constructor only takes a set of varags, args should be an Object[1][argCount]. Otherwise, the last element of
+     * args should be an array).
+     * @param chKlass the {@link java.lang.Class} of the class to instantiate
+     * @param args an array of the arguments to pass to the constructor
+     * @param argClasses an array of {@link Class}es of the Object's in <code>args</code>. Note that they have to match
+     *                   the classes that the constructor expects EXACTLY. In the case of varargs, the class of an array
+     *                   of the expected type suffices.
+     * @param <T> the type of class chKlass is
+     * @return this
+     */
+    public final <T extends ChannelHandler> FluentChannelInitializer addHandler(Class<T> chKlass, Object[] args, Class<?>[] argClasses) {
+        return addHandler(chKlass, args, argClasses, null);
     }
 
 
     /**
-     * Similar to {@link FluentChannelInitializer#addHandler(Class)}, except the class will
-     * be constructed with a constructor that matches the types in <tt>classes</tt>, using the arguments
+     * Similar to {@link FluentChannelInitializer#addHandler(Class, Object[], Class[])}, except you are also able to specify
+     * a callback to call
+     * @param chKlass the {@link java.lang.Class} of the class to instantiate
+     * @param args an array of the arguments to pass to the constructor
+     * @param argClasses an array of {@link Class}es of the Object's in <code>args</code>. Note that they have to match
+     *                   the classes that the constructor expects EXACTLY. In the case of varargs, the class of an array
+     *                   of the expected type suffices.
+     * @param cb the callback to call when this handler is instantiated and before it is added to the channel's pipeline
+     * @param <T> the type of class chKlass is
+     * @return this
+     */
+    public final <T extends ChannelHandler> FluentChannelInitializer addHandler(Class<T> chKlass,
+                                                                                Object[] args,
+                                                                                Class<?>[] argClasses,
+                                                                                ChannelHandlerCallback<T, ?> cb) {
+        return addHandler(chKlass, args, argClasses, cb, null);
+    }
+
+
+    /**
+     * Similar to {@link FluentChannelInitializer#addHandler(Class, Object[], Class[], ChannelHandlerCallback)},
+     * except the class will be constructed with a constructor that matches the types in <tt>classes</tt>, using the arguments
      * given in <tt>args</tt>. Inferring of argument types from <tt>args</tt> is not (yet) supported.
      * In the case of varags constructors, the last argument should be an array of the type expected.
-     * @param chc the Class of ChannelHandler
-     * @param args arguments to be passed to the constructor.
-     * @param argClasses the types of arguments passed to the constructor. note these should be
-     *                   qualified exactly the same way as the constructor is, (i.e., if the constructor
-     *                   expects a Number argument, you can't put Integer.class as the argClass, even if
-     *                   the same argument in <tt>args</tt> is an Integer.
+     * @param chKlass the {@link java.lang.Class} of the class to instantiate
+     * @param args an array of the arguments to pass to the constructor
+     * @param argClasses an array of {@link Class}es of the Object's in <code>args</code>. Note that they have to match
+     *                   the classes that the constructor expects EXACTLY. In the case of varargs, the class of an array
+     *                   of the expected type suffices.
+     * @param cb the callback to call when this handler is instantiated and before it is added to the channel's pipeline
+     * @param cbArgs any additional arguments to pass to the callback, other than the newly instantiated instance
      *
      * @return this
      */
-    public final <T extends ChannelHandler, U>FluentChannelInitializer addHandler(Class<T> chc,
+    public final <T extends ChannelHandler, U>FluentChannelInitializer addHandler(Class<T> chKlass,
                                                                                Object[] args,
                                                                                Class<?>[] argClasses,
                                                                                ChannelHandlerCallback<T, U> cb,
                                                                                U cbArgs) {
-        handlers.add(new InstantiatingHandlerWrapper<>(chc, args, argClasses, cb, cbArgs));
+        handlers.add(new InstantiatingHandlerWrapper<>(chKlass, args, argClasses, cb, cbArgs));
         return this;
     }
 

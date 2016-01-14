@@ -7,6 +7,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.net.AddressPort;
+import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.Tuple;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
@@ -51,6 +52,12 @@ class NodeClientImpl extends ESClient {
                     "The metadata response of this index did not " +
                     "contain a shard count for the requested index");
 
+    /**
+     * How long to wait for the ES Node to start. Should probably
+     * be configurable.
+     */
+    private static final long ES_START_TIMEOUT = 120000;
+
     private Settings.Builder nodeSettingsBuilder;
     private NodeBuilder nodeBuilder;
 
@@ -68,38 +75,54 @@ class NodeClientImpl extends ESClient {
 
     private final Injector injector;
 
+    /**
+     * Sort of a hack... we create a new thread in this factory
+     * to start ElasticSearch so that all of ES's threads will be their
+     * own thread group, so as not to pollute my debugger.
+     */
+    private final NamedThreadFactory esThreadFactory;
+
     @Inject
     NodeClientImpl(ESConfigProvider configProvider, Injector injector) {
         this.config = configProvider;
         this.injector = injector;
 
-        nodeSettingsBuilder = Settings.settingsBuilder()
-                .put("path.home", config.getESHome())
-                .put("http.enabled", config.isESHTTPEnabled()) // maybe serve HTTP requests
-                .put("http.port", config.getESHTTPPort()) // maybe serve HTTP requests
-                .put("node.master", false);
-
-        configProvider.getESNodeAttributes().forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
-
-        nodeBuilder = NodeBuilder.nodeBuilder()
-                .settings(nodeSettingsBuilder)
-                .clusterName(config.getESClusterName())
-                .data(false)
-                .local(false)
-                .client(true);
-
-        this.esNode = this.nodeBuilder.build();
         this.clusterStateListener = this.new ClusterStateListener();
 
         this.$clusterStateLock = new byte[0];
 
-        this.dispatcher = new AsyncListenerDispatcher<NabuESEventListener>("NabuESEvent");
+        this.dispatcher = new AsyncListenerDispatcher<>("NabuESEvent");
+        this.esThreadFactory = new NamedThreadFactory("ES Node");
     }
 
     @Override
     public void start() throws ComponentException {
         try {
-            this.esNode.start();
+
+            Thread esStarterThread = esThreadFactory.newThread(() -> {
+                synchronized (NodeClientImpl.this) {
+                    nodeSettingsBuilder = Settings.settingsBuilder()
+                            .put("path.home", config.getESHome())
+                            .put("http.enabled", config.isESHTTPEnabled()) // maybe serve HTTP requests
+                            .put("http.port", config.getESHTTPPort()) // maybe serve HTTP requests
+                            .put("node.master", false);
+
+                    config.getESNodeAttributes().forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
+
+                    nodeBuilder = NodeBuilder.nodeBuilder()
+                            .settings(nodeSettingsBuilder)
+                            .clusterName(config.getESClusterName())
+                            .data(false)
+                            .local(false)
+                            .client(true);
+
+                    this.esNode = this.nodeBuilder.build();
+
+                    esNode.start();
+                }
+            });
+            esStarterThread.start();
+            esStarterThread.join(ES_START_TIMEOUT);
         } catch (Exception e) {
             logger.error("Could not create the Nabu ES node", e);
             throw new ComponentException(true, e);

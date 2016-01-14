@@ -74,7 +74,7 @@ public class ThrottlePolicy implements MappedConfigObject<ThrottlePolicy> {
         }
 
         try {
-            maxBatchSize = ((Number)map.getOrDefault("target", DEFAULT_MAX_BATCH_SIZE)).intValue();
+            maxBatchSize = ((Number)map.getOrDefault("max_batch", DEFAULT_MAX_BATCH_SIZE)).intValue();
         } catch(ClassCastException cce) {
             maxBatchSize = DEFAULT_MAX_BATCH_SIZE;
             logger.warn("Could not read the max batch size for index policy" + theIndex + ", defaulting to " + writeTimeGoal, cce);

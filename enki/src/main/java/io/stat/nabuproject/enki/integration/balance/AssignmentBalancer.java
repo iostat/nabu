@@ -142,7 +142,7 @@ public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, A
             buckets.remove(oldBucket);
         }
 
-        logger.info("operateOnAD {} => {} ({})", oldBucket, newBucket, ad.getContext().getDescription());
+        logger.debug("operateOnAD {} => {} ({})", oldBucket, newBucket, ad.getContext().getDescription());
     }
 
     private Stream<AssignmentDelta.Builder<Context, Assignment>> streamAllBuckets() {
@@ -203,14 +203,14 @@ public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, A
 
         // nothing fancy, just a ceil division without floating casts)
         int idealTasksPerWorker = (totalAssignedAtStart / totalWorkers + (totalAssignedAtStart % totalWorkers == 0 ? 0 : 1));
-        logger.info("Step 1A: ideal {} ({}/{})", idealTasksPerWorker, totalAssignedAtStart, totalWorkers);
+        logger.debug("Step 1A: ideal {} ({}/{})", idealTasksPerWorker, totalAssignedAtStart, totalWorkers);
 
         //        1b) remove tasks from workers who have more than the average pre-existing-workload amount.
-        logger.info("Step 1B");
+        logger.debug("Step 1B");
         ArrayDeque<Assignment> pulledFromAboveIdeal = Queues.newArrayDeque();
         for(Map.Entry<Integer, Set<AssignmentDelta.Builder<Context, Assignment>>> entry : copyOfBuckets.entrySet()) {
             if(entry.getKey() > idealTasksPerWorker) {
-                logger.info("bucket with size {}", entry.getKey());
+                logger.debug("bucket with size {}", entry.getKey());
                 int toRemove = entry.getKey() - idealTasksPerWorker;
                 Set<AssignmentDelta.Builder<Context, Assignment>> copyOfBucket = ImmutableSet.copyOf(entry.getValue());
                 for(AssignmentDelta.Builder<Context, Assignment> adb : copyOfBucket) {
@@ -221,8 +221,8 @@ public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, A
                             pulledFromAboveIdeal.push(removed);
                             removedCount++;
                         }
-                        logger.info("{} || {} || {}", ad.getStartWeight(), ad.getToStart().size(), ad.getToStop().size());
-                        logger.info("ad => {}/{} ({})", removedCount, toRemove, adb.getContext().getDescription());
+                        logger.debug("{} || {} || {}", ad.getStartWeight(), ad.getToStart().size(), ad.getToStop().size());
+                        logger.debug("ad => {}/{} ({})", removedCount, toRemove, adb.getContext().getDescription());
                     });
                 }
             }
@@ -259,7 +259,7 @@ public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, A
         assert (totalLTIWGoalTasks == 0 && workersBelowIdeal == 0) || (workersBelowIdeal >= 1) : "Math has lost all meaning.";
 
         // sometimes you'll have an optimal distribution, in this case you can be sure
-        logger.info("Step 1C");
+        logger.debug("Step 1C");
         if(workersBelowIdeal != 0) {
             int targetTasksForLessLoadedWorkers = (totalLTIWGoalTasks / workersBelowIdeal + (totalLTIWGoalTasks % workersBelowIdeal == 0 ? 0 : 1));
             Set<AssignmentDelta.Builder<Context, Assignment>> keptLessLoadedBuckets = keptLessLoadedBucketsBuilder.build();
@@ -281,7 +281,7 @@ public class AssignmentBalancer<Context extends AssignmentContext<Assignment>, A
         // from this point on, we can work in a round-robin manner, wherein we just take the remaining tasks, and put them into a node
         // with the smallest amount of tasks assigned to it, but not backed by an immutable map, so we always have the closest packing
         // the only remaining tasks unassigned are tasks that were unassigned at the start of the rebalance.
-        logger.info("Step 1D");
+        logger.debug("Step 1D");
         ArrayDeque<Assignment> unassignedAsList = Queues.newArrayDeque(unassignedTasks);
         while(unassignedAsList.size() != 0) {
             Assignment nextUnassigned = unassignedAsList.pop();

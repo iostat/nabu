@@ -57,6 +57,8 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
     private final Thread shutdowner;
     private final AtomicBoolean shutdownStarted;
 
+    private final NamedThreadFactory nioThreadFactory;
+
     @Inject
     public ClientImpl(EnkiAddressProvider provider) {
         this.shouldAttemptReconnect = new AtomicBoolean(true);
@@ -67,8 +69,10 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
         this.wasEnkiSourcedConfigSet = false;
         this.enkiSourcedConfigs = ImmutableMap.of();
 
+        this.nioThreadFactory = new NamedThreadFactory("EnkiClientNIO");
+
         this.provider = new RetryTrackingAddressProvider(provider);
-        this.eventLoopGroup = new NioEventLoopGroup();
+        this.eventLoopGroup = new NioEventLoopGroup(0, nioThreadFactory);
         this.dispatcher = new EnkiClientEventDispatcher(this);
 
         this.dispatcher.addEnkiClientEventListener(this);
@@ -124,7 +128,7 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
 
             try {
                 this.clientChannel = bootstrap
-                        .connect(next.getAddress(), next.getPort())
+                        .connect(next.toInetSocketAddress())
                         .sync()
                         .channel();
 

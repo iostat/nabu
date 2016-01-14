@@ -6,12 +6,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
-import io.stat.nabuproject.nabu.common.IndexCommand;
-import io.stat.nabuproject.nabu.common.NabuCommand;
-import io.stat.nabuproject.nabu.common.UpdateCommand;
+import io.stat.nabuproject.nabu.common.command.NabuWriteCommand;
+import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -20,14 +18,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.elasticsearch.action.bulk.BulkItemResponse;
-import org.elasticsearch.action.bulk.BulkRequestBuilder;
-import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.index.IndexRequestBuilder;
-import org.elasticsearch.action.update.UpdateRequestBuilder;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.script.Script;
-import org.elasticsearch.script.ScriptService;
 
 import java.util.List;
 import java.util.Properties;
@@ -45,9 +35,9 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 final class SingleTPConsumer extends Component {
     /**
-     * The ESClient which we will use to perform our write ops
+     * The NabuCommand ES Writer we will be using to execute our logic.
      */
-    private final ESClient esClient;
+    private final NabuCommandESWriter esWriter;
 
     /**
      * The throttle policy that specifies target write time and max batch size
@@ -55,16 +45,10 @@ final class SingleTPConsumer extends Component {
     private final ThrottlePolicy throttlePolicy;
 
     /**
-     * The number of the Kafka partition to which to subscribe to
-     * for the topic specificed in the throttlePolicy
-     */
-    private final int partitionToSubscribe;
-
-    /**
      * The KafkaConsumer instance which does the heavy lifting of
      * dealing with Kafka
      */
-    private final KafkaConsumer<String, NabuCommand> consumer;
+    private final KafkaConsumer<String, NabuWriteCommand> consumer;
 
     /**
      * The current batch size, as adjusted based on performance
@@ -103,13 +87,12 @@ final class SingleTPConsumer extends Component {
     private final CountDownLatch readyLatch;
 
 
-    public SingleTPConsumer(ESClient esClient,
+    public SingleTPConsumer(NabuCommandESWriter esWriter,
                             ThrottlePolicy throttlePolicy,
                             int partitionToSubscribe,
                             KafkaBrokerConfigProvider config) {
-        this.esClient = esClient;
+        this.esWriter = esWriter;
         this.throttlePolicy = throttlePolicy;
-        this.partitionToSubscribe = partitionToSubscribe;
         this.targetTopicPartition = new TopicPartition(throttlePolicy.getTopicName(), partitionToSubscribe);
 
         this.currentBatchSize = new AtomicInteger(throttlePolicy.getMaxBatchSize());
@@ -135,14 +118,14 @@ final class SingleTPConsumer extends Component {
         try {
             consumer.assign(ImmutableList.of(targetTopicPartition));
             this.readyLatch.countDown();
-            List<NabuCommand> consumptionQueue = Lists.newArrayListWithExpectedSize(throttlePolicy.getMaxBatchSize());
+            List<NabuWriteCommand> consumptionQueue = Lists.newArrayListWithExpectedSize(throttlePolicy.getMaxBatchSize());
             long lastConsumedOffset;
             while(!isStopped.get()) {
-                ConsumerRecords<String, NabuCommand> thisPass = consumer.poll(300);
+                ConsumerRecords<String, NabuWriteCommand> thisPass = consumer.poll(300);
                 int consumed = 0;
                 lastConsumedOffset = -1;
                 int currentBatchLimit = currentBatchSize.get();
-                for(ConsumerRecord<String, NabuCommand> oneRecord : thisPass) {
+                for(ConsumerRecord<String, NabuWriteCommand> oneRecord : thisPass) {
                     consumed++;
                     consumptionQueue.add(oneRecord.value());
                     lastConsumedOffset = oneRecord.offset();
@@ -169,7 +152,7 @@ final class SingleTPConsumer extends Component {
      * @param consumptionQueue the list of records to consume
      * @param lastConsumedOffset the offset of the last record in the consumptionQueue
      */
-    private void writeAndFlush(List<NabuCommand> consumptionQueue, long lastConsumedOffset) {
+    private void writeAndFlush(List<NabuWriteCommand> consumptionQueue, long lastConsumedOffset) {
         if(consumptionQueue.size() != 0) {
             performWrite(consumptionQueue);
             consumer.commitSync(ImmutableMap.of(targetTopicPartition, new OffsetAndMetadata(lastConsumedOffset)));
@@ -177,67 +160,9 @@ final class SingleTPConsumer extends Component {
         }
     }
 
-    private void performWrite(List<NabuCommand> consumptionQueue) {
-        Client realClient = esClient.getESClient();
-        BulkRequestBuilder brb = realClient.prepareBulk();
-
-        for(NabuCommand c : consumptionQueue) {
-            if(c instanceof IndexCommand) {
-                IndexCommand ic = ((IndexCommand)c);
-                IndexRequestBuilder irb = realClient.prepareIndex();
-
-                irb.setIndex(ic.getIndex())
-                   .setSource(ic.getDocumentSource())
-                   .setType(ic.getDocumentType())
-                   .setRefresh(ic.shouldRefresh());
-
-                brb.add(irb);
-            } else if(c instanceof UpdateCommand) {
-                UpdateCommand uc = ((UpdateCommand)c);
-                UpdateRequestBuilder urb = realClient.prepareUpdate();
-
-                urb.setIndex(uc.getIndex())
-                   .setId(uc.getDocID())
-                   .setType(uc.getDocumentType())
-                   .setRefresh(uc.shouldRefresh())
-                   .setRetryOnConflict(5); // todo: configurable in ThrottlePolicy? or nah?
-
-                if(uc.hasUpdateScript()) {
-                    urb.setScript(new Script(
-                            uc.getUpdateScript(),
-                            ScriptService.ScriptType.INLINE,
-                            null,
-                            uc.getScriptParams()
-                    ));
-
-                    if(uc.hasUpsert()) {
-                        urb.setUpsert(uc.getDocumentSource());
-                    }
-                } else {
-                    urb.setDoc(uc.getDocumentSource());
-                    if(uc.hasUpsert()) {
-                        urb.setDocAsUpsert(true);
-                    }
-                }
-
-                brb.add(urb);
-            }
-        }
-
-        BulkResponse response = brb.execute().actionGet();
-        long reqTime = response.getTookInMillis();
-        logger.info("Bulk request took {} millis, and not a single fuck was given that day.", reqTime);
-        // todo: adjust batch size based on this somehow?
-
-        for(BulkItemResponse bir : response.getItems()) {
-            if(bir.isFailed()) {
-                logger.warn("[ES BULK WRITE FAILURE] {}/{}[{}] :: {}",
-                        bir.getIndex(),
-                        bir.getType(),
-                        bir.getId(),
-                        bir.getFailureMessage());
-            }
-        }
+    private void performWrite(List<NabuWriteCommand> consumptionQueue) {
+        long timeTaken = esWriter.bulkWrite(consumptionQueue);
+        logger.info("Write took {} ms", timeTaken);
     }
 
     @Override

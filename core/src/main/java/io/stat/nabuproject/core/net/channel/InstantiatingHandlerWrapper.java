@@ -2,6 +2,8 @@ package io.stat.nabuproject.core.net.channel;
 
 import io.netty.channel.ChannelHandler;
 
+import java.lang.reflect.Constructor;
+
 /**
  * A {@link FluentHandlerWrapper} which creates a new instance of a Class
  * every time it a handler is requested.
@@ -64,11 +66,36 @@ final class InstantiatingHandlerWrapper<T extends ChannelHandler, U> implements 
     
     @Override
     public T getHandler() throws Exception {
-        if(classInitArgs == null) {
-            return theClass.newInstance();
+        return makeInstance();
+//        if(classInitArgs == null) {
+//            return theClass.newInstance();
+//        } else {
+//            return theClass.getDeclaredConstructor(classInitArgTypes).newInstance(classInitArgs);
+//        }
+    }
+
+    private T makeInstance() throws Exception {
+        boolean useNullaryConstructor = classInitArgs == null || classInitArgs.length == 0;
+        Constructor<T> c;
+
+        if(useNullaryConstructor) {
+            c = theClass.getDeclaredConstructor();
         } else {
-            return theClass.getDeclaredConstructor(classInitArgTypes).newInstance(classInitArgs);
+            c = theClass.getDeclaredConstructor(classInitArgTypes);
         }
+
+        boolean wasAccessible = c.isAccessible();
+        c.setAccessible(true);
+
+        T instance;
+        if(useNullaryConstructor) {
+            instance = c.newInstance();
+        } else {
+            instance = c.newInstance(classInitArgs);
+        }
+
+        c.setAccessible(wasAccessible);
+        return instance;
     }
 
     @Override

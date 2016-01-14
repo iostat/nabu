@@ -9,7 +9,7 @@ root: ~/sr/nabuproject
 # socket_name: foo
 
 # Runs before everything. Use it to start daemons etc.
-# pre: sudo /etc/rc.d/mysqld start
+pre: ./gradlew :nabu:shadowJar
 
 # Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
 # pre_window: rbenv shell 2.0.0-p247
@@ -27,12 +27,15 @@ root: ~/sr/nabuproject
 # attach: false
 
 # Runs after everything. Use it to attach to tmux with custom options etc.
-# post: tmux -CC attach -t ezcluster
+# post: tmux -CC attach -t ez-nabu
 
 windows:
-  - nabu1: ./gradlew :nabu:run -Doverride.server.port=10041 
-  - nabu2: ./gradlew :nabu:run -Doverride.server.port=10042 
-  - nabu3: ./gradlew :nabu:run -Doverride.server.port=10043
-  - nabu4: ./gradlew :nabu:run -Doverride.server.port=10044
-  - nabu5: ./gradlew :nabu:run -Doverride.server.port=10045 
-  
+  - nabu1: java -Doverride.server.port=10041 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu2: java -Doverride.server.port=10042 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu3: java -Doverride.server.port=10043 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu4: java -Doverride.server.port=10044 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu5: java -Doverride.server.port=10045 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu6: java -Doverride.server.port=10046 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu7: java -Doverride.server.port=10047 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu8: java -Doverride.server.port=10048 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar
+  - nabu9: java -Doverride.server.port=10049 -jar nabu/build/libs/nabu-dev-0.1-SNAPSHOT-all.jar

@@ -1,5 +1,6 @@
-package io.stat.nabuproject.core.util;
+package io.stat.nabuproject.core.net;
 
+import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -7,8 +8,10 @@ import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.handler.codec.DecoderException;
 import lombok.experimental.UtilityClass;
 
+import java.io.Serializable;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
+import java.util.List;
 
 /**
  * Provides some helper functions for the network protocol that Nabu uses to communicate between
@@ -19,6 +22,8 @@ import java.nio.charset.Charset;
 @UtilityClass
 public class ProtocolHelper {
     private static final Charset UTF_8 = Charset.forName("UTF-8");
+    public static final String READ_STRING_NO_SIZE = "Don't have enough data available to determine a String length";
+    public static final String READ_STRING_TOO_SHORT = "Don't have enough data to read the whole string";
 
     /**
      * Converts a {@link String} into a series of bytes that can be reconstructed
@@ -32,6 +37,7 @@ public class ProtocolHelper {
 
         out.writeInt(size);
         out.writeBytes(encodedString);
+        encodedString.release();
     }
 
     /**
@@ -44,19 +50,22 @@ public class ProtocolHelper {
      */
     public static String readStringFromByteBuf(ByteBuf in) throws DecoderException {
         if(in.readableBytes() < 4) {
-            throw new DecoderException("Don't have enough data available to determine a String length");
+            throw new DecoderException(READ_STRING_NO_SIZE);
         }
 
         int size = in.readInt();
 
         if(in.readableBytes() < size) {
-            throw new DecoderException("Don't have enough data to read the whole string");
+            throw new DecoderException(READ_STRING_TOO_SHORT);
         }
 
         ByteBuf stringBuf = Unpooled.buffer();
         in.readBytes(stringBuf, size);
 
-        return stringBuf.toString(UTF_8);
+        String ret = stringBuf.toString(UTF_8);
+        stringBuf.release();
+
+        return ret;
     }
 
     /**
@@ -72,5 +81,25 @@ public class ProtocolHelper {
         buffer.release();
 
         return dest;
+    }
+
+    /**
+     * Write a Serializable into a ByteBuf, using {@link ObjectEncoderExposer}
+     * @param o the Serializable to write
+     * @param dest the ByteBuf to write to
+     * @throws Exception if any Exception bubbled up from {@link ObjectEncoderExposer}
+     */
+    public static void writeSerializableToByteBuf(Serializable o, ByteBuf dest) throws Exception {
+        new ObjectEncoderExposer().exposeEncode(null, o, dest);
+    }
+
+    public static <T extends Serializable> T readSerializableFromByteBuf(ByteBuf in) throws Exception {
+        List<Object> out = Lists.newArrayList(2);
+        new ObjectDecoderExposer().exposeDecode(null, in, out);
+
+
+        //noinspection unchecked assuming this is used properly, the cast shouldnt be an issue
+        return (T) out.get(1);
+        // the real issue is why exposeDecode starts at index 1 :/
     }
 }

@@ -1,6 +1,6 @@
 package io.stat.nabuproject.nabu.kafka;
 
-import io.stat.nabuproject.nabu.common.NabuCommand;
+import io.stat.nabuproject.nabu.common.command.NabuCommand;
 import io.stat.nabuproject.nabu.protocol.CommandEncoder;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;
@@ -8,11 +8,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.util.Map;
 
 /**
- * A Kafka serializer for NabuCommands.
+ * A Kafka serializer for {@link NabuCommand}s.
  * For any writes that Nabu throws into a throttle queue, we just
- * throw the raw NabuCommand into Kafka to save a bit on the performance cost
+ * throw the raw NabuWriteCommand into Kafka to save a bit on the performance cost
  * of storing the command in some intermedia representation. Also, this class is effectively
- * a proxy for a NabuCommand serializer.
+ * a proxy for a NabuWriteCommand serializer.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
@@ -30,7 +30,7 @@ public class NabuCommandKafkaSerializer implements Serializer<NabuCommand> {
             else
                 return new CommandEncoder().performEncode(data);
         } catch (Exception e) {
-            throw new SerializationException("Error when serializing NabuCommand to byte[]", e);
+            throw new SerializationException("Error when serializing NabuWriteCommand to byte[]", e);
         }
     }
 

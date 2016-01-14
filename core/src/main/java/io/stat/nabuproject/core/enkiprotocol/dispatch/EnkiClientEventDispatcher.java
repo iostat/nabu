@@ -75,7 +75,7 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
 
     @Override
     public boolean onTaskAssigned(EnkiConnection enki, EnkiAssign packet) {
-        logger.info("onTaskAssigned({}, {})", enki, packet);
+        logger.debug("onTaskAssigned({}, {})", enki, packet);
         dispatcher.dispatchListenerCallbacks(
                 listener -> listener.onTaskAssigned(enki, packet),
                 new AckOrDieCRC("onTaskAssigned", enki, packet));
@@ -84,7 +84,7 @@ public final class EnkiClientEventDispatcher extends Component implements EnkiCl
 
     @Override
     public boolean onTaskUnassigned(EnkiConnection enki, EnkiUnassign packet) {
-        logger.info("onTaskUnassigned({}, {})", enki, packet);
+        logger.debug("onTaskUnassigned({}, {})", enki, packet);
         dispatcher.dispatchListenerCallbacks(
                 listener -> listener.onTaskUnassigned(enki, packet),
                 new AckOrDieCRC("onTaskUnassigned", enki, packet));

@@ -6,55 +6,38 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.CorruptedFrameException;
-import io.stat.nabuproject.core.util.ProtocolHelper;
-import io.stat.nabuproject.nabu.common.NabuCommand;
-import io.stat.nabuproject.nabu.common.NabuCommandType;
-import org.apache.kafka.common.errors.SerializationException;
+import io.stat.nabuproject.core.net.ProtocolHelper;
+import io.stat.nabuproject.nabu.common.command.IdentifyCommand;
+import io.stat.nabuproject.nabu.common.command.IndexCommand;
+import io.stat.nabuproject.nabu.common.command.NabuCommand;
+import io.stat.nabuproject.nabu.common.command.UpdateCommand;
 
+import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Decodes data received from the network into {@link NabuCommand}s which was encoded by
  * {@link CommandEncoder} on the other end.
  */
 public class CommandDecoder extends ByteToMessageDecoder {
-    private static class NabuBaseCommand extends NabuCommand {
-
-        public NabuBaseCommand(String index, String documentType, boolean shouldUpdate) {
-            super(index, documentType, shouldUpdate);
-        }
-
-        @Override
-        public NabuCommandType getType() {
-            throw new IllegalStateException("What have you done.");
-        }
-    }
-
     public NabuCommand performDecode(byte[] in) throws Exception {
-        ByteBuf inByteBuf = Unpooled.copiedBuffer(in);
-        List<Object> out = Lists.newArrayList();
-        decode(null, inByteBuf, out);
+        ByteBuf slurped = Unpooled.wrappedBuffer(in);
+        List<Object> out = Lists.newArrayList(1);
+        decode(null, slurped, out);
 
-        if(out.size() != 1) {
-            throw new SerializationException("Received more than one object back from decode(), which should never happen");
-        }
-
-        Object first = out.get(0);
-
-        if(!(first instanceof NabuCommand)) {
-            throw new SerializationException("Received something other than a NabuCommand back from decode(), which should never happen");
-        }
-
-        return ((NabuCommand) first);
+        slurped.release();
+        return ((NabuCommand)out.get(0));
     }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         // At the very least we need at least 7 bytes to be readable
         // 2 bytes MAGIC (short)
-        // 1 byte type (NabuCommandType)
+        // 1 byte type (Type)
+        // 8 bytes sequence (long)
         // and 4 bytes dataLength (int)
-        if(in.readableBytes() < 7) {
+        if(in.readableBytes() < 15) {
             return;
         }
 
@@ -68,22 +51,50 @@ public class CommandDecoder extends ByteToMessageDecoder {
                     + " but expected" + NabuCommand.MAGIC_HEX_STRING);
         }
 
-        NabuCommandType commandType = NabuCommandType.ofCode(in.readByte());
+        NabuCommand.Type commandType = NabuCommand.Type.ofCode(in.readByte());
+        long sequence = in.readLong();
         int restOfDataLength = in.readInt();
 
-        // wait until all the data is available
-        if(in.readableBytes() < restOfDataLength) {
-            in.resetReaderIndex();
+        if(restOfDataLength == 0) {
+            out.add(makeSimpleCommand(commandType, sequence));
             return;
+        } else {
+            // wait until all the data is available
+            if(in.readableBytes() < restOfDataLength) {
+                in.resetReaderIndex();
+                return;
+            }
+
+            boolean shouldRefresh = in.readBoolean();
+            String indexName = ProtocolHelper.readStringFromByteBuf(in);
+            String documentType = ProtocolHelper.readStringFromByteBuf(in);
+            String documentID = ProtocolHelper.readStringFromByteBuf(in);
+            String documentSource = ProtocolHelper.readStringFromByteBuf(in);
+
+            if(commandType == NabuCommand.Type.INDEX) {
+                out.add(new IndexCommand(sequence, indexName, documentType, documentID, documentSource, shouldRefresh));
+                return;
+            } else if(commandType == NabuCommand.Type.UPDATE) {
+                boolean hasUpsert = in.readBoolean();
+                boolean hasUpdateScript = in.readBoolean();
+                String updateScript = ProtocolHelper.readStringFromByteBuf(in);
+                Map<String, Serializable> scriptParams = ProtocolHelper.readSerializableFromByteBuf(in);
+
+                out.add(new UpdateCommand(sequence, indexName, documentType, documentID, documentSource,
+                        shouldRefresh, updateScript, scriptParams, hasUpsert, hasUpdateScript));
+                return;
+            } else {
+                throw new UnsupportedOperationException("Don't know how to decode NabuWriteCommand of type " + commandType.toString() + "!");
+            }
         }
 
-        boolean shouldUpdateIndex = (in.readByte() == 1);
-        String indexName = ProtocolHelper.readStringFromByteBuf(in);
-        String documentType = ProtocolHelper.readStringFromByteBuf(in);
+    }
 
-        NabuBaseCommand base = new NabuBaseCommand(indexName, documentType, shouldUpdateIndex);
-        NabuCommand fullCommand = CommandSerializers.deserialize(in, base, commandType);
-
-        out.add(fullCommand);
+    private NabuCommand makeSimpleCommand(NabuCommand.Type commandType, long sequence) throws Exception {
+        if(commandType == NabuCommand.Type.IDENTIFY) {
+            return new IdentifyCommand(sequence);
+        } else {
+            throw new UnsupportedOperationException("Don't know how to decode NabuCommand of type " + commandType.toString() + "!");
+        }
     }
 }

@@ -177,7 +177,7 @@ class ConnectionImpl implements NabuConnection {
         dispatchPacket(new EnkiRedirect(assignSequence(), ap.getAddress(), ap.getPort()))
             .thenAcceptAsync($$$$$$ -> {
                 logger.info("acceptored");
-                killConnection(true);
+                leaveGracefully();
             });
     }
 

@@ -5,7 +5,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.stat.nabuproject.Version;
 import io.stat.nabuproject.core.net.AddressPort;
-import io.stat.nabuproject.core.util.ProtocolHelper;
+import io.stat.nabuproject.core.net.ProtocolHelper;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
