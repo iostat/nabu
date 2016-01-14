@@ -1,0 +1,20 @@
+project(":client_test") {
+    group 'io.stat.nabuproject'
+    version '0.1-SNAPSHOT'
+
+    apply(plugin: 'application')
+    mainClassName = 'io.stat.nabuproject.client_test.Main'
+
+    dependencies {
+        compile(project(':nabu'))
+    }
+
+    run {
+        if (project.hasProperty('args')) {
+            args project.args.split('\\s+')
+        }
+
+        systemProperties System.properties
+    }
+}
+
