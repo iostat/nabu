@@ -20,7 +20,7 @@ An intelligent ElasticSearch throttling and load distribution system.
 * An Oracle JVM
 * Gradle (we use the wrapper set to 2.10)
 * An Elasticsearch cluster (single instance is fine)
-* A Kafka cluster (single instance also fine)
+* A Kafka 0.9.0.0+ cluster (single instance also fine)
 * `$PWD` environment variable set. If you're running from shell it's fine, if you're running from IDEA, the bundled
 example configuration files will now work.
 

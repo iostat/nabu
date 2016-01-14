@@ -25,33 +25,6 @@ allprojects {
         mavenLocal()
         mavenCentral()
     }
-
-
-    task docs(type: Javadoc) {
-        source (subprojects.collect
-                {project -> project.sourceSets.main.allJava })
-
-        classpath = (files(subprojects.collect
-                {project -> project.sourceSets.main.compileClasspath}))
-        destinationDir = new File(projectDir, 'docs')
-
-        // cause there are some sneaky throws, and weird lombok annotations
-        // and JDK8's doclint is suuuuuuper strict
-        failOnError = false
-
-        // link to standard javadocs where needed
-        // and ES docs
-        // and probably kafka
-        // and guice
-        options.setLinks(["https://docs.oracle.com/javase/8/docs/api/",
-                          "https://google.github.io/guice/api-docs/4.0/javadoc/",
-                          "https://google.github.io/guava/releases/19.0/api/docs/",
-                          "http://javadoc.kyubu.de/elasticsearch/v2.1.0/",
-                          "http://kafka.apache.org/082/javadoc/"
-        ])
-
-        options.author = true
-    }
 }
 
 subprojects {
@@ -101,4 +74,30 @@ subprojects {
 
         mergeServiceFiles()
     }
+}
+
+task docs(type: Javadoc) {
+    source (subprojects.collect
+            {project -> project.sourceSets.main.allJava })
+
+    classpath = (files(subprojects.collect
+            {project -> project.sourceSets.main.compileClasspath}))
+    destinationDir = new File(projectDir, 'docs')
+
+    // cause there are some sneaky throws, and weird lombok annotations
+    // and JDK8's doclint is suuuuuuper strict
+    failOnError = false
+
+    // link to standard javadocs where needed
+    // and ES docs
+    // and probably kafka
+    // and guice
+    options.setLinks(["https://docs.oracle.com/javase/8/docs/api/",
+                      "https://google.github.io/guice/api-docs/4.0/javadoc/",
+                      "https://google.github.io/guava/releases/19.0/api/docs/",
+                      "http://javadoc.kyubu.de/elasticsearch/v2.1.0/",
+                      "http://kafka.apache.org/082/javadoc/"
+    ])
+
+    options.author = true
 }

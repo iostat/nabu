@@ -2,5 +2,5 @@ rootProject.name = 'nabuproject'
 include 'core'
 include 'enki'
 include 'nabu'
-include 'client_test'
+include 'client-test'
 

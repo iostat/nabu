@@ -1,4 +1,4 @@
-project(":client_test") {
+project(":client-test") {
     group 'io.stat.nabuproject'
     version '0.1-SNAPSHOT'
 
@@ -7,14 +7,6 @@ project(":client_test") {
 
     dependencies {
         compile(project(':nabu'))
-    }
-
-    run {
-        if (project.hasProperty('args')) {
-            args project.args.split('\\s+')
-        }
-
-        systemProperties System.properties
     }
 }
 
