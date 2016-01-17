@@ -37,7 +37,7 @@ import static io.stat.nabuproject.core.util.functional.FunMath.lt;
 import static io.stat.nabuproject.core.util.functional.FunMath.negate;
 /**
  * A leader election implementation using ZooKeeper.
- * One should not that due to the way the idiomatic ZooKeeper leader election strategy is
+ * Due to the way the idiomatic ZooKeeper leader election strategy is
  * designed, this implementation will never quite report the "true leader". Rather, it will report
  * the node in front of it for ascension to leadership. Every a time an Enki reconnects to the
  * cluster, it will get put in the back of the line. Even if nabus round-robin their connections to

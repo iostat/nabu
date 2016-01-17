@@ -22,14 +22,16 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
     private final @Getter ResettableCountDownLatch startupSynchronizer;
     private final AtomicReference<NabuConnectionFailedException> failureReason;
     private final AtomicReference<Channel> clientChannel;
-    private final Map<Long, CompletableFuture<NabuResponse>> promises;
+    private final Map<Long, NabuClientFuture> promises;
     private final NabuClient highLevelClient;
+    private final AtomicReference<NabuClientIO> ncio;
 
 
     NabuClientConnectionState(NabuClient highLevelClient) {
         this.highLevelClient = highLevelClient;
+        this.ncio = new AtomicReference<>(null);
 
-        this.connectionState = new AtomicReference<NCCState>(NCCState.INITIALIZED);
+        this.connectionState = new AtomicReference<>(NCCState.INITIALIZED);
         this.connectorThread = new AtomicReference<>(null);
         this.startupSynchronizer = new ResettableCountDownLatch(1);
         this.failureReason = new AtomicReference<>(null);
@@ -119,11 +121,12 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
             }
         }
 
-        synchronized (this) {
-            setConnectionState(NCCState.DISCONNECTED);
+        if(!isShuttingDown()) {
+            synchronized (this) {
+                setConnectionState(NCCState.DISCONNECTED);
+            }
+            highLevelClient.disconnect();
         }
-
-        highLevelClient.disconnect();
     }
 
     @Override
@@ -132,6 +135,35 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
             logger.error("Nabu failed the identification test. {} != {}", expectedClusterName, remoteClusterName);
             setConnectionState(NCCState.RETRYING);
             getStartupSynchronizer().countDown();
+        }
+    }
+
+    @Override
+    public void setClientIO(NabuClientIO ncio) {
+        synchronized (this) {
+            this.ncio.set(ncio);
+        }
+    }
+
+    NabuClientIO getNCIO() {
+        return ncio.get();
+    }
+
+    NabuClientFuture executePreparedCommand(WriteCommandBuilder wcb) throws NabuClientDisconnectedException {
+        if(getConnectionState() != NCCState.RUNNING) {
+            throw new NabuClientDisconnectedException("The client is not connected to Nabu and thus cannot send commands.");
+        }
+
+        synchronized (this) {
+            NabuClientIO ncio = getNCIO();
+            long sequence = ncio.assignNextSequence();
+
+            NabuClientFuture futureForCommand = new NabuClientFuture(sequence);
+
+            promises.put(sequence, futureForCommand);
+            ncio.dispatchCommand(wcb.build(sequence));
+
+            return futureForCommand;
         }
     }
 }

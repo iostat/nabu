@@ -7,8 +7,8 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.net.AddressPort;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
 import io.stat.nabuproject.core.util.Tuple;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
 import lombok.EqualsAndHashCode;
@@ -108,6 +108,9 @@ class NodeClientImpl extends ESClient {
                             .put("node.master", false);
 
                     config.getESNodeAttributes().forEach((k, v) -> nodeSettingsBuilder.put("node."+ k, v));
+
+                    // need to coer
+                    config.getAdditionalESProperties().forEach((k, v) -> nodeSettingsBuilder.put(k, v));
 
                     nodeBuilder = NodeBuilder.nodeBuilder()
                             .settings(nodeSettingsBuilder)

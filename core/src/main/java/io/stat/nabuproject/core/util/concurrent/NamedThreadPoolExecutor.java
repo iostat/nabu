@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.util;
+package io.stat.nabuproject.core.util.concurrent;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.SynchronousQueue;

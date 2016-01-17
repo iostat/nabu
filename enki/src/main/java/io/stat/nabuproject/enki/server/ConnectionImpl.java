@@ -23,7 +23,7 @@ import io.stat.nabuproject.core.net.ConnectionLostException;
 import io.stat.nabuproject.core.net.NodeLeavingException;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.server.dispatch.NabuConnectionListener;
 import lombok.Synchronized;

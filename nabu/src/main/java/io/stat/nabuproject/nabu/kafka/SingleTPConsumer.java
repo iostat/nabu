@@ -3,12 +3,13 @@ package io.stat.nabuproject.nabu.kafka;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Queues;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.nabu.common.command.NabuWriteCommand;
+import io.stat.nabuproject.nabu.elasticsearch.ESWriteResults;
 import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -19,7 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
-import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +36,13 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 final class SingleTPConsumer extends Component {
+    private static final long FLUSH_INTERVAL = 5000; // todo: remember that whole tunable thing? Pepperidge Farms remembers!
+    private static final String WAKEUP_INSIDE_UNSTOPPED_CONSUMER_WHILE_WRITING =
+            "A WakeupException was thrown INSIDE the consumer loop. A replay scenario may occur the next time " +
+            "this TopicPartition is consumed.";
+    private static final String WAKEUP_INSIDE_UNSTOPPED_CONSUMER_NOT_WRITING =
+            "A WakeupException was thrown INSIDE the consumer loop. However, the consumer was not in the process of writing " +
+                    "and a replay scenario is unlikely.";
     /**
      * The NabuCommand ES Writer we will be using to execute our logic.
      */
@@ -66,6 +75,13 @@ final class SingleTPConsumer extends Component {
     private final Thread consumerThread;
 
     /**
+     * When shutting down, this thread starts and waits for wakeupLatch to trip.
+     * The consumerThread checks whether the isStopped flag is set at the start of every
+     * consumption round, and if it is, trips wakeupLatch and exits out of the consumer loop.
+     */
+    private final Thread consumerWakeupWait;
+
+    /**
      * A human-readable indentifier for this instance of SingleTPConsumer
      */
     private final String friendlyTPString;
@@ -85,6 +101,13 @@ final class SingleTPConsumer extends Component {
      * Used to make starting this consumer synchronous
      */
     private final CountDownLatch readyLatch;
+
+    /**
+     * Used to wait for a WriteAndFlush operation to finish before waking the Kafka consumer
+     * when shutting down. This ensures that the latest consumed offsets are sync'd to kafka to prevent
+     * a double-write/double-update scenario.
+     */
+    private final CountDownLatch wakeupLatch;
 
 
     public SingleTPConsumer(NabuCommandESWriter esWriter,
@@ -112,57 +135,115 @@ final class SingleTPConsumer extends Component {
         this.consumerThread.setName(this.friendlyTPString);
 
         this.readyLatch = new CountDownLatch(1);
+        this.wakeupLatch = new CountDownLatch(1);
+
+        this.consumerWakeupWait = new Thread(() -> {
+            try {
+                this.wakeupLatch.await();
+            } catch (Exception e) {
+                logger.error("An exception was thrown while waiting for the consumer to acknowledge its shutdown. " +
+                        "You may have a replay scenario occur when this TopicPartition starts being consumed again.", e);
+
+            }
+        });
+        this.consumerWakeupWait.setName(this.friendlyTPString + "-FinishConsumeWait");
     }
 
     private void runConsumer() {
+        boolean isInWriteAndFlush = false;
         try {
             consumer.assign(ImmutableList.of(targetTopicPartition));
             this.readyLatch.countDown();
-            List<NabuWriteCommand> consumptionQueue = Lists.newArrayListWithExpectedSize(throttlePolicy.getMaxBatchSize());
+            ArrayDeque<ConsumerRecord<String,NabuWriteCommand>> consumptionBacklog = Queues.newArrayDeque();
+            ArrayDeque<NabuWriteCommand> immediateConsumptionQueue = new ArrayDeque<>(throttlePolicy.getMaxBatchSize() * 4);
             long lastConsumedOffset;
-            while(!isStopped.get()) {
-                ConsumerRecords<String, NabuWriteCommand> thisPass = consumer.poll(300);
+            while(!isStopped.get() || !consumptionBacklog.isEmpty()) { // items in the backlog can preempt stopping the consumer, see explanation below
                 int consumed = 0;
-                lastConsumedOffset = -1;
                 int currentBatchLimit = currentBatchSize.get();
-                for(ConsumerRecord<String, NabuWriteCommand> oneRecord : thisPass) {
-                    consumed++;
-                    consumptionQueue.add(oneRecord.value());
-                    lastConsumedOffset = oneRecord.offset();
+                long now = System.currentTimeMillis();
+                long flushTimeout = nextFlushTime.get();
+                long startOffset = Long.MIN_VALUE;   // todo: does Kafka reserve this for anything/should i use a bool?
+                lastConsumedOffset = Long.MIN_VALUE; // todo: ditto
 
-                    if(consumed == currentBatchLimit || System.currentTimeMillis() >= nextFlushTime.get()) {
-                        writeAndFlush(consumptionQueue, lastConsumedOffset);
-                        consumed = 0;
+                if(!consumptionBacklog.isEmpty()) {
+                    startOffset = consumptionBacklog.peek().offset();
+                    Iterator<ConsumerRecord<String, NabuWriteCommand>> backlogIterator = consumptionBacklog.iterator();
+                    while(backlogIterator.hasNext() && consumed < currentBatchLimit) {
+                        ConsumerRecord<String, NabuWriteCommand> cr = backlogIterator.next();
+                        immediateConsumptionQueue.addLast(cr.value());
+                        lastConsumedOffset = cr.offset();
+                        backlogIterator.remove();
+                        consumed++;
+                    }
+
+                    logger.info("Had backlog, consumed {}, {} remaining in backlog.", consumed, immediateConsumptionQueue.size());
+                }
+
+                // if we cleared the backlog but still have room or time for more...
+                // AND we're not stopping. this is important because if we ever want to reuse consumer objects,
+                // we still want the loop to run and flush the backlog, but not grow it..
+                while(consumed < currentBatchLimit && System.currentTimeMillis() < flushTimeout && !isStopped.get()) {
+                    long pollTimeout = 200; // todo: figure out the math behind this and how it relates to nextFlushTime and targetTime
+                    ConsumerRecords<String, NabuWriteCommand> thisPass = consumer.poll(pollTimeout);
+
+                    if(startOffset == Long.MIN_VALUE && thisPass.count() > 0) {
+                        startOffset = thisPass.records(targetTopicPartition).get(0).offset();
+                    }
+
+                    // add as many records as we can fit into the queue.
+                    Iterator<ConsumerRecord<String, NabuWriteCommand>> thisPassIterator = thisPass.iterator();
+                    while(thisPassIterator.hasNext() && consumed < currentBatchLimit) {
+                        ConsumerRecord<String, NabuWriteCommand> cr = thisPassIterator.next();
+                        immediateConsumptionQueue.addLast(cr.value());
+                        lastConsumedOffset = cr.offset();
+                        consumed++;
+                    }
+
+                    // put everything else into the backlog to be picked up again before the next poll.
+                    if(thisPassIterator.hasNext()) {
+                        while(thisPassIterator.hasNext()) {
+                            consumptionBacklog.addLast(thisPassIterator.next());
+                        }
                     }
                 }
-                // we ran out of records on this poll loop, flush anything that's left, if necessary
-                writeAndFlush(consumptionQueue, lastConsumedOffset);
+
+                if(consumed != 0) {
+                    isInWriteAndFlush = true;
+                    writeCommitAndAdjust(immediateConsumptionQueue, startOffset, lastConsumedOffset);
+                    immediateConsumptionQueue.clear();
+                    isInWriteAndFlush = false;
+                }
+
+                // todo: adjust nextFlushTime here as needed
+                nextFlushTime.set(System.currentTimeMillis() + FLUSH_INTERVAL);
             }
         } catch(WakeupException e) {
+            String messageToUse = isInWriteAndFlush ? WAKEUP_INSIDE_UNSTOPPED_CONSUMER_WHILE_WRITING : WAKEUP_INSIDE_UNSTOPPED_CONSUMER_NOT_WRITING;
             if(!isStopped.get()) {
-                throw e;
+                logger.error(messageToUse, e);
             }
         } finally {
             this.consumer.close();
+            this.wakeupLatch.countDown();
         }
     }
 
     /**
-     * Processes consumptionQueue by calling {@link SingleTPConsumer#performWrite(List)}, and commits lastConsumedOffset to Kafka
+     * Processes consumptionQueue by delegating to the {@link SingleTPConsumer#esWriter}, and commits lastConsumedOffset to Kafka.
+     * Then recomputes the batch size and next flush time as needed based on the performance of the write.
      * @param consumptionQueue the list of records to consume
      * @param lastConsumedOffset the offset of the last record in the consumptionQueue
      */
-    private void writeAndFlush(List<NabuWriteCommand> consumptionQueue, long lastConsumedOffset) {
-        if(consumptionQueue.size() != 0) {
-            performWrite(consumptionQueue);
+    private void writeCommitAndAdjust(ArrayDeque<NabuWriteCommand> consumptionQueue, long startedWithOffset, long lastConsumedOffset) {
+        int qsize = consumptionQueue.size();
+        if(qsize != 0) {
+            ESWriteResults res = esWriter.bulkWrite(consumptionQueue);
+            logger.debug("Bulk write: {}", res);
             consumer.commitSync(ImmutableMap.of(targetTopicPartition, new OffsetAndMetadata(lastConsumedOffset)));
-            consumptionQueue.clear();
-        }
-    }
+            logger.info("{}=>{} ({} docs)", startedWithOffset, lastConsumedOffset, qsize);
 
-    private void performWrite(List<NabuWriteCommand> consumptionQueue) {
-        long timeTaken = esWriter.bulkWrite(consumptionQueue);
-        logger.info("Write took {} ms", timeTaken);
+            // todo: adjust currentBatchSize here based on res
+        }
     }
 
     @Override
@@ -175,7 +256,16 @@ final class SingleTPConsumer extends Component {
     @Override
     public void shutdown() throws ComponentException {
         this.isStopped.set(true);
-        this.consumer.wakeup();
+
+        this.consumerWakeupWait.start();
+
+        try {
+            this.consumerWakeupWait.join(120000); // a generous 2 minutes to allow one final poll, consume, flush and sync and exit.
+        } catch (InterruptedException e) {
+            logger.error("ConsumerWakeupWait was interrupted while trying to shut down the consumer loop.", e);
+        } finally {
+            this.consumer.wakeup();
+        }
 
         boolean joined = false;
         int attempts = 1;

@@ -10,12 +10,14 @@ import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequestBuilder;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.update.UpdateRequestBuilder;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptService;
 
-import java.util.List;
+import java.util.ArrayDeque;
 
 /**
  * The canonical implementation of {@link NabuCommandESWriter}
@@ -25,6 +27,7 @@ import java.util.List;
 @Slf4j
 class CommandWriterImpl implements NabuCommandESWriter {
     private final ESClient esClient;
+    private static final ESWriteResults GENERIC_FAIL = new ESWriteResults(false, -1);
 
     @Inject
     public CommandWriterImpl(ESClient esClient) {
@@ -32,28 +35,31 @@ class CommandWriterImpl implements NabuCommandESWriter {
     }
 
     @Override
-    public long singleWrite(NabuWriteCommand nwc) {
+    public ESWriteResults singleWrite(NabuWriteCommand nwc) {
         Client realClient = esClient.getESClient();
         if(nwc instanceof IndexCommand) {
             IndexRequestBuilder irb = ic2irb(realClient, (IndexCommand) nwc);
 
             // todo: error checking. profiling.
-            long start = System.currentTimeMillis();
-            irb.execute().actionGet();
-            return System.currentTimeMillis() - start;
+            long start = System.nanoTime();
+            IndexResponse done = irb.execute().actionGet();
+            long end = System.nanoTime() - start;
+
+            return new ESWriteResults(done.isCreated(), end);
         } else if (nwc instanceof UpdateCommand) {
             UpdateRequestBuilder urb = uc2urb(realClient, (UpdateCommand) nwc);
 
             // todo: ditto
-            long start = System.currentTimeMillis();
-            urb.execute().actionGet();
-            return System.currentTimeMillis() - start;
+            long start = System.nanoTime();
+            UpdateResponse done = urb.execute().actionGet();
+            long end = System.nanoTime() - start;
+            return new ESWriteResults(done.isCreated(), end);
         }
-        return 0;
+        return GENERIC_FAIL;
     }
 
     @Override
-    public long bulkWrite(List<NabuWriteCommand> commands) {
+    public ESWriteResults bulkWrite(ArrayDeque<NabuWriteCommand> commands) {
         Client realClient = esClient.getESClient();
         BulkRequestBuilder brb = realClient.prepareBulk();
 
@@ -69,8 +75,8 @@ class CommandWriterImpl implements NabuCommandESWriter {
 
         BulkResponse response = brb.execute().actionGet();
         long reqTime = response.getTookInMillis();
-        logger.info("Bulk request took {} millis, and not a single fuck was given that day.", reqTime);
-        // todo: adjust batch size based on this somehow?
+
+        int failures = 0;
 
         for(BulkItemResponse bir : response.getItems()) {
             if(bir.isFailed()) {
@@ -79,10 +85,16 @@ class CommandWriterImpl implements NabuCommandESWriter {
                         bir.getType(),
                         bir.getId(),
                         bir.getFailureMessage());
+                failures++;
             }
         }
 
-        return reqTime;
+        // totally a good heuristic... right?
+        if(failures > commands.size() / 2) {
+            return new ESWriteResults(false, reqTime*1000);
+        } else {
+            return new ESWriteResults(true, reqTime*1000);
+        }
     }
 
     private IndexRequestBuilder ic2irb(Client client, IndexCommand ic) {

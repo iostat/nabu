@@ -14,4 +14,5 @@ public interface ESConfigProvider {
     int getESHTTPPort();
 
     Map<String, String> getESNodeAttributes();
+    Map<String, String> getAdditionalESProperties();
 }

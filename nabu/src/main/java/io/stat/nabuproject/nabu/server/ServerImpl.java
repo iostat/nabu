@@ -5,6 +5,7 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LoggingHandler;
@@ -13,8 +14,9 @@ import io.stat.nabuproject.core.elasticsearch.ESConfigProvider;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import io.stat.nabuproject.nabu.protocol.CommandDecoder;
+import io.stat.nabuproject.nabu.protocol.Limits;
 import io.stat.nabuproject.nabu.protocol.ResponseEncoder;
 import io.stat.nabuproject.nabu.router.CommandRouter;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +66,7 @@ class ServerImpl extends NabuServer {
                         .addHandler(ResponseEncoder.class)
                         .addHandler(CommandDecoder.class)
                         .addHandler(NabuCommandInboundHandler.class,
-                                new Object[]{ esConfigProvider,       commandRouter},
+                                new Object[]{ esConfigProvider,       this.commandRouter},
                                 new Class[] { ESConfigProvider.class, CommandRouter.class });
     }
 
@@ -73,6 +75,9 @@ class ServerImpl extends NabuServer {
         bootstrap.group(acceptorGroup, workerGroup)
          .channel(NioServerSocketChannel.class)
          .option(ChannelOption.TCP_NODELAY, true) // the nabu protocol is tiny. John Nagle is not our friend.
+         .option(ChannelOption.SO_RCVBUF, Limits.BUFFER_LIMIT)
+         .option(ChannelOption.SO_SNDBUF, Limits.BUFFER_LIMIT)
+         .option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(Limits.BUFFER_LIMIT))
          .handler(new LoggingHandler())
          .childHandler(channelInitializer);
 

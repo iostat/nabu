@@ -30,6 +30,8 @@ public class ZKLeaderElectionModule extends AbstractModule {
 
     @Override
     protected void configure() {
+        bind(LeaderEventSource.class).to(EnkiLeaderElector.class);
+
         bind(ZKLeaderImpl.class).in(Singleton.class);
         bind(ZKLeaderProvider.class).to(ZKLeaderImpl.class);
         bind(EnkiLeaderElector.class).to(ZKLeaderImpl.class);

@@ -19,15 +19,6 @@ enki:
   #
   # REQUIRED
   es:
-    # Whether or not to use the "license" plugin.
-    #
-    # Basically, what will happen is, if any masters have the license plugin, the client node
-    # won't be able to discover them unless it also has it. However, if the masters join AFTER the client
-    # is listening for Zen discovery, everything will work.
-    #
-    # REQUIRED (because gg elastic)
-    use_license: true
-
     # ES path.* keys.
     #
     # REQUIRED for at least path.home
@@ -72,6 +63,16 @@ enki:
       # OPTIONAL
       # port: 19216
 
+    # Anything else you want to throw into ES.
+    # Please limit to simple property.name.like.this.if.nested: "always string values"
+    # as there is basically no type checking or flattening, and ES's NodeSettingsBuilder
+    # expects Map<String, String>
+    #
+    # OPTIONAL
+    # other:
+    #   some.property: "goes here"
+
+
   # Settings for the Kafka subsystem
   #
   # REQUIRED
@@ -105,7 +106,7 @@ enki:
       # OPTIONAL, defaults to 1000000000
       # session: 1000000000
 
-  # ZooKeeper leader election settings
+  # ZooKeeper leader election and distributed TP config settings
   #
   # REQUIRED, at least zookeepers and chroot
   leader:
@@ -160,14 +161,4 @@ enki:
     #
     # OPTIONAL
     policies:
-    - index: "test-1-shard"
-      target: 100
-      max_batch: 500
-
-    - index: "test-5-shards"
-    - index: "test-10-shards"
     - index: "test-20-shards"
-    # - index: "test-mismatched-shards"
-    # - index: "test-only-exists-in-kafka"
-    # - index: "test-only-exists-in-es"
-    # - index: "test-doesnt-exist-anywhere"

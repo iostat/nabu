@@ -32,10 +32,10 @@ import java.util.Map;
 @Singleton @Slf4j
 final class EnkiConfig extends AbstractConfig implements
         KafkaZkConfigProvider,
-        ThrottlePolicyProvider,
         KafkaBrokerConfigProvider,
         ZKLeaderConfigProvider,
-        NetworkServerConfigProvider {
+        NetworkServerConfigProvider,
+        ThrottlePolicyProvider {
     /**
      * Mapped to the enki.env property
      */
@@ -109,6 +109,8 @@ final class EnkiConfig extends AbstractConfig implements
     private final @Getter String lEZKChroot;
     private final @Getter int lEZKConnTimeout;
 
+    private final @Getter Map<String, String> additionalESProperties;
+
     private final Injector injector;
 
     @Inject
@@ -146,6 +148,9 @@ final class EnkiConfig extends AbstractConfig implements
                 Integer.class);
 
         this.throttlePolicies = getOptionalSequence(Keys.ENKI_THROTTLING_POLICIES, Defaults.ENKI_THROTTLING_POLICIES, ThrottlePolicy.class);
+
+        //noinspection unchecked todo: i know this is ratchet to coerce like this, but fuck it; pre-alpha motherfuckers!
+        this.additionalESProperties = (Map)getOptionalSubmap(Keys.ENKI_ES_OTHER, ImmutableMap.of());
     }
 
     @Override
@@ -181,6 +186,12 @@ final class EnkiConfig extends AbstractConfig implements
     }
 
     @Override
+    public boolean canEventuallyProvideConfig() {
+        // will never lose config
+        return true;
+    }
+
+    @Override
     public void setKafkaBrokerConfig(List<String> brokers, String group) {
         String msg = "somebody tried to call EnkiConfig::setKafkaBrokerConfig. This is considered high treason.";
         logger.error(msg);
@@ -193,6 +204,7 @@ final class EnkiConfig extends AbstractConfig implements
         public static final String ENKI_ES_CLUSTER_NAME = "enki.es.cluster.name";
         public static final String ENKI_ES_HTTP_ENABLED = "enki.es.http.enabled";
         public static final String ENKI_ES_HTTP_PORT    = "enki.es.http.port";
+        public static final String ENKI_ES_OTHER        = "enki.es.other";
 
         public static final String ENKI_KAFKA_BROKERS    = "enki.kafka.brokers";
         public static final String ENKI_KAFKA_ZK_SERVERS = "enki.kafka.zk.servers";

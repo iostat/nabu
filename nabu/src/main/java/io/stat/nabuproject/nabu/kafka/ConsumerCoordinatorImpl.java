@@ -19,6 +19,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -37,9 +38,11 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     private final AtomicReference<List<String>> kafkaBrokers;
     private final AtomicReference<String> kafkaGroup;
 
-    private final byte[] $sourcedConfigLock;
+    private final AtomicBoolean isShuttingDown;
 
+    private final byte[] $sourcedConfigLock;
     private final SessionSourcedKafkaBrokerCP sskbcp;
+    private final AtomicBoolean configurationSetAtLeastOnce;
 
     @Inject
     ConsumerCoordinatorImpl(NabuCommandESWriter esWriter, EnkiClientEventSource eces) {
@@ -53,6 +56,9 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
 
         this.consumerMap = Maps.newHashMap();
         this.$consumerMapLock = new byte[0];
+
+        this.configurationSetAtLeastOnce = new AtomicBoolean(false);
+        this.isShuttingDown = new AtomicBoolean(false);
 
         this.sskbcp = this.new SessionSourcedKafkaBrokerCP();
     }
@@ -87,6 +93,8 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
             );
 
             kafkaGroup.set((String) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_GROUP, ""));
+
+            configurationSetAtLeastOnce.set(true);
 
             logger.info("Initialized session-sourced configs");
         }
@@ -193,6 +201,7 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     @Override
     public void shutdown() throws ComponentException {
         logger.info("Stopping ConsumerCoordinatorImpl");
+        this.isShuttingDown.set(true);
         eces.removeEnkiClientEventListener(this);
 
         synchronized ($consumerMapLock) {
@@ -208,7 +217,12 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     private class SessionSourcedKafkaBrokerCP implements KafkaBrokerConfigProvider {
         @Override
         public boolean isKafkaBrokerConfigAvailable() {
-            return true;
+            return ConsumerCoordinatorImpl.this.configurationSetAtLeastOnce.get();
+        }
+
+        @Override
+        public boolean canEventuallyProvideConfig() {
+            return !ConsumerCoordinatorImpl.this.isShuttingDown.get();
         }
 
         @Override

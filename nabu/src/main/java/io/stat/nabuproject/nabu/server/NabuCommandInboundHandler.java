@@ -50,6 +50,9 @@ public class NabuCommandInboundHandler extends SimpleChannelInboundHandler<NabuC
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        // todo: remember that tunable thing?
+        // todo: SUPER CRITICAL TO BE TUNABLE. Currently a 50MB buffer size limit
+        // todo: but there's probably nothing stopping a packet from being bigger
         this.context.set(ctx);
     }
 

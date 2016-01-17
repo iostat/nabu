@@ -20,7 +20,7 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
 
@@ -142,9 +142,13 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
                 }
 
                 if(e instanceof InterruptedException) {
-                    this.eventLoopGroup.shutdownGracefully();
-                    shouldAttemptReconnect.set(false);
-                    throw new ComponentException(true, e);
+                    if(this.shutdownStarted.get()) {
+                        logger.info("Interrupted while shutting down. This is normal.");
+                    } else {
+                        this.eventLoopGroup.shutdownGracefully();
+                        shouldAttemptReconnect.set(false);
+                        throw new ComponentException(true, e);
+                    }
                 } else {
                     logger.error("Unhandled exception in client reconnect loop!", e);
                     getStarter().shutdown();
@@ -198,6 +202,11 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
         synchronized($enkiSourcedConfigLock) {
             return wasEnkiSourcedConfigSet;
         }
+    }
+
+    @Override
+    public boolean canEventuallyProvideConfig() {
+        return !shutdownStarted.get();
     }
 
     @Override @SuppressWarnings("unchecked")

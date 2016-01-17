@@ -1,17 +1,20 @@
-# Root nabu configuration map
+# Root enki configuration map
 #
 # REQUIRED... very very required...
-nabu:
+enki:
   # This gets echoed out when the application starts
   # for the operator to ensure that they have the right configuration
   # set in their JARs.
   #
-  # Furthermore, this may affect certain aspects of Nabu's
+  # Furthermore, this may affect certain aspects of Enki's
   # functionality in the future to make development/debugging
   # easier when running in dev/prod.
   #
+  # In retrospect, this was literally NEVER used as the above description
+  # implies. But to piss people off, I'm going to leave it here.
+  #
   # REQUIRED
-  env: dev
+  env: azure
 
   # Elasticsearch-related configuration options. Generally keys that have names
   # similar to ones ES uses itself get pass through when building the embedded node
@@ -33,7 +36,7 @@ nabu:
       # See data/es-home/elasticsearch.yml for an example
       #
       # REQUIRED
-      home: '${env:PWD}/data/es-home'
+      home: '${env:ES_HOME:/es}'
 
     # ES cluster.*
     # Likewise identical to es.cluster.*
@@ -46,40 +49,93 @@ nabu:
       # REQUIRED
       name: es.socialrank.azure
 
-
     # ES http.*, related to the REST server
     # in the embedded node
     #
     # OPTIONAL
-    http:
+    # http:
       # Whether or not to enable the embedded HTTP server
       # Defaults to false
-      enabled: false
+      #
+      # OPTIONAL
+      # enabled: false
+
       # What port to run the embedded HTTP server on
       # Defaults to 19216
-      port: 19216
+      #
+      # OPTIONAL
+      # port: 19216
 
     # Anything else you want to throw into ES.
-    # Please limit to simple property.name.like.this.if.nested: "always string values"
+    # Please limit to simple.property.names.like.this.if.nested: "always string values"
     # as there is basically no type checking or flattening, and ES's NodeSettingsBuilder
     # expects Map<String, String>
     #
     # OPTIONAL
-    other:
-      discovery.type: "kubernetes"
-      cloud.kubernetes.service: "es-transport"
-      cloud.kubernetes.namespace: "default"
-      security.manager.enabled: "false"
-      network.host: "_non_loopback:ipv4_"
+#    other:
+#      discovery.type: "kubernetes"
+#      cloud.kubernetes.service: "es-transport"
+#      cloud.kubernetes.namespace: "default"
+#      security.manager.enabled: "false"
+#      network.host: "_non_loopback:ipv4_"
+
 
   # Settings for the Kafka subsystem
   #
-  # REQUIRED, at least for kafka.brokers
+  # REQUIRED
   kafka:
     # A sequence of addresses of Kafka brokers that Nabu will use for its backlog, etc.
     brokers:
-    - localhost:9091
-    - localhost:9092
+    - kafka-1.default.svc.srnk.int:9092
+    - kafka-2.default.svc.srnk.int:9092
+    - kafka-3.default.svc.srnk.int:9092
+
+    # Zookeeper instances backing the above Kafka instance
+    #
+    # REQUIRED
+    zk:
+      # Addresses of Zk instances that Kafka uses
+      #
+      # REQUIRED
+      servers:
+      - zookeeper-1.default.svc.srnk.int:9092
+      - zookeeper-1.default.svc.srnk.int:9092
+      - zookeeper-1.default.svc.srnk.int:9092
+
+      # The chroot, if Kafka is chrooted
+      #
+      # OPTIONAL, defaults to '/'
+      chroot: '/kafka-prod'
+
+      # Connection timeout
+      #
+      # OPTIONAL, defaults to 500
+      # timeout: 500
+
+      # Session timeout
+      #
+      # OPTIONAL, defaults to 1000000000
+      # session: 1000000000
+
+  # ZooKeeper leader election and distributed TP config settings
+  #
+  # REQUIRED, at least zookeepers and chroot
+  leader:
+    # Addresses of Zk instances to use for leader election
+    zookeepers:
+    - zookeeper-1.default.svc.srnk.int:2181
+    - zookeeper-2.default.svc.srnk.int:2181
+    - zookeeper-3.default.svc.srnk.int:2181
+
+    # The chroot, if the leader election is chrooted
+    zkchroot: '/nabu'
+
+    # Connection timeout
+    #
+    # OPTIONAL, defaults to 500
+    # zktimeout: 500
+
+
 
   # Settings for the Nabu API server
   #
@@ -88,24 +144,24 @@ nabu:
     # Address to bind the API server to
     #
     # OPTIONAL, defaults to 127.0.0.1
-    bind: '127.0.0.1'
+    # bind: '127.0.0.1'
     # Port to bind the API server to
     #
-    # OPTIONAL, defaults to 6228
-    port: ${prop:override.server.port:6228}
+    # OPTIONAL, defaults to 3654
+    port: ${prop:override.server.port:3654}
     # NIO threading parameters
     #
     # OPTIONAL
-    threads:
+    # threads:
       # How many threads in the acceptor EventLoopGroup
       # (aka the "boss" group)
       #
       # OPTIONAL, defaults to 1
-      acceptor: 1
+      # acceptor: 1
       # How many threads in the worker EventLoopGroup
       #
-      # OPTIONAL, defaults to 10
-      worker:   10
+      # OPTIONAL, defaults to 50
+      # worker:   50
 
   # Write throttling policies. By default, the Nabu will immediately attempt to write
   # to Elasticsearch, and not read any more commands on the incoming pipe until that request
@@ -118,8 +174,4 @@ nabu:
     #
     # OPTIONAL
     policies:
-
-    - index: "index-1"
-      when: always
-    - index: "index-2"
-      when: always
+    - index: "test-20-shards"

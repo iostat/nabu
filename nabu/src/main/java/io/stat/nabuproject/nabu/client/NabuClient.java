@@ -7,6 +7,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.logging.LogLevel;
@@ -14,8 +15,9 @@ import io.netty.handler.logging.LoggingHandler;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.util.CatastrophicException;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import io.stat.nabuproject.nabu.protocol.CommandEncoder;
+import io.stat.nabuproject.nabu.protocol.Limits;
 import io.stat.nabuproject.nabu.protocol.ResponseDecoder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -175,15 +177,27 @@ public class NabuClient {
         }
     }
 
+    /**
+     * Attempts to perform a graceful shutdown.
+     * todo: this is probably not everything necessary for a graceful shutdown...
+     */
     private void gracefulShutdown() {
         this.nioEventGroup.shutdownGracefully();
     }
 
+    /**
+     * performs a gracefulShutdown(), then nukeThreadFactory()
+     * @throws CatastrophicException
+     */
     private void passiveAggressiveShutdown() throws CatastrophicException {
         gracefulShutdown();
         nukeThreadFactory();
     }
 
+    /**
+     *
+     * @throws CatastrophicException
+     */
     private void nukeThreadFactory() throws CatastrophicException {
         try {
             nioThreadFactory.nukeCreatedHeirarchy(500);
@@ -193,17 +207,33 @@ public class NabuClient {
         }
     }
 
+    /**
+     * If the connection loop is still running, tell it to stop running, then shutdown everything else gracefully
+     */
     public void disconnect() {
         synchronized (nccs) {
             if(nccs.getConnectionState() != NCCState.DISCONNECTED) {
                 nccs.isShuttingDown(true);
-                nccs.getConnectorThread().interrupt();
+            } else {
+                logger.warn("disconnect() called multiple times in a row...");
+                return;
             }
         }
 
-        this.nioEventGroup.shutdownGracefully();
+        nccs.getConnectorThread().interrupt();
+
+        try {
+            nccs.getConnectorThread().join(10000);
+        } catch (InterruptedException e) {
+            logger.warn("Interrupted while attempting to join() on the connection thread.", e);
+        }
+
+        gracefulShutdown();
     }
 
+    /**
+     * Runs the reconnection loop and manages the NabuClient state machine
+     */
     private void connectorLoop() {
         ArrayDeque<AddressPort> addressesToTry = Queues.newArrayDeque(servers);
         synchronized (nccs) {
@@ -240,7 +270,10 @@ public class NabuClient {
                 Bootstrap bootstrap = new Bootstrap();
                 bootstrap.group(nioEventGroup)
                          .option(ChannelOption.TCP_NODELAY, true) // todo: potentially dangerous downcoercion in CONNECT_TIMEOUT_MILLIS
-//                         .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, ((int)this.connectionTimeout))
+                         .option(ChannelOption.SO_RCVBUF, Limits.BUFFER_LIMIT)
+                         .option(ChannelOption.SO_SNDBUF, Limits.BUFFER_LIMIT)
+                         .option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(Limits.BUFFER_LIMIT)) // todo: BUFFER_LIMIT is 50 MB, which is probably beyond excessive. figure out max size of doc.
+                         .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, ((int)this.connectionTimeout))
                          .channel(NioSocketChannel.class)
                          .handler(fci);
 
@@ -293,12 +326,30 @@ public class NabuClient {
                 }
             } catch(InterruptedException e) {
                 if(!nccs.isShuttingDown()) {
-                    logger.warn("Received an InterruptException, likely from a connection timeout.", e);
+                    logger.error("Received an unexpected InterruptException!", e);
                 } else {
-                    logger.warn("Received an InterruptException and I am not shutting down...", e);
-                    disconnect();
+                    logger.debug("Received an InterruptException and I am shutting down...", e);
                 }
             }
         }
+    }
+
+    /**
+     * Finalize a {@link WriteCommandBuilder} and send it out.
+     * @param wcb the {@link WriteCommandBuilder} to execute
+     * @return a future that will be completed when a response is available.
+     */
+    public NabuClientFuture executePreparedCommand(WriteCommandBuilder wcb) throws NabuClientDisconnectedException {
+        synchronized (nccs) {
+            return nccs.executePreparedCommand(wcb);
+        }
+    }
+
+    public IndexCommandBuilder prepareIndexCommand(String indexName, String documentType) {
+        return new IndexCommandBuilder(this, indexName, documentType);
+    }
+
+    public UpdateCommandBuilder prepareUpdateCommand(String indexName, String documentType) {
+        return new UpdateCommandBuilder(indexName, documentType);
     }
 }

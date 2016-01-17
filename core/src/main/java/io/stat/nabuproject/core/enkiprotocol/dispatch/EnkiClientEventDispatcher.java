@@ -8,7 +8,7 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.net.AddressPort;
-import io.stat.nabuproject.core.util.NamedThreadPoolExecutor;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadPoolExecutor;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.CallbackReducerCallback;
 import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;

@@ -10,6 +10,7 @@ import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.kafka.KafkaModule;
 import io.stat.nabuproject.core.net.AdvertisedAddressResolverModule;
+import io.stat.nabuproject.core.throttling.DynamicTPPModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.enki.integration.IntegrationModule;
 import io.stat.nabuproject.enki.leader.ZKLeaderElectionModule;
@@ -48,7 +49,8 @@ public class Main {
                 new KafkaModule(),
                 new ZKLeaderElectionModule(),
                 new IntegrationModule(true),
-                new EnkiServerModule()
+                new EnkiServerModule(),
+                new DynamicTPPModule(EnkiConfig.class)
         );
 
         if(doDeps) {

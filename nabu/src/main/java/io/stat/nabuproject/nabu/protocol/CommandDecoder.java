@@ -27,7 +27,7 @@ public class CommandDecoder extends ByteToMessageDecoder {
         decode(null, slurped, out);
 
         slurped.release();
-        return ((NabuCommand)out.get(0));
+        return ((NabuCommand)out.get(1));
     }
 
     @Override

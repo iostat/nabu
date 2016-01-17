@@ -5,7 +5,7 @@ import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.AckOnSuccessCRC;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.KillCnxnOnFailCRC;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
-import io.stat.nabuproject.core.util.NamedThreadPoolExecutor;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadPoolExecutor;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.enki.server.NabuConnection;
 import lombok.experimental.Delegate;

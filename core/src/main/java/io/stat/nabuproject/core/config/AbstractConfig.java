@@ -201,6 +201,25 @@ public abstract class AbstractConfig extends Component implements ESConfigProvid
         }
     }
 
+    /**
+     * Just like {@link AbstractConfig#getRequiredSubmap(String)}, just 100% more optional.
+     * @param key the key to find the map under
+     * @param fallback the map to fall back to
+     * @return the entire submap underneath <tt>key</tt> if it was set, or <tt>fallback</tt> if it wasn't
+     */
+    protected final Map<String, Object> getOptionalSubmap(String key, Map<String, Object> fallback) {
+        try {
+            return getRequiredSubmap(key);
+        } catch(ComponentException e) {
+            if(e.getCause() instanceof MissingPropertyException) {
+                logger.info("{} is not set and falling back to a default value of {}", key, fallback);
+                return fallback;
+            } else {
+                throw new ComponentException(e);
+            }
+        }
+    }
+
     private void ensureClassIsConfigurable(Class klass) throws ComponentException {
         if (Number.class.isAssignableFrom(klass)    ||
             Character.class.isAssignableFrom(klass) ||

@@ -8,6 +8,7 @@ import io.stat.nabuproject.nabu.common.command.IndexCommand;
 import io.stat.nabuproject.nabu.common.command.NabuCommand;
 import io.stat.nabuproject.nabu.common.command.NabuWriteCommand;
 import io.stat.nabuproject.nabu.common.command.UpdateCommand;
+import io.stat.nabuproject.nabu.elasticsearch.ESWriteResults;
 import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
 import io.stat.nabuproject.nabu.kafka.NabuKafkaProducer;
 import io.stat.nabuproject.nabu.server.NabuCommandSource;
@@ -64,14 +65,14 @@ class RouterImpl extends CommandRouter {
 
         if(maybeTP == null) {
             try {
-                esWriter.singleWrite(command);
-                src.respond(command.okResponse());
+                ESWriteResults res = esWriter.singleWrite(command);
+                src.respond(res.success() ? command.okResponse() : command.failResponse());
             } catch(Exception e) {
                 logger.error("ElasticSearch spit out an error", e);
                 src.respond(command.retryResponse());
             }
         } else {
-            kafkaProducer.enqueueCommand(command.getIndex(), calculatePartition(command), src, command);
+            kafkaProducer.enqueueCommand(ThrottlePolicy.TOPIC_PREFIX + command.getIndex(), calculatePartition(command), src, command);
         }
     }
 

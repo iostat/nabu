@@ -17,6 +17,11 @@ public interface KafkaBrokerConfigProvider {
     boolean isKafkaBrokerConfigAvailable();
 
     /**
+     * @return whether or not the data this class is responsible for is in a state where it can have data.
+     */
+    boolean canEventuallyProvideConfig();
+
+    /**
      * @return A list of addresses to contact the Kafka brokers for this Nabu cluster
      */
     List<String> getKafkaBrokers();

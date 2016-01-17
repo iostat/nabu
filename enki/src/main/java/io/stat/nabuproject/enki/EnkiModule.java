@@ -6,7 +6,6 @@ import com.google.inject.name.Names;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
-import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.enki.leader.ZKLeaderConfigProvider;
 
 /**
@@ -25,7 +24,6 @@ public class EnkiModule extends AbstractModule {
         bind(EnkiConfig.class).in(Singleton.class);
         bind(AbstractConfig.class).to(EnkiConfig.class);
         bind(KafkaZkConfigProvider.class).to(EnkiConfig.class);
-        bind(ThrottlePolicyProvider.class).to(EnkiConfig.class);
         bind(ZKLeaderConfigProvider.class).to(EnkiConfig.class);
         bind(NetworkServerConfigProvider.class).to(EnkiConfig.class);
 

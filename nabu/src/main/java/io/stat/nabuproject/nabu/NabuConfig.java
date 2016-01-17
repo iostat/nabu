@@ -59,6 +59,12 @@ final class NabuConfig extends AbstractConfig implements
      */
     private final @Getter String eSClusterName;
 
+    /**
+     * Mapped to the nabu.es.other property. All of these properties
+     * will get shoved into the ES Node client, without any filtering
+     * for conflicting required Nabu properties.
+     */
+    private final @Getter Map<String, String> additionalESProperties;
 
     @Inject
     public NabuConfig(ConfigStore provider) {
@@ -81,6 +87,10 @@ final class NabuConfig extends AbstractConfig implements
         this.workerThreads   = getOptionalProperty(Keys.NABU_SERVER_THREADS_WORKER,
                 Defaults.NABU_SERVER_THREADS_WORKER,
                 Integer.class);
+
+        //noinspection unchecked todo: i know this is ratchet to coerce like this, but fuck it; pre-alpha motherfuckers!
+        this.additionalESProperties = (Map)getOptionalSubmap(Keys.NABU_ES_OTHER, ImmutableMap.of());
+
     }
 
     @Override
@@ -96,9 +106,12 @@ final class NabuConfig extends AbstractConfig implements
         public static final String NABU_ES_HTTP_ENABLED = "nabu.es.http.enabled";
         public static final String NABU_ES_HTTP_PORT    = "nabu.es.http.port";
 
+        public static final String NABU_ES_OTHER        = "nabu.es.other";
+
         public static final String NABU_SERVER_BIND             = "nabu.server.bind";
         public static final String NABU_SERVER_PORT             = "nabu.server.port";
         public static final String NABU_SERVER_THREADS_ACCEPTOR = "nabu.server.threads.acceptor";
+
         public static final String NABU_SERVER_THREADS_WORKER   = "nabu.server.threads.worker";
     }
 

@@ -13,9 +13,6 @@ project(":core") {
     dependencies {
         testCompile(group: 'junit', name: 'junit', version: '4.11')
 
-        // lombok :fire:
-        compile(group: 'org.projectlombok', name: 'lombok', version: '1.16.6')
-
         // dependencies are like heroin, you only get the most out of it when you inject
         compile(group: 'com.google.inject', name: 'guice', version: '4.0') {
             // preemptive avoidance of jar hell due to multiple versions of guava in classpath

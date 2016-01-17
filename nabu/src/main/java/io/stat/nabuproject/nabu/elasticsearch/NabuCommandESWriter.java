@@ -2,7 +2,7 @@ package io.stat.nabuproject.nabu.elasticsearch;
 
 import io.stat.nabuproject.nabu.common.command.NabuWriteCommand;
 
-import java.util.List;
+import java.util.ArrayDeque;
 
 /**
  * Something which can take NabuWriteCommands and perform the ES
@@ -16,7 +16,7 @@ public interface NabuCommandESWriter {
      * @param nwc the NabuWriteCommand to write
      * @return how long the execution took.
      */
-    long singleWrite(NabuWriteCommand nwc);
+    ESWriteResults singleWrite(NabuWriteCommand nwc);
 
     /**
      * Write a list of NabuWriteCommands into ES
@@ -24,5 +24,5 @@ public interface NabuCommandESWriter {
      * @param commands the commands to write.
      * @return how long the execution took.
      */
-    long bulkWrite(List<NabuWriteCommand> commands);
+    ESWriteResults bulkWrite(ArrayDeque<NabuWriteCommand> commands);
 }

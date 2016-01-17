@@ -38,4 +38,11 @@ interface HighLevelNabuClientBridge {
      * @param remoteClusterName the ES cluster name it received
      */
     void identificationFailed(NabuClientIO src, String expectedClusterName, String remoteClusterName);
+
+    /**
+     * Used internally when the connection is ready to set the low-level
+     * IO object, making the bridge bidirectional.
+     * @param ncio the low-level IO
+     */
+    void setClientIO(NabuClientIO ncio);
 }

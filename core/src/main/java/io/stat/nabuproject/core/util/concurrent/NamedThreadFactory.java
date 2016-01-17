@@ -1,4 +1,4 @@
-package io.stat.nabuproject.core.util;
+package io.stat.nabuproject.core.util.concurrent;
 
 import com.google.common.collect.ImmutableList;
 import lombok.EqualsAndHashCode;

@@ -2,6 +2,8 @@ package io.stat.nabuproject.enki.integration;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;
+import com.google.inject.name.Names;
+import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 
 /**
@@ -22,6 +24,9 @@ public class IntegrationModule extends AbstractModule {
         bind(ESKafkaValidatorImpl.class).in(Singleton.class);
 
         bind(ElectedLeaderProvider.class).to(LeaderLivenessIntegrator.class);
+
+        bind(ZKThrottlePolicyProvider.class).in(Singleton.class);
+        bind(Component.class).annotatedWith(Names.named("ZKTPP")).to(ZKThrottlePolicyProvider.class);
 
         bind(ESKafkaValidator.class).to(ESKafkaValidatorImpl.class);
         if(useESZKLivenessIntegrator) {

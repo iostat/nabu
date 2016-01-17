@@ -3,6 +3,7 @@ package io.stat.nabuproject.nabu.client;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.stat.nabuproject.nabu.common.command.IdentifyCommand;
+import io.stat.nabuproject.nabu.common.command.NabuCommand;
 import io.stat.nabuproject.nabu.common.response.IDResponse;
 import io.stat.nabuproject.nabu.common.response.NabuResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,8 @@ final class NabuClientIO extends SimpleChannelInboundHandler<NabuResponse> {
         this.$lock = new byte[0];
 
         this.context = new AtomicReference<>(null);
+
+        this.bridge.setClientIO(this);
         logger.debug("Constructed a new NabuClientIO!");
     }
 
@@ -77,28 +80,35 @@ final class NabuClientIO extends SimpleChannelInboundHandler<NabuResponse> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, NabuResponse msg) throws Exception {
-        logger.info("Received a NabuResponse! :: {}", msg); // todo: change to debug.
-        if(msg instanceof IDResponse && !identifyReceived.get()) {
-            String remoteClusterName = ((IDResponse)msg).getData();
-            String expectedClusterName = this.expectedClusterName.get();
-            if(msg.getSequence() == identifySequence.get()) {
-                identifyReceived.set(true);
-                if(remoteClusterName.equals(expectedClusterName)) {
-                    bridge.connectionEstablished(this);
+        logger.debug("Received a NabuResponse! :: {}", msg); // todo: change to debug.
+        if(msg instanceof IDResponse) {
+            if(!identifyReceived.get()) {
+                String remoteClusterName = ((IDResponse)msg).getData();
+                String expectedClusterName = this.expectedClusterName.get();
+                if(msg.getSequence() == identifySequence.get()) {
+                    identifyReceived.set(true);
+                    if(remoteClusterName.equals(expectedClusterName)) {
+                        bridge.connectionEstablished(this);
+                    } else {
+                        bridge.identificationFailed(this, expectedClusterName, remoteClusterName);
+                    }
                 } else {
-                    bridge.identificationFailed(this, expectedClusterName, remoteClusterName);
+                    logger.error("Only one IDENTIFY is ever sent, and we received the wrong sequence number back.");
                 }
             } else {
-                logger.error("Only one IDENTIFY is ever sent, and we received the wrong sequence number back.");
+                logger.error("Only one IDENTIFY is ever sent, and we already received one before.");
             }
         } else {
-            logger.error("Only one IDENTIFY is ever sent, and we already received one before.");
+            bridge.responseReceived(this, msg);
         }
 
-        bridge.responseReceived(this, msg);
     }
 
-    private long assignNextSequence() {
+    void dispatchCommand(NabuCommand cmd) {
+        context.get().writeAndFlush(cmd);
+    }
+
+    long assignNextSequence() {
         return lastOutgoingSequence.getAndIncrement();
     }
 }

@@ -3,8 +3,8 @@ package io.stat.nabuproject.core.util.dispatch;
 import com.google.common.collect.Sets;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
-import io.stat.nabuproject.core.util.NamedThreadFactory;
-import io.stat.nabuproject.core.util.NamedThreadPoolExecutor;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadPoolExecutor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;

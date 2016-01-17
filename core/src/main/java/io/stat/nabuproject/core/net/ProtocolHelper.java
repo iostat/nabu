@@ -59,7 +59,7 @@ public class ProtocolHelper {
             throw new DecoderException(READ_STRING_TOO_SHORT);
         }
 
-        ByteBuf stringBuf = Unpooled.buffer();
+        ByteBuf stringBuf = Unpooled.buffer(size);
         in.readBytes(stringBuf, size);
 
         String ret = stringBuf.toString(UTF_8);

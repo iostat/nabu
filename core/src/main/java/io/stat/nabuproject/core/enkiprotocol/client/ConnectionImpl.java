@@ -13,12 +13,16 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiRedirect;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.net.AddressPort;
+import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -30,6 +34,20 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 class ConnectionImpl implements EnkiConnection {
     static final AttributeKey<Boolean> SUPPRESS_DISCONNECT_CALLBACK = AttributeKey.newInstance("SUPPRESS_DISCONNECT_CALLBACK");
+    private static final NamedThreadFactory HEARTBEAT_ENFORCER_TASK_FACTORY = new NamedThreadFactory("EnkiClientHeartbeatEnforcer");
+    private static final NamedThreadFactory LEAVE_ENFORCER_TASK_FACTORY = new NamedThreadFactory("EnkiClientLeaveEnforcer");
+
+    /**
+     * How much time may elapse between a heartbeat being received before the client
+     * preemptively shuts itself down for safety.
+     */
+    public static final long MAX_HEARTBEAT_DISCREPANCY = 10000; // todo: tunable?
+
+    /**
+     * How much time may elapse between a heartbeat being received before the client
+     * preemptively shuts itself down for safety.
+     */
+    public static final long MAX_HEARTBEAT_LEAVE_TIMEOUT = 3000; // todo: tunable?
 
     private final ChannelHandlerContext ctx;
     private final EnkiClient creator;
@@ -40,6 +58,7 @@ class ConnectionImpl implements EnkiConnection {
     private final AtomicLong sequenceNumberOfLeave;
 
     private final AtomicLong lastHeartbeatTimestamp;
+    private final AtomicLong lastHeartbeatUpdatedAt;
     private final AtomicLong lastConfigTimestamp;
 
     private final AtomicBoolean isDisconnecting;
@@ -50,6 +69,8 @@ class ConnectionImpl implements EnkiConnection {
     private final AtomicBoolean wasRedirected;
 
     private final CompletableFuture<ConnectionImpl> afterClientLeaveAcked;
+    private final ScheduledExecutorService heartbeatEnforcerExecutor;
+    private final ScheduledExecutorService heartbeatLeaveEnforcer;
 
     private final long createdOn;
 
@@ -64,6 +85,7 @@ class ConnectionImpl implements EnkiConnection {
         lastOutgoingSequence = new AtomicLong(0);
 
         lastHeartbeatTimestamp = new AtomicLong(0);
+        lastHeartbeatUpdatedAt = new AtomicLong(0);
         lastConfigTimestamp = new AtomicLong(0);
 
         sequenceNumberOfLeave = new AtomicLong(-1);
@@ -75,6 +97,9 @@ class ConnectionImpl implements EnkiConnection {
         wasRedirected = new AtomicBoolean(false);
 
         afterClientLeaveAcked = new CompletableFuture<>();
+
+        heartbeatEnforcerExecutor = Executors.newSingleThreadScheduledExecutor(HEARTBEAT_ENFORCER_TASK_FACTORY);
+        heartbeatLeaveEnforcer = Executors.newSingleThreadScheduledExecutor(LEAVE_ENFORCER_TASK_FACTORY);
 
         createdOn = System.nanoTime();
 
@@ -92,6 +117,9 @@ class ConnectionImpl implements EnkiConnection {
     }
 
     public void onDisconnected() {
+        heartbeatLeaveEnforcer.shutdownNow();
+        heartbeatEnforcerExecutor.shutdownNow();
+
         DisconnectCause cause;
         if(wasLeavePacketSent.get()) {
             if(wasLeaveServerInitiated.get()) {
@@ -113,10 +141,14 @@ class ConnectionImpl implements EnkiConnection {
         switch(p.getType()) {
             case HEARTBEAT:
                 lastHeartbeatTimestamp.set(((EnkiHeartbeat) p).getTimestamp());
+                lastHeartbeatUpdatedAt.set(System.currentTimeMillis());
                 dispatchPacket(new EnkiAck(p.getSequenceNumber()));
                 break;
             case CONFIGURE:
+                // pre-seed the heartbeat monitor so as not to horrify it as soon as it starts
+                lastHeartbeatUpdatedAt.set(System.currentTimeMillis());
                 lastConfigTimestamp.set(System.currentTimeMillis());
+                heartbeatEnforcerExecutor.scheduleAtFixedRate(this::heartbeatEnforcerTask, 1, 3, TimeUnit.SECONDS);
                 toNotify.onConfigurationReceived(this, ((EnkiConfigure)p));
                 dispatchPacket(new EnkiAck(p.getSequenceNumber()));
                 break;
@@ -155,6 +187,23 @@ class ConnectionImpl implements EnkiConnection {
                     toNotify.onTaskUnassigned(this, ((EnkiUnassign)packet));
                 }
                 break;
+        }
+    }
+
+    private void heartbeatEnforcerTask() {
+        long lastHeartbeat = lastHeartbeatTimestamp.get();
+        long now = System.currentTimeMillis();
+        long discrepancy = now - lastHeartbeat;
+
+        if(Math.abs(discrepancy) >= MAX_HEARTBEAT_DISCREPANCY) {
+            logger.error("Have not received a heartbeat in {} ms (max is {}). Disconnecting for safety.", discrepancy, MAX_HEARTBEAT_DISCREPANCY);
+            leaveGracefully();
+            heartbeatLeaveEnforcer.schedule(() -> {
+                if(!wasLeaveAcknowledged.get()) {
+                    logger.error("Heartbeat-discrepancy-related leave was not acknowledged after {} ms. Killing the connection violently", MAX_HEARTBEAT_LEAVE_TIMEOUT);
+                    killConnection(true);
+                }
+            }, MAX_HEARTBEAT_LEAVE_TIMEOUT, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -209,13 +258,15 @@ class ConnectionImpl implements EnkiConnection {
 
         ConnectionImpl other = ((ConnectionImpl) obj);
 
-        if(ctx == null) {
-            if(other.ctx != null) {
-                return false;
-            }
+        if(this.createdOn != other.createdOn) {
+            return false;
         }
 
-        return this.createdOn == other.createdOn && this.ctx.equals(other.ctx);
+        if(ctx == null) {
+            return other.ctx == null;
+        } else {
+            return this.ctx.equals(other.ctx);
+        }
     }
 
     @Override
