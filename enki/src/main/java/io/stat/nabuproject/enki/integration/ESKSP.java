@@ -14,9 +14,24 @@ import lombok.Setter;
 @RequiredArgsConstructor
 @EqualsAndHashCode
 final class ESKSP {
+    /**
+     * The name of the ES index.
+     */
     private final @Getter String indexName;
+
+    /**
+     * The name of the Kafka topic
+     */
     private final @Getter String topicName;
+
+    /**
+     * The number of primary shards in the ES index
+     */
     private @Getter @Setter int shards = -1;
+
+    /**
+     * The number of partitions in the Kafka topic
+     */
     private @Getter @Setter int partitions = -1;
 
     @Override

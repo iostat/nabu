@@ -102,7 +102,7 @@ public class ThrottlePolicy implements MappedConfigObject<ThrottlePolicy> {
 
         String theIndex = maybeIndex.toString();
 
-        Object maybeTopic = map.get("topic");
+        Object maybeTopic = map.getOrDefault("topic", TOPIC_PREFIX + theIndex);
         if(!(maybeTopic instanceof String)) {
             throw new InvalidValueException("Throttle policy Kafka topic must be a String!");
         }

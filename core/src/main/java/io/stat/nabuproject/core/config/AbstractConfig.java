@@ -104,7 +104,6 @@ public abstract class AbstractConfig extends Component implements ESConfigProvid
             ret = provider.getSequence(key, klass);
         } catch (ConfigException ce) {
             String message = "Could not get the value of required sequence " + key;
-            logger.error(message, ce);
             throw new ComponentException(true, message, ce);
         }
 
@@ -138,7 +137,6 @@ public abstract class AbstractConfig extends Component implements ESConfigProvid
             ret = provider.getSubmap(key);
         } catch (ConfigException ce) {
             String message = "Could not get the value of required submap " + key;
-            logger.error(message, ce);
             throw new ComponentException(true, message, ce);
         }
 

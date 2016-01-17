@@ -25,6 +25,8 @@ allprojects {
         mavenLocal()
         mavenCentral()
     }
+
+    project.ext.delombokPath = "${project.projectDir}/build/delombok/main/java"
 }
 
 subprojects {
@@ -84,23 +86,34 @@ subprojects {
         compile configurations.lombok.dependencies
     }
 
+    sourceSets {
+        delombok {
+            java {
+                srcDir project.ext.delombokPath
+            }
+        }
+    }
+
     task delombok {
-        inputs.files file('src/main/java')
-        outputs.dir file('build/delombok/main/java')
+        inputs.files project.sourceSets.main.allJava
+        outputs.dir file(project.ext.delombokPath)
 
         doLast {
             FileCollection collection = files(configurations.compile)
             FileCollection sumTree = collection + fileTree(dir: 'bin')
 
             ant.taskdef(name: 'delombok', classname: 'lombok.delombok.ant.Tasks$Delombok', classpath: configurations.lombok.asPath)
-            ant.delombok(from:srcJava, to:srcDelomboked, classpath: sumTree.asPath)
+            ant.delombok(from: "${project.projectDir}/src/main/java", to: project.ext.delombokPath, classpath: sumTree.asPath)
         }
     }
 }
 
 task docs(type: Javadoc) {
     source (subprojects.collect
-            {project -> project.sourceSets.main.allJava })
+            {project -> project.sourceSets.delombok.allJava })
+
+    dependsOn(subprojects.collect
+            {project -> project.tasks.delombok})
 
     classpath = (files(subprojects.collect
             {project -> project.sourceSets.main.compileClasspath}))
