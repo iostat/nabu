@@ -6,7 +6,8 @@ import com.google.inject.name.Names;
 import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
-import io.stat.nabuproject.enki.leader.ZKLeaderConfigProvider;
+import io.stat.nabuproject.core.telemetry.TelemetryConfigProvider;
+import io.stat.nabuproject.enki.zookeeper.ZKConfigProvider;
 
 /**
  * Guice module for the Enki bootstrap.
@@ -23,8 +24,9 @@ public class EnkiModule extends AbstractModule {
 
         bind(EnkiConfig.class).in(Singleton.class);
         bind(AbstractConfig.class).to(EnkiConfig.class);
+        bind(TelemetryConfigProvider.class).to(EnkiConfig.class);
         bind(KafkaZkConfigProvider.class).to(EnkiConfig.class);
-        bind(ZKLeaderConfigProvider.class).to(EnkiConfig.class);
+        bind(ZKConfigProvider.class).to(EnkiConfig.class);
         bind(NetworkServerConfigProvider.class).to(EnkiConfig.class);
 
         bind(String.class).annotatedWith(Names.named("Configuration File Name")).toInstance(CONFIG_FILE_NAME);

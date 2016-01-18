@@ -5,6 +5,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.ComponentStarter;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiClient;
+import io.stat.nabuproject.core.telemetry.TelemetryService;
 import io.stat.nabuproject.nabu.kafka.AssignedConsumptionCoordinator;
 import io.stat.nabuproject.nabu.kafka.NabuKafkaProducer;
 import io.stat.nabuproject.nabu.server.NabuServer;
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 class NabuImpl extends Nabu {
     private final NabuConfig config;
+    private final TelemetryService telemetry;
     private final ESClient esClient;
     private final EnkiClient enkiClient;
     private final NabuServer nabuServer;
@@ -44,6 +46,7 @@ class NabuImpl extends Nabu {
 
         componentStarter.registerComponents(
                 config,
+                telemetry,
                 esClient,
                 assignedConsumptionCoordinator, // should be started before the enki client!!
                 enkiClient,

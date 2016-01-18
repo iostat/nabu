@@ -56,6 +56,7 @@ class ServerImpl extends EnkiServer {
 
     @Inject
     ServerImpl(NetworkServerConfigProvider config,
+               ThrottlePolicyProvider tpp,
                ElectedLeaderProvider leaderProvider) {
         this.bootstrap = new ServerBootstrap();
 
@@ -79,7 +80,7 @@ class ServerImpl extends EnkiServer {
                 new Object[]{
                         dispatcher,
                         allOpenChannels,
-                        config,
+                        tpp,
                         config,
                         leaderProvider
 

@@ -13,6 +13,10 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
+import io.stat.nabuproject.core.telemetry.TelemetryCounterSink;
+import io.stat.nabuproject.core.telemetry.TelemetryGaugeSink;
+import io.stat.nabuproject.core.telemetry.TelemetryService;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyChangeListener;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.enki.Enki;
 import io.stat.nabuproject.enki.integration.balance.AssignmentBalancer;
@@ -52,7 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 @Slf4j
-public class WorkerCoordinator extends Component {
+public class WorkerCoordinator extends Component implements ThrottlePolicyChangeListener {
     /**
      * How frequently should the rebalancer run. (currently every 30s)
      * todo: definitely make this tunable?
@@ -89,8 +93,13 @@ public class WorkerCoordinator extends Component {
     private final Thread rebalanceThread;
     private final AtomicBoolean isShuttingDown;
 
+    private final TelemetryGaugeSink connectedNabuGauge;
+    private final TelemetryCounterSink reapedNabuCount;
+    private final TelemetryCounterSink rebalanceCounter;
+
     @Inject
     public WorkerCoordinator(ThrottlePolicyProvider config,
+                             TelemetryService ts,
                              ESKafkaValidator validator,
                              ESClient esClient,
                              EnkiServer enkiServer,
@@ -106,6 +115,10 @@ public class WorkerCoordinator extends Component {
         this.injector = injector;
 
         this.cnxnListener = new CnxnListener();
+
+        this.connectedNabuGauge = ts.createGauge("connected");
+        this.reapedNabuCount    = ts.createCounter("reaped");
+        this.rebalanceCounter   = ts.createCounter("rebalances");
 
         this.$lock = new byte[0];
 
@@ -130,6 +143,7 @@ public class WorkerCoordinator extends Component {
                                 // 1 second to grab the worker set lock to coordinate a join.
                                 Thread.sleep(1000);
                             }
+                            rebalanceCounter.increment();
                         }
                     } catch (Exception e) {
                         //noinspection ConstantConditions sometimes static analysis is NOT the answer
@@ -156,6 +170,7 @@ public class WorkerCoordinator extends Component {
     public void start() throws ComponentException {
         logger.info("WorkerCoordinator start");
         nabuConnectionEventSource.addNabuConnectionListener(cnxnListener);
+        config.registerThrottlePolicyChangeListener(this);
 
         synchronized ($lock) {
             ImmutableSet.Builder<TopicPartition> allAssnBuilder = ImmutableSet.builder();
@@ -190,7 +205,8 @@ public class WorkerCoordinator extends Component {
                 this.rebalanceThread.interrupt();
                 this.rebalanceThread.stop();
             }
-            nabuConnectionEventSource.addNabuConnectionListener(cnxnListener);
+            nabuConnectionEventSource.removeNabuConnectionListener(cnxnListener);
+            config.deregisterThrottlePolicyChangeListener(this);
             logger.info("WorkerCoordinator shutdown complete");
         }
     }
@@ -359,6 +375,8 @@ public class WorkerCoordinator extends Component {
                 }
                 return false;
             });
+
+            reapedNabuCount.increment();
         }
     }
 
@@ -368,6 +386,7 @@ public class WorkerCoordinator extends Component {
                 AssignableNabu n = new AssignableNabu(cnxn);
                 confirmedWorkers.add(n);
                 needsRebalance.set(true);
+                connectedNabuGauge.set(confirmedWorkers.size());
             }
         }
     }
@@ -384,10 +403,24 @@ public class WorkerCoordinator extends Component {
                     return;
                 }
             }
+
+            connectedNabuGauge.set(confirmedWorkers.size());
         }
     }
 
-    @EqualsAndHashCode(exclude={"assignments", "$workerAssignmentLock"})
+    @Override
+    public boolean onThrottlePolicyChange() {
+        logger.info("Notified of throttle policy change!");
+        synchronized ($lock) {
+            confirmedWorkers.forEach(anabu -> {
+                NabuConnection cnxn = anabu.getCnxn();
+                cnxn.refreshConfiguration();
+            });
+        }
+        return true;
+    }
+
+    @EqualsAndHashCode(exclude={"assignments"})
     private static class AssignableNabu implements AssignmentContext<TopicPartition> {
         private final @Getter NabuConnection cnxn;
         private volatile @Getter @Setter Set<TopicPartition> assignments;

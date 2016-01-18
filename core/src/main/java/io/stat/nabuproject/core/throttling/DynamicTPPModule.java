@@ -32,7 +32,6 @@ public class DynamicTPPModule extends AbstractModule {
     protected void configure() {
         bind(new TypeLiteral<DynamicComponent<ThrottlePolicyProvider>>() {}).to(DynamicThrottlePolicyProvider.class);
         bind(ThrottlePolicyProvider.class).to(DynamicThrottlePolicyProvider.class);
-
     }
 
     @Provides synchronized DynamicThrottlePolicyProvider getDTTPWithInitialTPP(Injector injector) {

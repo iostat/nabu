@@ -3,6 +3,7 @@ package io.stat.nabuproject.enki;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Singleton;
@@ -14,14 +15,18 @@ import io.stat.nabuproject.core.kafka.KafkaZkConfigProvider;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.AdvertisedAddressProvider;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
+import io.stat.nabuproject.core.telemetry.TelemetryConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyChangeListener;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
-import io.stat.nabuproject.enki.leader.ZKLeaderConfigProvider;
+import io.stat.nabuproject.enki.zookeeper.ZKConfigProvider;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Adapter for all Enki-related configuration that is specified from
@@ -33,9 +38,10 @@ import java.util.Map;
 final class EnkiConfig extends AbstractConfig implements
         KafkaZkConfigProvider,
         KafkaBrokerConfigProvider,
-        ZKLeaderConfigProvider,
+        ZKConfigProvider,
         NetworkServerConfigProvider,
-        ThrottlePolicyProvider {
+        ThrottlePolicyProvider,
+        TelemetryConfigProvider {
     /**
      * Mapped to the enki.env property
      */
@@ -104,14 +110,19 @@ final class EnkiConfig extends AbstractConfig implements
     /**
      * Mapped to the enki.throttle.policies property.
      */
-    private final @Getter List<ThrottlePolicy> throttlePolicies;
-    private final @Getter List<String> lEZooKeepers;
-    private final @Getter String lEZKChroot;
-    private final @Getter int lEZKConnTimeout;
-
+    private final @Getter List<AtomicReference<ThrottlePolicy>> tPReferences;
+    private final @Getter List<String> zookeepers;
+    private final @Getter String zKChroot;
+    private final @Getter int zKConnectionTimeout;
     private final @Getter Map<String, String> additionalESProperties;
 
+    private final @Getter String telemetryPrefix;
+    private final @Getter String telemetryServer;
+    private final @Getter int telemetryPort;
+
     private final Injector injector;
+
+    private final AtomicReference<Collection<ThrottlePolicyChangeListener>> tpcls;
 
     @Inject
     public EnkiConfig(ConfigStore provider, Injector injector) {
@@ -132,9 +143,9 @@ final class EnkiConfig extends AbstractConfig implements
         this.kafkaZkChroot   = getOptionalProperty(Keys.ENKI_KAFKA_ZK_CHROOT, Defaults.ENKI_KAFKA_ZK_CHROOT, String.class);
         this.kafkaZkConnTimeout  = getOptionalProperty(Keys.ENKI_KAFKA_ZK_TIMEOUT, Defaults.ENKI_KAFKA_ZK_TIMEOUT, Integer.class);
 
-        this.lEZooKeepers = getRequiredSequence(Keys.ENKI_LEADER_ZOOKEEPERS, String.class);
-        this.lEZKChroot   = getRequiredProperty(Keys.ENKI_LEADER_ZKCHROOT, String.class);
-        this.lEZKConnTimeout  = getOptionalProperty(Keys.ENKI_LEADER_ZKTIMEOUT, Defaults.ENKI_LEADER_ZKTIMEOUT, Integer.class);
+        this.zookeepers = getRequiredSequence(Keys.ENKI_ZK_ZOOKEEPERS, String.class);
+        this.zKChroot = getRequiredProperty(Keys.ENKI_ZK_CHROOT, String.class);
+        this.zKConnectionTimeout = getOptionalProperty(Keys.ENKI_ZK_TIMEOUT, Defaults.ENKI_ZK_TIMEOUT, Integer.class);
 
         String listenAddress = getOptionalProperty(Keys.ENKI_SERVER_BIND, Defaults.ENKI_SERVER_BIND, String.class);
         int    listenPort    = getOptionalProperty(Keys.ENKI_SERVER_PORT, Defaults.ENKI_SERVER_PORT, Integer.class);
@@ -147,23 +158,39 @@ final class EnkiConfig extends AbstractConfig implements
                 Defaults.ENKI_SERVER_THREADS_WORKER,
                 Integer.class);
 
-        this.throttlePolicies = getOptionalSequence(Keys.ENKI_THROTTLING_POLICIES, Defaults.ENKI_THROTTLING_POLICIES, ThrottlePolicy.class);
+        List<ThrottlePolicy> loadedTPs = getOptionalSequence(Keys.ENKI_THROTTLING_POLICIES, Defaults.ENKI_THROTTLING_POLICIES, ThrottlePolicy.class);
+        ImmutableList.Builder<AtomicReference<ThrottlePolicy>> tprefbuilder = ImmutableList.builder();
+        for (ThrottlePolicy loadedTP : loadedTPs) {
+            tprefbuilder.add(new AtomicReference<>(loadedTP));
+        }
+
+        this.tPReferences = tprefbuilder.build();
+
+        this.tpcls = new AtomicReference<>(Lists.newArrayList());
 
         //noinspection unchecked todo: i know this is ratchet to coerce like this, but fuck it; pre-alpha motherfuckers!
         this.additionalESProperties = (Map)getOptionalSubmap(Keys.ENKI_ES_OTHER, ImmutableMap.of());
+
+        this.telemetryPrefix = "enki";
+        this.telemetryServer = getRequiredProperty(Keys.ENKI_TELEMETRY_SERVER, String.class);
+        this.telemetryPort   = getRequiredProperty(Keys.ENKI_TELEMETRY_PORT, Integer.class);
     }
 
     @Override
     public void start() throws ComponentException {
         StringBuilder prettyPolicies = new StringBuilder("The following throttling policies have been configured:\n");
-        prettyPolicies.append(Strings.padStart("INDEX", 50, ' '));
-        prettyPolicies.append(" MAXBATCH   TARGETMS\n");
-        throttlePolicies.forEach(
-                policy -> prettyPolicies.append(Strings.padStart(policy.getIndexName(), 50, ' '))
+        prettyPolicies.append(Strings.padStart("INDEX", 25, ' '));
+        prettyPolicies.append(Strings.padStart("TOPIC", 25, ' '));
+        prettyPolicies.append(" MAXBATCH   TARGETMS   FLUSHMS\n");
+        tPReferences.forEach(
+                policy -> prettyPolicies.append(Strings.padStart(policy.get().getIndexName(), 25, ' '))
+                        .append(Strings.padStart(policy.get().getTopicName(), 25, ' '))
                         .append("    ")
-                        .append(Strings.padEnd(Integer.toString(policy.getMaxBatchSize()), 7, ' '))
+                        .append(Strings.padEnd(Integer.toString(policy.get().getMaxBatchSize()), 7, ' '))
                         .append("    ")
-                        .append(Strings.padEnd(Long.toString(policy.getWriteTimeTarget()), 7, ' '))
+                        .append(Strings.padEnd(Long.toString(policy.get().getWriteTimeTarget()), 7, ' '))
+                        .append("   ")
+                        .append(Strings.padEnd(Long.toString(policy.get().getFlushTimeout()), 5, ' '))
                         .append('\n')
         );
         logger.info(prettyPolicies.toString());
@@ -198,6 +225,16 @@ final class EnkiConfig extends AbstractConfig implements
         throw new IllegalStateException(msg);
     }
 
+    @Override
+    public Collection<ThrottlePolicyChangeListener> getAllTPCLs() {
+        return tpcls.get();
+    }
+
+    @Override
+    public void seedTPCLs(Collection<ThrottlePolicyChangeListener> tpcls) {
+        this.tpcls.set(tpcls);
+    }
+
     public static final class Keys {
         public static final String ENKI_ENV             = "enki.env";
         public static final String ENKI_ES_PATH_HOME    = "enki.es.path.home";
@@ -207,14 +244,14 @@ final class EnkiConfig extends AbstractConfig implements
         public static final String ENKI_ES_OTHER        = "enki.es.other";
 
         public static final String ENKI_KAFKA_BROKERS    = "enki.kafka.brokers";
+        public static final String ENKI_KAFKA_GROUP      = "enki.kafka.group";
         public static final String ENKI_KAFKA_ZK_SERVERS = "enki.kafka.zk.servers";
         public static final String ENKI_KAFKA_ZK_CHROOT  = "enki.kafka.zk.chroot";
         public static final String ENKI_KAFKA_ZK_TIMEOUT = "enki.kafka.zk.timeout";
-        public static final String ENKI_KAFKA_GROUP      = "enki.kafka.group";
 
-        public static final String ENKI_LEADER_ZOOKEEPERS = "enki.leader.zookeepers";
-        public static final String ENKI_LEADER_ZKCHROOT   = "enki.leader.zkchroot";
-        public static final String ENKI_LEADER_ZKTIMEOUT  = "enki.leader.zktimeout";
+        public static final String ENKI_ZK_ZOOKEEPERS = "enki.zk.zookeepers";
+        public static final String ENKI_ZK_CHROOT = "enki.zk.chroot";
+        public static final String ENKI_ZK_TIMEOUT = "enki.zk.timeout";
 
         public static final String ENKI_SERVER_BIND             = "enki.server.bind";
         public static final String ENKI_SERVER_PORT             = "enki.server.port";
@@ -222,6 +259,9 @@ final class EnkiConfig extends AbstractConfig implements
         public static final String ENKI_SERVER_THREADS_WORKER   = "enki.server.threads.worker";
 
         public static final String ENKI_THROTTLING_POLICIES = "enki.throttling.policies";
+
+        public static final String ENKI_TELEMETRY_SERVER = "enki.telemetry.server";
+        public static final String ENKI_TELEMETRY_PORT   = "enki.telemetry.port";
     }
 
     public static final class Defaults {
@@ -231,7 +271,7 @@ final class EnkiConfig extends AbstractConfig implements
         public static final String ENKI_KAFKA_ZK_CHROOT  = "/";
         public static final int    ENKI_KAFKA_ZK_TIMEOUT = 500;
 
-        public static final int    ENKI_LEADER_ZKTIMEOUT = 500;
+        public static final int ENKI_ZK_TIMEOUT = 500;
 
         public static final String  ENKI_SERVER_BIND             = "0.0.0.0";
         public static final int     ENKI_SERVER_PORT             = 3654;

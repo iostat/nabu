@@ -50,6 +50,7 @@ public class IndexTest extends ProfileOperation {
         documents =
                 fjp.submit(() ->
                         Files.walk(Paths.get("/Users/io/sr/socialrank/setup-scripts/dump"))
+                                .limit(30000)
                                 .parallel()
                                 .filter(Files::isRegularFile)
                                 .map(path -> {

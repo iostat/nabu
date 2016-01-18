@@ -5,6 +5,7 @@ import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import io.stat.nabuproject.core.util.concurrent.NamedThreadPoolExecutor;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -33,7 +34,7 @@ import java.util.stream.Collectors;
 public class AsyncListenerDispatcher<T> extends Component {
     private final ExecutorService workerExecutorService;
     private final ExecutorService collectorExecutorService;
-    private final Set<T> listeners;
+    private final @Getter Set<T> listeners;
     private final AtomicBoolean isShuttingDown;
 
     private final byte[] $executorLock;

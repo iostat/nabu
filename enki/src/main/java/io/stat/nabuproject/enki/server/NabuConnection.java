@@ -42,4 +42,9 @@ public interface NabuConnection extends EnkiPacketConnection {
      * @return a future that can be listened to which will be fullfilled with the Nabu's response to this request
      */
     CompletableFuture<EnkiPacket> sendUnassign(TopicPartition assignment);
+
+    /**
+     * Dispatches a fresh configuration packet to the connection.
+     */
+    void refreshConfiguration();
 }

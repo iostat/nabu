@@ -44,7 +44,7 @@ nabu:
       # join. This option supercedes any cluster.name defined in elasticsearch.yml
       #
       # REQUIRED
-      name: es.socialrank.azure
+      name: elasticsearch_michaelschonfeld
 
 
     # ES http.*, related to the REST server
@@ -65,12 +65,12 @@ nabu:
     # expects Map<String, String>
     #
     # OPTIONAL
-    other:
-      discovery.type: "kubernetes"
-      cloud.kubernetes.service: "es-transport"
-      cloud.kubernetes.namespace: "default"
-      security.manager.enabled: "false"
-      network.host: "_non_loopback:ipv4_"
+    # other:
+    #   discovery.type: "kubernetes"
+    #   cloud.kubernetes.service: "es-transport"
+    #   cloud.kubernetes.namespace: "default"
+    #   security.manager.enabled: "false"
+    #   network.host: "_non_loopback:ipv4_"
 
   # Settings for the Kafka subsystem
   #
@@ -107,19 +107,9 @@ nabu:
       # OPTIONAL, defaults to 10
       worker:   10
 
-  # Write throttling policies. By default, the Nabu will immediately attempt to write
-  # to Elasticsearch, and not read any more commands on the incoming pipe until that request
-  # finishes.
+  # Configuration for the StatsD telemetry service
   #
-  # OPTIONAL, defaults to what's set above
-  throttling:
-    # Really just an extension of the above. Currently "policies" is the only subkey of throttling
-    # A list of "ThrottlingPolicies which contain an index and
-    #
-    # OPTIONAL
-    policies:
-
-    - index: "index-1"
-      when: always
-    - index: "index-2"
-      when: always
+  # REQUIRED, because as simple as it is to make "null" sinks, who wants that?
+  telemetry:
+    server: 127.0.0.1
+    port: 8125

@@ -6,6 +6,7 @@ import io.stat.nabuproject.core.config.AbstractConfig;
 import io.stat.nabuproject.core.config.ConfigStore;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.NetworkServerConfigProvider;
+import io.stat.nabuproject.core.telemetry.TelemetryConfigProvider;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -19,7 +20,8 @@ import java.util.Map;
  */
 @Slf4j
 final class NabuConfig extends AbstractConfig implements
-        NetworkServerConfigProvider {
+        NetworkServerConfigProvider,
+        TelemetryConfigProvider {
     /**
      * Mapped to the nabu.env property
      */
@@ -66,9 +68,15 @@ final class NabuConfig extends AbstractConfig implements
      */
     private final @Getter Map<String, String> additionalESProperties;
 
+    private final @Getter String telemetryPrefix;
+    private final @Getter String telemetryServer;
+    private final @Getter int telemetryPort;
+
     @Inject
     public NabuConfig(ConfigStore provider) {
         super(provider);
+
+        this.telemetryPrefix = "nabu";
 
         this.env    = getRequiredProperty(Keys.NABU_ENV, String.class);
         this.eSHome = getRequiredProperty(Keys.NABU_ES_PATH_HOME, String.class);
@@ -91,6 +99,8 @@ final class NabuConfig extends AbstractConfig implements
         //noinspection unchecked todo: i know this is ratchet to coerce like this, but fuck it; pre-alpha motherfuckers!
         this.additionalESProperties = (Map)getOptionalSubmap(Keys.NABU_ES_OTHER, ImmutableMap.of());
 
+        this.telemetryServer = getRequiredProperty(Keys.NABU_TELEMETRY_SERVER, String.class);
+        this.telemetryPort   = getRequiredProperty(Keys.NABU_TELEMETRY_PORT, Integer.class);
     }
 
     @Override
@@ -113,6 +123,9 @@ final class NabuConfig extends AbstractConfig implements
         public static final String NABU_SERVER_THREADS_ACCEPTOR = "nabu.server.threads.acceptor";
 
         public static final String NABU_SERVER_THREADS_WORKER   = "nabu.server.threads.worker";
+
+        public static final String NABU_TELEMETRY_SERVER = "nabu.telemetry.server";
+        public static final String NABU_TELEMETRY_PORT   = "nabu.telemetry.port";
     }
 
     private static final class Defaults {

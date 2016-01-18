@@ -1,6 +1,7 @@
 package io.stat.nabuproject.nabu.kafka;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
@@ -11,7 +12,10 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiAssign;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiConfigure;
 import io.stat.nabuproject.core.enkiprotocol.packet.EnkiUnassign;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
+import io.stat.nabuproject.core.telemetry.TelemetryCounterSink;
+import io.stat.nabuproject.core.telemetry.TelemetryService;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
@@ -29,12 +33,13 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     private final EnkiClientEventSource eces;
+    private final TelemetryService telemetryService;
     private final NabuCommandESWriter esWriter;
     private final Map<TopicPartition, SingleTPConsumer> consumerMap;
     private final byte[] $consumerMapLock;
 
     // todo: refactor sessionsourcedwhatever to hold these?
-    private final AtomicReference<List<ThrottlePolicy>> throttlePolicies;
+    private final AtomicReference<List<AtomicReference<ThrottlePolicy>>> throttlePolicies;
     private final AtomicReference<List<String>> kafkaBrokers;
     private final AtomicReference<String> kafkaGroup;
 
@@ -44,12 +49,19 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     private final SessionSourcedKafkaBrokerCP sskbcp;
     private final AtomicBoolean configurationSetAtLeastOnce;
 
+    private final TelemetryCounterSink startedConsumerCounter;
+    private final TelemetryCounterSink stoppedConsumerCounter;
+    private final TelemetryCounterSink activeConsumerCounter;
+
     @Inject
-    ConsumerCoordinatorImpl(NabuCommandESWriter esWriter, EnkiClientEventSource eces) {
+    ConsumerCoordinatorImpl(NabuCommandESWriter esWriter,
+                            EnkiClientEventSource eces,
+                            TelemetryService telemetryService) {
         this.esWriter = esWriter;
         this.eces = eces;
+        this.telemetryService = telemetryService;
 
-        this.throttlePolicies = new AtomicReference<>(null);
+        this.throttlePolicies = new AtomicReference<>(Lists.newArrayList());
         this.kafkaBrokers = new AtomicReference<>(null);
         this.kafkaGroup = new AtomicReference<>(null);
         this.$sourcedConfigLock = new byte[0];
@@ -61,38 +73,39 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
         this.isShuttingDown = new AtomicBoolean(false);
 
         this.sskbcp = this.new SessionSourcedKafkaBrokerCP();
+
+        this.startedConsumerCounter = telemetryService.createCounter("consumers.started");
+        this.stoppedConsumerCounter = telemetryService.createCounter("consumers.stopped");
+        this.activeConsumerCounter  = telemetryService.createCounter("consumers.active");
     }
 
     @Override
     public boolean onConfigurationReceived(EnkiConnection enki, EnkiConfigure packet) {
         synchronized ($sourcedConfigLock) {
+            Map<String, Serializable> sourcedConfigs = packet.getOptions();
+
             if(throttlePolicies.get() != null) {
-                logger.error("Tried to reconfigure throttle policies in the same session. This is currently unsupported.");
-                return false;
+                logger.error("Trying to reconfigure throttle policies in the same session. This is shaky at best");
             }
 
+            //noinspection unchecked we all know what's really happening here...
+            List<ThrottlePolicy> newList = ((List<ThrottlePolicy>) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.THROTTLE_POLICIES, ImmutableList.of()));
+            ThrottlePolicyProvider.performTPMerge(newList, throttlePolicies.get(), true, logger);
+
             if(kafkaBrokers.get() != null) {
-                logger.error("Tried to reconfigure Kafka brokers in the same session. This is currently unsupported.");
-                return false;
+                logger.warn("Reconfiguring Kafka brokers is unsupported and this consumer coordinator will not update them");
+            } else {
+                //noinspection unchecked ditto
+                kafkaBrokers.set(
+                        (List<String>) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_BROKERS, ImmutableList.of())
+                );
             }
 
             if(kafkaGroup.get() != null) {
-                logger.error("Tried to reconfigure Kafka group in the same session. This is currently unsupported.");
-                return false;
+                logger.warn("Reconfiguring Kafka group is unsupported and this consumer coordinator will not update them");
+            } else {
+                kafkaGroup.set((String) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_GROUP, ""));
             }
-
-            Map<String, Serializable> sourcedConfigs = packet.getOptions();
-
-            //noinspection unchecked we all know what's really happening here...
-            throttlePolicies.set((List<ThrottlePolicy>)
-                    sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.THROTTLE_POLICIES, ImmutableList.of()));
-
-            //noinspection unchecked ditto
-            kafkaBrokers.set(
-                (List<String>) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_BROKERS, ImmutableList.of())
-            );
-
-            kafkaGroup.set((String) sourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.KAFKA_GROUP, ""));
 
             configurationSetAtLeastOnce.set(true);
 
@@ -104,7 +117,7 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     @Override
     public boolean onTaskAssigned(EnkiConnection enki, EnkiAssign packet) {
         synchronized($sourcedConfigLock) {
-            List<ThrottlePolicy> throttlePolicies = this.throttlePolicies.get();
+            List<AtomicReference<ThrottlePolicy>> throttlePolicies = this.throttlePolicies.get();
             List<String> kafkaBrokers = this.kafkaBrokers.get();
             String kafkaGroup = this.kafkaGroup.get();
 
@@ -131,9 +144,9 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
                     logger.error("Tried to re-assign the same TopicPartition to this worker. This is beyond wrong.");
                     return false;
                 } else {
-                    ThrottlePolicy maybeTP = throttlePolicies.stream()
+                    AtomicReference<ThrottlePolicy> maybeTP = throttlePolicies.stream()
                                                              .filter((policy ->
-                                                                 policy.getTopicName().equals(packet.getIndexName())
+                                                                 policy.get().getTopicName().equals(packet.getIndexName())
                                                              ))
                                                              .findFirst()
                                                              .orElse(null);
@@ -142,10 +155,10 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
                         logger.error("Tried to assign a topic to consume for which this Nabu did not receive a ThrottlePolicy");
                         return false;
                     } else {
-                        SingleTPConsumer stpc = new SingleTPConsumer(esWriter, maybeTP, packet.getPartitionNumber(), sskbcp);
-
+                        SingleTPConsumer stpc = new SingleTPConsumer(esWriter, maybeTP, packet.getPartitionNumber(), sskbcp, telemetryService);
                         stpc.start();
-
+                        startedConsumerCounter.increment();
+                        activeConsumerCounter.increment();
                         consumerMap.put(tp, stpc);
                     }
                 }

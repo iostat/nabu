@@ -11,6 +11,7 @@ import io.stat.nabuproject.core.net.AdvertisedAddressProvider;
 import io.stat.nabuproject.core.util.dispatch.AsyncListenerDispatcher;
 import io.stat.nabuproject.core.util.dispatch.ShutdownOnFailureCRC;
 import io.stat.nabuproject.enki.Enki;
+import io.stat.nabuproject.enki.zookeeper.ZKConfigProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.I0Itec.zkclient.IZkChildListener;
 import org.I0Itec.zkclient.IZkStateListener;
@@ -68,7 +69,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     private static final String ELECTION_PREFIX = "n_";
     private static final String ELECTION_PATH_AND_PREFIX = ELECTION_PATH + "/" + ELECTION_PREFIX;
 
-    private final ZKLeaderConfigProvider config;
+    private final ZKConfigProvider config;
 
     private final byte[] $leaderDataLock;
 
@@ -100,7 +101,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     private final Injector injector;
 
     @Inject
-    public ZKLeaderImpl(ZKLeaderConfigProvider config,
+    public ZKLeaderImpl(ZKConfigProvider config,
                         ESClient esClient,
                         AdvertisedAddressProvider addressProvider,
                         Injector injector) {
@@ -127,17 +128,17 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
 
     @Override
     public void start() throws ComponentException {
-        Function<String, String> appendChroot = curry2($(String::concat), config.getLEZKChroot());
+        Function<String, String> appendChroot = curry2(String::concat, config.getZKChroot());
         try {
             Iterator<String> chrootedZookeepersIterator =
-                    config.getLEZooKeepers()
+                    config.getZookeepers()
                             .stream()
                             .map(appendChroot)
                             .iterator();
 
             this.zkClient = new ZkClient(
                     new ZkConnection(Joiner.on(',').join(chrootedZookeepersIterator)),
-                    config.getLEZKConnTimeout(),
+                    config.getZKConnectionTimeout(),
                     new KafkaZKStringSerializerProxy());
 
             createLeaderData();
@@ -221,7 +222,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
             myZNodeSequence.set(newSequence);
 
             logger.info("created leader election ephemeral + sequential znode at {}{} with {}",
-                    config.getLEZKChroot(), newZnodePath, zkEncodedSeed);
+                    config.getZKChroot(), newZnodePath, zkEncodedSeed);
 
             zkClient.subscribeStateChanges(connectionStateListener);
             zkClient.subscribeChildChanges(ELECTION_PATH, electionPathChildListener);
@@ -240,6 +241,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
         // todo: stop watchers, etc.
         // may not actually be necessary...
         if(this.zkClient != null) {
+            this.zkClient.unsubscribeAll();
             this.zkClient.close();
         }
 

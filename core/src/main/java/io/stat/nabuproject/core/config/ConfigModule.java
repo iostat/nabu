@@ -12,7 +12,6 @@ public class ConfigModule extends AbstractModule {
     @Override
     protected void configure() {
         bind(ConfigStore.class).to(YamlConfigStore.class);
-
         bind(ESConfigProvider.class).to(AbstractConfig.class);
     }
 }

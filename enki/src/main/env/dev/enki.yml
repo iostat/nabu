@@ -109,20 +109,22 @@ enki:
   # ZooKeeper leader election and distributed TP config settings
   #
   # REQUIRED, at least zookeepers and chroot
-  leader:
+  zk:
     # Addresses of Zk instances to use for leader election
+    #
+    # REQUIRED
     zookeepers:
     - localhost:2181
 
     # The chroot, if the leader election is chrooted
-    zkchroot: '/nabu'
+    #
+    # REQUIRED
+    chroot: '/nabu'
 
     # Connection timeout
     #
     # OPTIONAL, defaults to 500
-    # zktimeout: 500
-
-
+    # timeout: 500
 
   # Settings for the Nabu API server
   #
@@ -149,6 +151,13 @@ enki:
       #
       # OPTIONAL, defaults to 50
       # worker:   50
+
+  # Configuration for the StatsD telemetry service
+  #
+  # REQUIRED, because as simple as it is to make "null" sinks, who wants that?
+  telemetry:
+    server: 127.0.0.1
+    port: 8125
 
   # Write throttling policies. By default, the Nabu will immediately attempt to write
   # to Elasticsearch, and not read any more commands on the incoming pipe until that request

@@ -14,7 +14,8 @@ public interface ZKEventSource {
      * Gets the data under <tt>path</tt>, and subscribes to future changes to the data in
      * <tt>path</tt>. This means that the {@link ZKEventListener#onZkDataChange(ZKClient, String, String)}
      * callback will be called.
-     * @param path the path to get and subscribe to changes for
+     *
+     * @param path       the path to get and subscribe to changes for
      * @param subscriber the subscriber to notify of future changes
      * @return the contents of path as the subscription was made
      */
@@ -24,10 +25,10 @@ public interface ZKEventSource {
      * Gets the list of children of <tt>path</tt>, and subscribes to future changes to the data in
      * <tt>path</tt>. This means that the {@link ZKEventListener#onZkDataChange(ZKClient, String, String)}
      * callback will be called.
-     * @param path the path to get and subscribe to changes for
+     *
+     * @param path       the path to get and subscribe to changes for
      * @param subscriber the subscriber to notify
-     * @return the contents of path as the subscription was made
-     * @param path the path to subscribe to
+     * @param path       the path to subscribe to
      * @param subscriber the subscriber to notify of future changes
      * @return the children of path at the time the subscription began.
      */
@@ -36,7 +37,8 @@ public interface ZKEventSource {
     /**
      * Stops <tt>listener</tt> from being notified when the set of children under
      * <tt>path</tt> changes, if it was. Otherwise does nothing.
-     * @param path the path to stop notifying listener of changes to
+     *
+     * @param path     the path to stop notifying listener of changes to
      * @param listener the listener who should not longer be notified
      */
     void unsubscribeFromChildEvents(String path, ZKEventListener listener);
@@ -44,22 +46,15 @@ public interface ZKEventSource {
     /**
      * Stops <tt>listener</tt> from being notified of changes to the data
      * stored in <tt>path</tt>.
-     * @param path the path to stop notifying listener of changes to
+     *
+     * @param path     the path to stop notifying listener of changes to
      * @param listener the listener who should no longer be notified
      */
     void unsubscribeFromDataEvents(String path, ZKEventListener listener);
 
     /**
-     * Gets the contents of <tt>path</tt>
-     * @param path the path
-     * @return the contents of the path if it exists and has data, or null otherwise
+     * Removes the leader from event notifications for ANY kind of subscribed event
+     * @param listener the listener to stop notifying
      */
-    String get(String path);
-
-    /**
-     * Gets the children of <tt>path</tt>
-     * @param path the path whose childrne to get
-     * @return a List of the contents of <tt>path</tt>
-     */
-    List<String> getChildren(String path);
+    void unsubscribeFromAllEvents(ZKEventListener listener);
 }

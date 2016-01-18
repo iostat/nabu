@@ -26,9 +26,9 @@ public class Main {
     public static final int FJP_SIZE = 100;
     public static final int TP_SIZE = 1500;
 
-    public Main() throws Exception {
+    public Main(int port) throws Exception {
         this.servers = ImmutableList.of(
-                new AddressPort("127.0.0.1", 6228)
+                new AddressPort("127.0.0.1", port)
         );
         this.client = new NabuClient("elasticsearch_michaelschonfeld", servers);
 
@@ -37,7 +37,7 @@ public class Main {
 
     private void start() throws Throwable {
         logger.info("GET IN");
-        Thread.sleep(10000);
+        Thread.sleep(5000);
         logger.info("TOO LATE LOLZ");
 
         client.connect();
@@ -89,7 +89,7 @@ public class Main {
 
     public static void main(String[] args) {
         try {
-            Main m = new Main();
+            Main m = new Main(Integer.parseInt(args[0]));
             m.start();
         } catch(Throwable e) {
             logger.error("o noes!", e);

@@ -72,12 +72,12 @@ enki:
     # expects Map<String, String>
     #
     # OPTIONAL
-#    other:
-#      discovery.type: "kubernetes"
-#      cloud.kubernetes.service: "es-transport"
-#      cloud.kubernetes.namespace: "default"
-#      security.manager.enabled: "false"
-#      network.host: "_non_loopback:ipv4_"
+    # other:
+    #   discovery.type: "kubernetes"
+    #   cloud.kubernetes.service: "es-transport"
+    #   cloud.kubernetes.namespace: "default"
+    #   security.manager.enabled: "false"
+    #   network.host: "_non_loopback:ipv4_"
 
 
   # Settings for the Kafka subsystem
@@ -120,7 +120,7 @@ enki:
   # ZooKeeper leader election and distributed TP config settings
   #
   # REQUIRED, at least zookeepers and chroot
-  leader:
+  zk:
     # Addresses of Zk instances to use for leader election
     zookeepers:
     - zookeeper-1.default.svc.srnk.int:2181
@@ -128,7 +128,7 @@ enki:
     - zookeeper-3.default.svc.srnk.int:2181
 
     # The chroot, if the leader election is chrooted
-    zkchroot: '/nabu'
+    chroot: '/nabu'
 
     # Connection timeout
     #
@@ -162,6 +162,14 @@ enki:
       #
       # OPTIONAL, defaults to 50
       # worker:   50
+
+  # Configuration for the StatsD telemetry service
+  #
+  # REQUIRED, because as simple as it is to make "null" sinks, who wants that?
+  telemetry:
+    server: 127.0.0.1
+    port: 8125
+
 
   # Write throttling policies. By default, the Nabu will immediately attempt to write
   # to Elasticsearch, and not read any more commands on the incoming pipe until that request

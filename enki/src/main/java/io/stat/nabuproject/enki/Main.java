@@ -10,11 +10,13 @@ import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.kafka.KafkaModule;
 import io.stat.nabuproject.core.net.AdvertisedAddressResolverModule;
+import io.stat.nabuproject.core.telemetry.TelemetryModule;
 import io.stat.nabuproject.core.throttling.DynamicTPPModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.enki.integration.IntegrationModule;
 import io.stat.nabuproject.enki.leader.ZKLeaderElectionModule;
 import io.stat.nabuproject.enki.server.EnkiServerModule;
+import io.stat.nabuproject.enki.zookeeper.ZookeeperModule;
 import lombok.Getter;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
@@ -44,8 +46,10 @@ public class Main {
         this.injector = Guice.createInjector(
                 new EnkiModule(),
                 new ConfigModule(),
+                new TelemetryModule(),
                 new AdvertisedAddressResolverModule(AdvertisedAddressResolverModule.Resolver.MOST_ACCESSIBLE),
                 new ESModule(),
+                new ZookeeperModule(),
                 new KafkaModule(),
                 new ZKLeaderElectionModule(),
                 new IntegrationModule(true),

@@ -5,11 +5,15 @@ import com.google.common.collect.Sets;
 import com.google.common.primitives.Longs;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.google.inject.Key;
+import com.google.inject.TypeLiteral;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.DynamicComponent;
 import io.stat.nabuproject.core.elasticsearch.ESClient;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
 import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.net.AddressPort;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.core.util.Tuple;
 import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import io.stat.nabuproject.core.util.concurrent.ResettableCountDownLatch;
@@ -18,6 +22,7 @@ import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.leader.LeaderData;
 import io.stat.nabuproject.enki.leader.LeaderEventListener;
 import io.stat.nabuproject.enki.leader.ZKLeaderProvider;
+import io.stat.nabuproject.enki.zookeeper.ZKClient;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -37,6 +42,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -150,7 +156,16 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
     private final ResettableCountDownLatch esEventSyncDelayLatch;
     private final AtomicLong lastESEventSyncDelayCompleted;
 
-    private static Predicate<LeaderData> existsInES(List<Tuple<String, AddressPort>> knownFromES) {      /* **************************** */
+    private final AtomicBoolean wasSelfLeader;
+
+    /**
+     * When we get elected leader, this gets populated with a Guice'd instance
+     * of ZKTPP. Because its not otherwise started anywhere, this ESZKLeaderIntegrated
+     * is responsible for stopping it if the need ever arises.
+     */
+    private final AtomicReference<ZKThrottlePolicyProvider> zktppRef;
+
+    private static Predicate<LeaderData> existsInES(List<Tuple<String, AddressPort>> knownFromES) {     /* **************************** */
         // for the candidate that we are testing                                             gave u      *          oh noes!            *
         return candidate -> knownFromES.stream() // see if                        the ES client    s     * theres a leak in the stream  *
         /*              |  \        */.anyMatch(t -> // any of the    of the tuples     ___________  h   * and the bytes are all wonky! *
@@ -184,6 +199,9 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
         this.esEventSyncDelayLatch.countDown();
         this.lastESEventSyncDelayCompleted = new AtomicLong(System.currentTimeMillis());
 
+        this.wasSelfLeader = new AtomicBoolean(false);
+        this.zktppRef = new AtomicReference<>(null);
+
         logger.info("ESZKLeaderIntegrator constructed!");
     }
 
@@ -213,6 +231,11 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     @Override
     public void shutdown() throws ComponentException {
+        ZKThrottlePolicyProvider refPtr = this.zktppRef.get();
+        if(refPtr != null) {
+            refPtr.shutdown();
+        }
+
         zkLeaderProvider.removeLeaderEventListener(this);
         esClient.removeNabuESEventListener(this);
 
@@ -330,6 +353,43 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
             logger.info("ZK says {}:{} is allegedly the leader, and my check says its: {}", isSelf ? "self" : "other", allegedLeaderShort, trueLeaderEqZkLead);
             logger.info("ESZK:{} {} ZK:{} (self:{})", trueLeaderShort, trueLeaderEqZkLead ? "==" : "!=", allegedLeaderShort, myLeaderDataShort);
         }
+
+        if(wasSelfLeader.get() && !(isSelf && trueLeaderEqZkLead)) {
+            logger.error("I was the leader before and no longer am. This is impossble.");
+            injector.getInstance(Enki.class).shutdown();
+            return false;
+        }
+
+        if(isSelf && trueLeaderEqZkLead) {
+            boolean wasPreviouslyLeader = wasSelfLeader.get();
+            if(!wasPreviouslyLeader) {
+                try {
+                    if(zktppRef.get() == null) {
+                        zktppRef.set(injector.getInstance(ZKThrottlePolicyProvider.class));
+                    } else {
+                        logger.error("what the fuck, zktpp already set prior?????. totally impossible.");
+                        injector.getInstance(Enki.class).shutdown();
+                    }
+
+                    ZKThrottlePolicyValidator tpv = new ZKThrottlePolicyValidator(
+                            injector.getInstance(ZKClient.class),
+                            injector.getInstance(Key.get(new TypeLiteral<DynamicComponent<ThrottlePolicyProvider>>(){})),
+                            zktppRef.get());
+
+                    if(!tpv.isValidToLead()) { // isValidToLead also has the side effect of updating the DynamicTPP to a ZK-based one.
+                        logger.error("ThrottlePolicyValidator failed after I was elected leader. Shutting down Enki.");
+                        injector.getInstance(Enki.class).shutdown();
+                        return false;
+                    } else {
+                        wasSelfLeader.set(true);
+                    }
+                } catch(Exception e) {
+                    logger.error("ThrottlePolicyValidator threw an exception while validating after I was elected leader. Shutting down Enki.", e);
+                    injector.getInstance(Enki.class).shutdown();
+                }
+            }
+        }
+
 
         setAsLeader(trueLeader);
 

@@ -7,6 +7,8 @@ import com.google.common.collect.Queues;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
+import io.stat.nabuproject.core.telemetry.TelemetryGaugeSink;
+import io.stat.nabuproject.core.telemetry.TelemetryService;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.nabu.common.command.NabuWriteCommand;
 import io.stat.nabuproject.nabu.elasticsearch.ESWriteResults;
@@ -28,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A managed wrapper around a KafkaConsumer that consumes only a single instance
@@ -51,7 +54,7 @@ final class SingleTPConsumer extends Component {
     /**
      * The throttle policy that specifies target write time and max batch size
      */
-    private final ThrottlePolicy throttlePolicy;
+    private final AtomicReference<ThrottlePolicy> throttlePolicy;
 
     /**
      * The KafkaConsumer instance which does the heavy lifting of
@@ -109,16 +112,21 @@ final class SingleTPConsumer extends Component {
      */
     private final CountDownLatch wakeupLatch;
 
+    private final TelemetryGaugeSink batchSizeGauge;
+    private final TelemetryGaugeSink writeTimeGauge;
+    private final TelemetryGaugeSink targetTimeGauge;
+
 
     public SingleTPConsumer(NabuCommandESWriter esWriter,
-                            ThrottlePolicy throttlePolicy,
+                            AtomicReference<ThrottlePolicy> throttlePolicy,
                             int partitionToSubscribe,
-                            KafkaBrokerConfigProvider config) {
+                            KafkaBrokerConfigProvider config,
+                            TelemetryService telemetryService) {
         this.esWriter = esWriter;
         this.throttlePolicy = throttlePolicy;
-        this.targetTopicPartition = new TopicPartition(throttlePolicy.getTopicName(), partitionToSubscribe);
+        this.targetTopicPartition = new TopicPartition(throttlePolicy.get().getTopicName(), partitionToSubscribe);
 
-        this.currentBatchSize = new AtomicInteger(throttlePolicy.getMaxBatchSize());
+        this.currentBatchSize = new AtomicInteger(throttlePolicy.get().getMaxBatchSize());
         this.isStopped = new AtomicBoolean(false);
         this.nextFlushTime = new AtomicLong(System.currentTimeMillis());
 
@@ -131,7 +139,7 @@ final class SingleTPConsumer extends Component {
 
         this.consumer = new KafkaConsumer<>(consumerProps);
         this.consumerThread = new Thread(this::runConsumer);
-        this.friendlyTPString = String.format("SingleTPConsumer(%s[%d])", throttlePolicy.getIndexName(), partitionToSubscribe);
+        this.friendlyTPString = String.format("SingleTPConsumer(%s[%d])", throttlePolicy.get().getIndexName(), partitionToSubscribe);
         this.consumerThread.setName(this.friendlyTPString);
 
         this.readyLatch = new CountDownLatch(1);
@@ -147,6 +155,10 @@ final class SingleTPConsumer extends Component {
             }
         });
         this.consumerWakeupWait.setName(this.friendlyTPString + "-FinishConsumeWait");
+
+        this.batchSizeGauge = telemetryService.createGauge("consumer.batchsize", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
+        this.writeTimeGauge = telemetryService.createGauge("consumer.writetime", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
+        this.targetTimeGauge = telemetryService.createGauge("consumer.target", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
     }
 
     private void runConsumer() {
@@ -155,7 +167,7 @@ final class SingleTPConsumer extends Component {
             consumer.assign(ImmutableList.of(targetTopicPartition));
             this.readyLatch.countDown();
             ArrayDeque<ConsumerRecord<String,NabuWriteCommand>> consumptionBacklog = Queues.newArrayDeque();
-            ArrayDeque<NabuWriteCommand> immediateConsumptionQueue = new ArrayDeque<>(throttlePolicy.getMaxBatchSize() * 4);
+            ArrayDeque<NabuWriteCommand> immediateConsumptionQueue = new ArrayDeque<>(throttlePolicy.get().getMaxBatchSize() * 4);
             long lastConsumedOffset;
             while(!isStopped.get() || !consumptionBacklog.isEmpty()) { // items in the backlog can preempt stopping the consumer, see explanation below
                 int consumed = 0;
@@ -176,7 +188,7 @@ final class SingleTPConsumer extends Component {
                         consumed++;
                     }
 
-                    logger.info("Had backlog, consumed {}, {} remaining in backlog.", consumed, immediateConsumptionQueue.size());
+                    logger.info("Had backlog, consumed {}, {} remaining in backlog.", consumed, consumptionBacklog.size());
                 }
 
                 // if we cleared the backlog but still have room or time for more...
@@ -243,7 +255,17 @@ final class SingleTPConsumer extends Component {
             logger.info("{}=>{} ({} docs)", startedWithOffset, lastConsumedOffset, qsize);
 
             // todo: adjust currentBatchSize here based on res
+            setCurrentBatchSize(throttlePolicy.get().getMaxBatchSize());
+            writeTimeGauge.set(res.getTime() / 1000000); // lol nanos
+            targetTimeGauge.set(throttlePolicy.get().getWriteTimeTarget());
         }
+
+        logger.info("My TP is {}", throttlePolicy.get());
+    }
+
+    void setCurrentBatchSize(int newSize) {
+        currentBatchSize.set(newSize);
+        batchSizeGauge.set(newSize);
     }
 
     @Override

@@ -227,7 +227,7 @@ class ConnectionImpl implements NabuConnection {
      * Assigns the next sequence number.
      * @return the next sequence number.
      */
-    private long assignSequence() {
+    private @Synchronized long assignSequence() {
         return lastOutgoingSequence.incrementAndGet();
     }
 
@@ -364,6 +364,20 @@ class ConnectionImpl implements NabuConnection {
     @Override
     public CompletableFuture<EnkiPacket> sendUnassign(TopicPartition assignment) {
         return dispatchPacket(new EnkiUnassign(assignSequence(), assignment.topic(), assignment.partition()));
+    }
+
+    @Override
+    public void refreshConfiguration() {
+        dispatchConfigure(buildDispatchedNabuConfig()).whenCompleteAsync((ack, throwable) -> {
+            if(throwable != null) {
+                logger.error("{} threw an exception when dispatching a fresh configuration. Attempting graceful leave.", this);
+                leaveGracefully();
+            }
+            if(ack.getType() != EnkiPacket.Type.ACK) {
+                logger.error("{} gave me back something other than ACK ({}) when dispatching a fresh configuration.", this, ack);
+                leaveGracefully();
+            }
+        });
     }
 
     @Override @Synchronized

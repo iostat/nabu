@@ -9,6 +9,7 @@ import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiClientModule;
+import io.stat.nabuproject.core.telemetry.TelemetryModule;
 import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.nabu.elasticsearch.CommandESWriterModule;
 import io.stat.nabuproject.nabu.kafka.KafkaModule;
@@ -44,6 +45,7 @@ public class Main {
         this.injector = Guice.createInjector(
                 new ESExtractorModule(),
                 new NabuModule(),
+                new TelemetryModule(),
                 new EnkiClientModule(true, true),
                 new ConfigModule(),
                 new ESModule(),

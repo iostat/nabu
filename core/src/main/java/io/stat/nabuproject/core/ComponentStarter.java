@@ -8,6 +8,9 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A basic Component which starts Components in the order they are registered and stops
@@ -26,10 +29,13 @@ import java.util.Set;
 public final class ComponentStarter extends Component {
     private Deque<Component> deque;
     private Set<Class<? extends Component>> registeredComponents;
+    private AtomicBoolean isShuttingDown;
+    private CountDownLatch startLatch;
 
     public ComponentStarter() {
         this.deque = new ArrayDeque<>();
         this.registeredComponents = new HashSet<>();
+        this.isShuttingDown = new AtomicBoolean(false);
     }
 
     public void registerComponents(Component... cs) {
@@ -47,14 +53,32 @@ public final class ComponentStarter extends Component {
     @Override
     public void start() throws ComponentException {
         // don't use deque.forEach unless you want terrible exception bubbling.
+        this.startLatch = new CountDownLatch(deque.size());
         for (Component c : deque) {
-            c.setStarter(this);
-            c._dispatchStart();
+            try {
+                c.setStarter(this);
+
+                if(!this.isShuttingDown.get()) {
+                    c._dispatchStart();
+                } else {
+                    logger.error("Cannot start {} as this starter is shutting down", c);
+                }
+            } catch(Exception e) {
+                logger.error("An exception bubbled up when trying to start a component", e);
+            } finally {
+                startLatch.countDown();
+            }
         }
     }
 
     @Override
     public void shutdown() throws ComponentException {
+        this.isShuttingDown.set(true);
+        try {
+            startLatch.await(5, TimeUnit.SECONDS);
+        } catch(InterruptedException e) {
+            logger.error("Failed to await startup to finish before shutting down.", e);
+        }
         Iterator<Component> rit = deque.descendingIterator();
         while(rit.hasNext()) {
             rit.next()._dispatchShutdown();

@@ -2,6 +2,7 @@ package io.stat.nabuproject.core.enkiprotocol.client;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -20,6 +21,7 @@ import io.stat.nabuproject.core.enkiprotocol.packet.EnkiPacket;
 import io.stat.nabuproject.core.net.AddressPort;
 import io.stat.nabuproject.core.net.channel.FluentChannelInitializer;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
+import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +61,8 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
 
     private final NamedThreadFactory nioThreadFactory;
 
+    private final List<AtomicReference<ThrottlePolicy>> sourcedThrottlePolicies;
+
     @Inject
     public ClientImpl(EnkiAddressProvider provider) {
         this.shouldAttemptReconnect = new AtomicBoolean(true);
@@ -97,6 +101,7 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
         });
 
         this.shutdowner = new NamedThreadFactory("EnkiClientShutdowner").newThread(this::doShutdown);
+        this.sourcedThrottlePolicies = Lists.newArrayList();
 
         addEnkiClientEventListener(this);
     }
@@ -224,8 +229,8 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
     }
 
     @Override @SuppressWarnings("unchecked")
-    public List<ThrottlePolicy> getThrottlePolicies() {
-        return (List<ThrottlePolicy>) enkiSourcedConfigs.getOrDefault(EnkiSourcedConfigKeys.THROTTLE_POLICIES, ImmutableList.of());
+    public List<AtomicReference<ThrottlePolicy>> getTPReferences() {
+        return sourcedThrottlePolicies;
     }
 
     @Override
@@ -235,6 +240,11 @@ class ClientImpl extends EnkiClient implements EnkiClientEventListener {
         synchronized ($enkiSourcedConfigLock) {
             wasEnkiSourcedConfigSet = true;
             enkiSourcedConfigs = ImmutableMap.copyOf(packet.getOptions());
+            // todo: hack hack hack hack hack hack hack hack hack hack
+            //noinspection unchecked yes i know ffs
+            List<ThrottlePolicy> newTPs = ((List<ThrottlePolicy>)(enkiSourcedConfigs.get(EnkiSourcedConfigKeys.THROTTLE_POLICIES)));
+            // todo: stop judging me
+            ThrottlePolicyProvider.performTPMerge(newTPs, sourcedThrottlePolicies, true, logger);
         }
 
         return true;

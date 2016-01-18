@@ -1,4 +1,4 @@
-package io.stat.nabuproject.enki.leader;
+package io.stat.nabuproject.enki.zookeeper;
 
 import java.util.List;
 
@@ -8,23 +8,23 @@ import java.util.List;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
-public interface ZKLeaderConfigProvider {
+public interface ZKConfigProvider {
     /**
      * The ZooKeeper servers on which to perform leader election. (in the form of host:port)
      * @return the address of the ZK server to perform leader election in
      */
-    List<String> getLEZooKeepers();
+    List<String> getZookeepers();
 
     /**
      * A directory which will be the base of the ZK election nodes.
      * That is, the final path where ZNodes will be creates is LEZKServer:LEZKPort/LEZKChroot/enki_le/***
      * @return the ZKChroot
      */
-    String getLEZKChroot();
+    String getZKChroot();
 
     /**
      * How long to wait before the connection times out.
      * @return the zookeeper connection timeout.
      */
-    int getLEZKConnTimeout();
+    int getZKConnectionTimeout();
 }

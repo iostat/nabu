@@ -55,6 +55,9 @@ project(":core") {
         // also duh
         compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.9.0.0')
         compile(group: 'org.apache.kafka', name: 'kafka_2.10', version: '0.9.0.0')
+
+        // statsd telemetry
+        compile(group: 'com.datadoghq', name: 'java-dogstatsd-client', version: '2.1.1')
     }
 
     // lololololololololol (for JVMHackery)
