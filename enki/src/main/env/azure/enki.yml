@@ -98,9 +98,9 @@ enki:
       #
       # REQUIRED
       servers:
-      - zookeeper-1.default.svc.srnk.int:9092
-      - zookeeper-1.default.svc.srnk.int:9092
-      - zookeeper-1.default.svc.srnk.int:9092
+      - zookeeper-1.default.svc.srnk.int:2181
+      - zookeeper-1.default.svc.srnk.int:2181
+      - zookeeper-1.default.svc.srnk.int:2181
 
       # The chroot, if Kafka is chrooted
       #
