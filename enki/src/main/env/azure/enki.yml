@@ -168,7 +168,6 @@ enki:
     server: 127.0.0.1
     port: 8125
 
-
   # Write throttling policies. By default, the Nabu will immediately attempt to write
   # to Elasticsearch, and not read any more commands on the incoming pipe until that request
   # finishes.

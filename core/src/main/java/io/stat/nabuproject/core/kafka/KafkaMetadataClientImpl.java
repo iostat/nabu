@@ -10,7 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
 
-import java.util.Iterator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Provides a method of querying Kafka metadata using Zookeeper.
@@ -35,19 +36,21 @@ final class KafkaMetadataClientImpl extends KafkaMetadataClient {
 
     @Override
     public void start() throws ComponentException {
-        Iterator<String> chrootedZookeepersIterator =
+        List<String> chrootedZookeepers =
                 config.getKafkaZookeepers()
                       .stream()
                       .map(zk -> zk + config.getKafkaZkChroot())
-                      .iterator();
+                      .collect(Collectors.toList());
 
-        this.zkConnection = new ZkConnection(Joiner.on(',').join(chrootedZookeepersIterator));
+        this.zkConnection = new ZkConnection(Joiner.on(',').join(chrootedZookeepers));
         this.zkClient = new ZkClient(
                 this.zkConnection,
                 config.getKafkaZkConnTimeout());
         this.zkClient.setZkSerializer(new KafkaZKStringSerializerProxy());
 
         this.zkUtils = new ZkUtils(this.zkClient, this.zkConnection, false); // todo: yeah that false.. yeah... seriously...
+
+        logger.info("MetadataImpl start() :: {}", chrootedZookeepers);
     }
 
     @Override

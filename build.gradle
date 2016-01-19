@@ -138,7 +138,7 @@ task docs(type: Javadoc) {
 task jenkins(dependsOn: [":enki:shadowJar", ":nabu:shadowJar", ":client-test:shadowJar"]) << {
     exec {
         executable "docker"
-        args 'rmi', 'srnk.io/svcs/nabu'
+        args 'rmi', 'srnk.io/svcs/nabu:0.1'
         ignoreExitValue = true
     }
 
