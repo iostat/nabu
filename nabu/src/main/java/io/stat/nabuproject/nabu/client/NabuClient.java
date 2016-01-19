@@ -350,6 +350,6 @@ public class NabuClient {
     }
 
     public UpdateCommandBuilder prepareUpdateCommand(String indexName, String documentType) {
-        return new UpdateCommandBuilder(indexName, documentType);
+        return new UpdateCommandBuilder(this, indexName, documentType);
     }
 }

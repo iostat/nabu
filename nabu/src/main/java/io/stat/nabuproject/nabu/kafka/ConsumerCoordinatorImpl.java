@@ -195,9 +195,7 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
             throttlePolicies.set(null);
 
             synchronized ($consumerMapLock) {
-                for(SingleTPConsumer tpc : consumerMap.values()) {
-                    tpc.shutdown();
-                }
+                consumerMap.values().forEach(SingleTPConsumer::shutdown);
                 consumerMap.clear();
             }
         }

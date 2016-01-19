@@ -1,7 +1,7 @@
 package io.stat.nabuproject.nabu.client;
 
 import com.google.common.collect.ImmutableMap;
-import io.stat.nabuproject.nabu.common.command.IndexCommand;
+import io.stat.nabuproject.nabu.common.command.UpdateCommand;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
@@ -16,7 +16,7 @@ import java.util.Map;
  */
 @EqualsAndHashCode @ToString
 public class UpdateCommandBuilder implements WriteCommandBuilder {
-    final NabuClientConnectionState executor;
+    final NabuClient executor;
 
     String index;
     String documentType;
@@ -60,7 +60,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * @param index The ES index this command will operate on
      * @param documentType the document type (i.e. mapping) this command will operate on
      */
-    public UpdateCommandBuilder(NabuClientConnectionState executor, String index, String documentType) {
+    public UpdateCommandBuilder(NabuClient executor, String index, String documentType) {
         this(executor, index, documentType,  "");
     }
 
@@ -79,7 +79,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * @param documentType the document type (i.e. mapping) this command will operate on
      * @param documentID the ID of the document.
      */
-    public UpdateCommandBuilder(NabuClientConnectionState executor, String index, String documentType, String documentID) {
+    public UpdateCommandBuilder(NabuClient executor, String index, String documentType, String documentID) {
         this(executor, index, documentType, documentID, "");
     }
 
@@ -98,7 +98,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * @param documentID the ID of the document.
      * @param documentSource the JSON source of the document
      */
-    public UpdateCommandBuilder(NabuClientConnectionState executor, String index, String documentType, String documentID, String documentSource) {
+    public UpdateCommandBuilder(NabuClient executor, String index, String documentType, String documentID, String documentSource) {
         this(executor, index, documentType, documentID, documentSource, false);
     }
 
@@ -117,7 +117,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * @param documentSource the JSON source of the document
      * @param shouldRefresh whether or not ES should trigger an index refresh after this command is finally executed.
      */
-    public UpdateCommandBuilder(NabuClientConnectionState executor, String index, String documentType, String documentID, String documentSource, boolean shouldRefresh) {
+    public UpdateCommandBuilder(NabuClient executor, String index, String documentType, String documentID, String documentSource, boolean shouldRefresh) {
         this(executor, index, documentType, documentID, documentSource, shouldRefresh, false);
     }
 
@@ -136,7 +136,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * @param shouldRefresh whether or not ES should trigger an index refresh after this command is finally executed.
      * @param isUpsert whether or not this update should be treated as an upsert
      */
-    public UpdateCommandBuilder(NabuClientConnectionState executor, String index, String documentType, String documentID, String documentSource, boolean shouldRefresh, boolean isUpsert) {
+    public UpdateCommandBuilder(NabuClient executor, String index, String documentType, String documentID, String documentSource, boolean shouldRefresh, boolean isUpsert) {
         this(executor, index, documentType, documentID, documentSource, shouldRefresh, isUpsert, "");
     }
 
@@ -155,7 +155,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * @param isUpsert whether or not this update should be treated as an upsert
      * @param updateScript the update script to run when executing this command
      */
-    public UpdateCommandBuilder(NabuClientConnectionState executor, String index, String documentType,
+    public UpdateCommandBuilder(NabuClient executor, String index, String documentType,
                                 String documentID, String documentSource, boolean shouldRefresh,
                                 boolean isUpsert, String updateScript) {
         this(executor, index, documentType, documentID, documentSource, shouldRefresh, isUpsert, updateScript, ImmutableMap.of());
@@ -175,7 +175,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * @param updateScript the update script to run when executing this command
      * @param scriptParams a map of parameters to pass to the script when it runs
      */
-    public UpdateCommandBuilder(NabuClientConnectionState executor, String index, String documentType,
+    public UpdateCommandBuilder(NabuClient executor, String index, String documentType,
                                 String documentID, String documentSource, boolean shouldRefresh,
                                 boolean isUpsert, String updateScript, Map<String, Serializable> scriptParams) {
         this.executor = executor;
@@ -193,56 +193,63 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * Change the index to something else
      * @param idx the new index
      */
-    public void onIndex(String idx) {
+    public UpdateCommandBuilder onIndex(String idx) {
         index = idx;
+        return this;
     }
 
     /**
      * Change the type (mapping) of the document
      * @param newType the new type (mapping)
      */
-    public void ofType(String newType) {
+    public UpdateCommandBuilder ofType(String newType) {
         documentType = newType;
+        return this;
     }
 
     /**
      * Change the document's JSON source
      * @param src the new document source
      */
-    public void withSource(String src) {
+    public UpdateCommandBuilder withSource(String src) {
         documentSource = src;
+        return this;
     }
 
     /**
      * Set the indexed document's ID
      * @param id the ID to write the document into
      */
-    public void withID(String id) {
+    public UpdateCommandBuilder withID(String id) {
         documentID = id;
+        return this;
     }
 
     /**
      * Set whether or not the document will trigger a refresh when indexed
      * @param wellShouldIt whether or not an update op should be triggered after this command is executed
      */
-    public void shouldRefresh(boolean wellShouldIt) {
+    public UpdateCommandBuilder shouldRefresh(boolean wellShouldIt) {
         shouldRefresh = wellShouldIt;
+        return this;
     }
 
     /**
      * Whether or not the document should be created if it doesnt exist
      * @param wellIsIt well.. is it?
      */
-    public void isUpsert(boolean wellIsIt) {
+    public UpdateCommandBuilder isUpsert(boolean wellIsIt) {
         isUpsert = wellIsIt;
+        return this;
     }
 
     /**
      * Change the update script associated with this document
      * @param theScript the document's new update script
      */
-    public void withScript(String theScript) {
+    public UpdateCommandBuilder withScript(String theScript) {
         updateScript = theScript;
+        return this;
     }
 
     /**
@@ -252,16 +259,21 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
      * PARAMS ARE UPDATE.</b>
      * @param newParams the new parameters for the script
      */
-    public void withScriptParams(Map<String, Serializable> newParams) {
+    public UpdateCommandBuilder withScriptParams(Map<String, Serializable> newParams) {
         scriptParams = newParams;
+        return this;
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public IndexCommand build(long sequence) {
-        return new IndexCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh);
+    public UpdateCommand build(long sequence) {
+        String newScript = updateScript == null ? "" : updateScript.trim();
+        return new UpdateCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh,
+                newScript,
+                scriptParams, isUpsert,
+                newScript.isEmpty());
     }
 
     /**

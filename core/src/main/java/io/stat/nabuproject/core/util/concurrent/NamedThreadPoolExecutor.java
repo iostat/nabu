@@ -1,6 +1,7 @@
 package io.stat.nabuproject.core.util.concurrent;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +34,16 @@ public class NamedThreadPoolExecutor extends ThreadPoolExecutor {
                                    BlockingQueue<Runnable> queue) {
         super(
                 min, max, timeout, timeoutUnit, queue, new NamedThreadFactory(name)
+        );
+    }
+
+    public NamedThreadPoolExecutor(String name,
+                                   int min, int max,
+                                   long timeout, TimeUnit timeoutUnit,
+                                   BlockingQueue<Runnable> queue,
+                                   RejectedExecutionHandler handler) {
+        super(
+                min, max, timeout, timeoutUnit, queue, new NamedThreadFactory(name), handler
         );
     }
 }

@@ -142,6 +142,19 @@ task jenkins {
     dependsOn ":nabu:shadowJar"
     dependsOn ":client-test:shadowJar"
     dependsOn "docs"
-    println "i should download elasticsearch plugins here, copy them into a docker staging directory"
-    println "then execute the docker file!"
+
+    exec {
+        executable "docker"
+        args 'rmi', 'srnk.io/svcs/nabu'
+    }
+
+    exec {
+        executable "docker"
+        args 'build', '-t', 'srnk.io/svcs/nabu:0.1', '.'
+    }
+
+    exec {
+        executable "docker"
+        args 'push', 'srnk.io/svcs/nabu:0.1', '.'
+    }
 }

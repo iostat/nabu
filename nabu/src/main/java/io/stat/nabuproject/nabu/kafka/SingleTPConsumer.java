@@ -177,19 +177,24 @@ final class SingleTPConsumer extends Component {
                 long startOffset = Long.MIN_VALUE;   // todo: does Kafka reserve this for anything/should i use a bool?
                 lastConsumedOffset = Long.MIN_VALUE; // todo: ditto
 
-                if(!consumptionBacklog.isEmpty()) {
+                boolean hadBacklog = !consumptionBacklog.isEmpty();
+                int backlogConsumed = 0;
+
+                if(hadBacklog) {
                     startOffset = consumptionBacklog.peek().offset();
                     Iterator<ConsumerRecord<String, NabuWriteCommand>> backlogIterator = consumptionBacklog.iterator();
-                    while(backlogIterator.hasNext() && consumed < currentBatchLimit) {
+                    while(backlogIterator.hasNext() && backlogConsumed < currentBatchLimit) {
                         ConsumerRecord<String, NabuWriteCommand> cr = backlogIterator.next();
                         immediateConsumptionQueue.addLast(cr.value());
                         lastConsumedOffset = cr.offset();
                         backlogIterator.remove();
-                        consumed++;
+                        backlogConsumed++;
                     }
 
-                    logger.info("Had backlog, consumed {}, {} remaining in backlog.", consumed, consumptionBacklog.size());
+                    logger.info("Had backlog, consumed {}, {} remaining in backlog.", backlogConsumed, consumptionBacklog.size());
                 }
+
+                consumed += backlogConsumed;
 
                 // if we cleared the backlog but still have room or time for more...
                 // AND we're not stopping. this is important because if we ever want to reuse consumer objects,
@@ -220,6 +225,7 @@ final class SingleTPConsumer extends Component {
                 }
 
                 if(consumed != 0) {
+                    logger.info("Consumed {} with {} of it backlog", consumed, backlogConsumed);
                     isInWriteAndFlush = true;
                     writeCommitAndAdjust(immediateConsumptionQueue, startOffset, lastConsumedOffset);
                     immediateConsumptionQueue.clear();
@@ -259,8 +265,6 @@ final class SingleTPConsumer extends Component {
             writeTimeGauge.set(res.getTime() / 1000000); // lol nanos
             targetTimeGauge.set(throttlePolicy.get().getWriteTimeTarget());
         }
-
-        logger.info("My TP is {}", throttlePolicy.get());
     }
 
     void setCurrentBatchSize(int newSize) {
