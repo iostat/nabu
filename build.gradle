@@ -149,6 +149,6 @@ task jenkins(dependsOn: [":enki:shadowJar", ":nabu:shadowJar", ":client-test:sha
 
     exec {
         executable "docker"
-        args 'push', 'srnk.io/svcs/nabu:0.1', '.'
+        args 'push', 'srnk.io/svcs/nabu:0.1'
     }
 }
