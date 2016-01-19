@@ -117,7 +117,7 @@ public final class Common {
 
     public static List<String> readDump(ForkJoinPool fjp, JsonFactory jf, TypeReference<Map<String, Object>> typeref, AtomicLong parseTime) throws InterruptedException, java.util.concurrent.ExecutionException {
         return fjp.submit(() ->
-                Files.walk(Paths.get("/Users/io/sr/socialrank/setup-scripts/dump"))
+                Files.walk(Paths.get("/dump"))
                         .limit(30000)
                         .parallel()
                         .filter(Files::isRegularFile)

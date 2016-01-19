@@ -146,6 +146,7 @@ task jenkins {
     exec {
         executable "docker"
         args 'rmi', 'srnk.io/svcs/nabu'
+        ignoreExitValue = true
     }
 
     exec {
