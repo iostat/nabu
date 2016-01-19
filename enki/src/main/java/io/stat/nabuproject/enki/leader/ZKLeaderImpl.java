@@ -208,6 +208,7 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
 
             String zkEncodedSeed = seed.toBase64();
             String newZnodePath = zkClient.createEphemeralSequential(ELECTION_PATH_AND_PREFIX, zkEncodedSeed);
+            logger.info("createEphemeralSequential:: {}", newZnodePath);
             long newSequence = parseFromPathAndPrefix(newZnodePath);
 
             seed = new ZKLeaderData(

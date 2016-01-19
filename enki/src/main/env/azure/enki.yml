@@ -99,8 +99,8 @@ enki:
       # REQUIRED
       servers:
       - zookeeper-1.default.svc.srnk.int:2181
-      - zookeeper-1.default.svc.srnk.int:2181
-      - zookeeper-1.default.svc.srnk.int:2181
+      - zookeeper-2.default.svc.srnk.int:2181
+      - zookeeper-3.default.svc.srnk.int:2181
 
       # The chroot, if Kafka is chrooted
       #
@@ -134,8 +134,6 @@ enki:
     #
     # OPTIONAL, defaults to 500
     # zktimeout: 500
-
-
 
   # Settings for the Nabu API server
   #

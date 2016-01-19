@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: enki
+spec:
+  replicas: 3
+  selector:
+    name: enki
+  template:
+    metadata:
+      labels:
+        name: enki
+    spec:
+      nodeSelector:
+        role: accessories
+      containers:
+        - name: enki
+          image: srnk.io/svcs/nabu:0.1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 6228
+          env:
+            - name: KUBERNETES_AUTH_TRYKUBECONFIG
+              value: "false"
+            - name: KUBERNETES_MASTER
+              value: "https://10.101.0.1"
+          command:
+            - java
+            - -jar
+            - /enki.jar

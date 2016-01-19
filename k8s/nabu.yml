@@ -19,6 +19,11 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 6228
+          env:
+            - name: KUBERNETES_AUTH_TRYKUBECONFIG
+              value: "false"
+            - name: KUBERNETES_MASTER
+              value: "https://10.101.0.1"
           command:
             - java
             - -jar
