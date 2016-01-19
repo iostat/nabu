@@ -18,7 +18,9 @@ spec:
           image: srnk.io/svcs/nabu:0.1
           imagePullPolicy: Always
           ports:
-            - containerPort: 6228
+            - name: nabu-server
+              hostPort: 6228
+              containerPort: 6228
           env:
             - name: KUBERNETES_AUTH_TRYKUBECONFIG
               value: "false"

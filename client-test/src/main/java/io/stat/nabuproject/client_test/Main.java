@@ -28,7 +28,7 @@ public class Main {
 
     public Main(int port) throws Exception {
         this.servers = ImmutableList.of(
-                new AddressPort("127.0.0.1", port)
+                new AddressPort("nabu.default.svc.srnk.int", port)
         );
         this.client = new NabuClient("elasticsearch_michaelschonfeld", servers);
 
