@@ -33,7 +33,7 @@ nabu:
       # See data/es-home/elasticsearch.yml for an example
       #
       # REQUIRED
-      home: '${env:PWD}/data/es-home'
+      home: '/es-home'
 
     # ES cluster.*
     # Likewise identical to es.cluster.*
@@ -44,8 +44,7 @@ nabu:
       # join. This option supercedes any cluster.name defined in elasticsearch.yml
       #
       # REQUIRED
-      name: elasticsearch_michaelschonfeld
-
+      name: es.socialrank.azure
 
     # ES http.*, related to the REST server
     # in the embedded node
@@ -65,12 +64,12 @@ nabu:
     # expects Map<String, String>
     #
     # OPTIONAL
-    # other:
-    #   discovery.type: "kubernetes"
-    #   cloud.kubernetes.service: "es-transport"
-    #   cloud.kubernetes.namespace: "default"
-    #   security.manager.enabled: "false"
-    #   network.host: "_non_loopback:ipv4_"
+    other:
+      discovery.type: "kubernetes"
+      cloud.kubernetes.service: "es-transport"
+      cloud.kubernetes.namespace: "default"
+      security.manager.enabled: "false"
+      network.host: "_non_loopback:ipv4_"
 
   # Settings for the Kafka subsystem
   #

@@ -135,7 +135,7 @@ task docs(type: Javadoc) {
     options.author = true
 }
 
-task jenkins(dependsOn: [":enki:shadowJar", ":nabu:shadowJar", ":client-test:shadowJar", "docs"]) << {
+task jenkins(dependsOn: [":enki:shadowJar", ":nabu:shadowJar", ":client-test:shadowJar"]) << {
     exec {
         executable "docker"
         args 'rmi', 'srnk.io/svcs/nabu'

@@ -36,7 +36,7 @@ enki:
       # See data/es-home/elasticsearch.yml for an example
       #
       # REQUIRED
-      home: '${env:ES_HOME:/es}'
+      home: '/es-home'
 
     # ES cluster.*
     # Likewise identical to es.cluster.*
@@ -72,12 +72,12 @@ enki:
     # expects Map<String, String>
     #
     # OPTIONAL
-    # other:
-    #   discovery.type: "kubernetes"
-    #   cloud.kubernetes.service: "es-transport"
-    #   cloud.kubernetes.namespace: "default"
-    #   security.manager.enabled: "false"
-    #   network.host: "_non_loopback:ipv4_"
+    other:
+      discovery.type: "kubernetes"
+      cloud.kubernetes.service: "es-transport"
+      cloud.kubernetes.namespace: "default"
+      security.manager.enabled: "false"
+      network.host: "_non_loopback:ipv4_"
 
 
   # Settings for the Kafka subsystem
