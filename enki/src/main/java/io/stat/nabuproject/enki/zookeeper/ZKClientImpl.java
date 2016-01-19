@@ -16,7 +16,6 @@ import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
 import org.apache.zookeeper.CreateMode;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,14 +68,10 @@ class ZKClientImpl extends ZKClient {
     public void start() throws ComponentException {
         Function<String, String> appendChroot = curry2(String::concat, config.getZKChroot());
         try {
-            Iterator<String> chrootedZookeepersIterator =
-                    config.getZookeepers()
-                            .stream()
-                            .map(appendChroot)
-                            .iterator();
+            String zkConn = Joiner.on(',').join(config.getZookeepers()) + config.getZKChroot();
 
             this.backingClient = new ZkClient(
-                    new ZkConnection(Joiner.on(',').join(chrootedZookeepersIterator)),
+                    new ZkConnection(zkConn),
                     config.getZKConnectionTimeout(),
                     new KafkaZKStringSerializerProxy());
 

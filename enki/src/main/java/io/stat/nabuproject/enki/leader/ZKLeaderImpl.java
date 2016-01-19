@@ -20,7 +20,6 @@ import org.I0Itec.zkclient.ZkConnection;
 import org.I0Itec.zkclient.exception.ZkNoNodeException;
 import org.apache.zookeeper.Watcher;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -130,14 +129,10 @@ class ZKLeaderImpl extends EnkiLeaderElector implements ZKLeaderProvider {
     public void start() throws ComponentException {
         Function<String, String> appendChroot = curry2(String::concat, config.getZKChroot());
         try {
-            Iterator<String> chrootedZookeepersIterator =
-                    config.getZookeepers()
-                            .stream()
-                            .map(appendChroot)
-                            .iterator();
+            String zkConn = Joiner.on(',').join(config.getZookeepers()) + config.getZKChroot();
 
             this.zkClient = new ZkClient(
-                    new ZkConnection(Joiner.on(',').join(chrootedZookeepersIterator)),
+                    new ZkConnection(zkConn),
                     config.getZKConnectionTimeout(),
                     new KafkaZKStringSerializerProxy());
 

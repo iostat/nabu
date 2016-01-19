@@ -10,9 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 /**
  * Provides a method of querying Kafka metadata using Zookeeper.
  * (The Kafka client APIs all have the chance of creating the topic if
@@ -36,13 +33,9 @@ final class KafkaMetadataClientImpl extends KafkaMetadataClient {
 
     @Override
     public void start() throws ComponentException {
-        List<String> chrootedZookeepers =
-                config.getKafkaZookeepers()
-                      .stream()
-                      .map(zk -> zk + config.getKafkaZkChroot())
-                      .collect(Collectors.toList());
+        String zkConn = Joiner.on(',').join(config.getKafkaZookeepers()) + config.getKafkaZkChroot();
 
-        this.zkConnection = new ZkConnection(Joiner.on(',').join(chrootedZookeepers));
+        this.zkConnection = new ZkConnection(zkConn);
         this.zkClient = new ZkClient(
                 this.zkConnection,
                 config.getKafkaZkConnTimeout());
@@ -50,7 +43,7 @@ final class KafkaMetadataClientImpl extends KafkaMetadataClient {
 
         this.zkUtils = new ZkUtils(this.zkClient, this.zkConnection, false); // todo: yeah that false.. yeah... seriously...
 
-        logger.info("MetadataImpl start() :: {}", chrootedZookeepers);
+        logger.info("MetadataImpl start() :: {}", zkConn);
     }
 
     @Override
