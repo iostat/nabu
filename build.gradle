@@ -51,8 +51,6 @@ subprojects {
 
     // Delete the stuff copied into src/main/resources per-env
     task cleanCopiedConfiguration {
-        println "Clearing src/main/resources/*"
-
         delete fileTree(dir: "$projectPath/src/main/resources", exclude: ".keep")
     }
 
@@ -137,12 +135,7 @@ task docs(type: Javadoc) {
     options.author = true
 }
 
-task jenkins {
-    dependsOn ":enki:shadowJar"
-    dependsOn ":nabu:shadowJar"
-    dependsOn ":client-test:shadowJar"
-    dependsOn "docs"
-
+task jenkins(dependsOn: [":enki:shadowJar", ":nabu:shadowJar", ":client-test:shadowJar", "docs"]) << {
     exec {
         executable "docker"
         args 'rmi', 'srnk.io/svcs/nabu'
