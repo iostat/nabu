@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: nabu
+spec:
+  replicas: 5
+  selector:
+    name: nabu
+  template:
+    metadata:
+      labels:
+        name: nabu
+    spec:
+      nodeSelector:
+        role: accessories
+      containers:
+        - name: nabu
+          image: srnk.io/svcs/nabu:0.1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 6228
+          command:
+            - java
+            - -jar
+            - /nabu.jar
