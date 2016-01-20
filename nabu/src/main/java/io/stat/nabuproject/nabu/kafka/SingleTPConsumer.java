@@ -40,7 +40,6 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Slf4j
 final class SingleTPConsumer extends Component {
-    private static final long FLUSH_INTERVAL = 30000; // todo: remember that whole tunable thing? Pepperidge Farms remembers!
     private static final String WAKEUP_INSIDE_UNSTOPPED_CONSUMER_WHILE_WRITING =
             "A WakeupException was thrown INSIDE the consumer loop. A replay scenario may occur the next time " +
             "this TopicPartition is consumed.";
@@ -184,6 +183,7 @@ final class SingleTPConsumer extends Component {
                 int currentBatchLimit = currentBatchSize.get();
                 long now = System.currentTimeMillis();
                 long flushTimeout = nextFlushTime.get();
+                long flushInterval = throttlePolicy.get().getFlushTimeout();
                 long startOffset = Long.MIN_VALUE;   // todo: does Kafka reserve this for anything/should i use a bool?
                 lastConsumedOffset = Long.MIN_VALUE; // todo: ditto
 
@@ -242,8 +242,8 @@ final class SingleTPConsumer extends Component {
                     isInWriteAndFlush = false;
                 }
 
-                // todo: adjust nextFlushTime here as needed
-                nextFlushTime.set(System.currentTimeMillis() + FLUSH_INTERVAL);
+                // todo: adjust nextFlushTime here as needed, or is it needed?
+                nextFlushTime.set(System.currentTimeMillis() + flushInterval);
             }
         } catch(WakeupException e) {
             String messageToUse = isInWriteAndFlush ? WAKEUP_INSIDE_UNSTOPPED_CONSUMER_WHILE_WRITING : WAKEUP_INSIDE_UNSTOPPED_CONSUMER_NOT_WRITING;
