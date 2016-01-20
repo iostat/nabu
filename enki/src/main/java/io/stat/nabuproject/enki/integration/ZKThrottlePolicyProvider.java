@@ -49,8 +49,8 @@ class ZKThrottlePolicyProvider extends Component implements ThrottlePolicyProvid
 
     private final List<AtomicReference<ThrottlePolicy>> tpList;
 
-    public static final String ENCODE_ZKTP(String kafkaTopicName, int batchSize, long targetTime) {
-        return String.format("%s:%d,%d", kafkaTopicName, batchSize, targetTime);
+    public static String ENCODE_ZKTP(String kafkaTopicName, int batchSize, long targetTime, long flushTime) {
+        return String.format("%s:%d,%d,%d", kafkaTopicName, batchSize, targetTime, flushTime);
     }
 
     private final DynamicComponent<ThrottlePolicyProvider> replacer;
@@ -76,7 +76,6 @@ class ZKThrottlePolicyProvider extends Component implements ThrottlePolicyProvid
 
     @Override
     public List<AtomicReference<ThrottlePolicy>> getTPReferences() {
-        logger.info("GetTPP!");
         return ImmutableList.copyOf(tpList);
     }
 
@@ -155,8 +154,9 @@ class ZKThrottlePolicyProvider extends Component implements ThrottlePolicyProvid
 
         int batchSize = Integer.parseInt(numberBits[0]);
         long targetMS = Long.parseLong(numberBits[1]);
+        long flushTimeout = Long.parseLong(numberBits[2]);
 
-        return new ThrottlePolicy(tpName, kafkaName, targetMS, batchSize, target.getFlushTimeout());
+        return new ThrottlePolicy(tpName, kafkaName, targetMS, batchSize, flushTimeout);
     }
 
     static String encodeTPPath(String tpName) {

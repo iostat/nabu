@@ -57,20 +57,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 public class WorkerCoordinator extends Component implements ThrottlePolicyChangeListener {
-    /**
-     * How frequently should the rebalancer run. (currently every 30s)
-     * todo: definitely make this tunable?
-     */
-    public static final int REBALANCE_PERIOD = 5000;
-
-    /**
-     * How long to wait for the the rebalance thread to gracefully exist.
-     * todo: definitely make this tunable?
-     */
-    public static final int SHUTDOWN_REBALANCE_KILL_TIMEOUT = 2000;
-
-
     private final ThrottlePolicyProvider config;
+    private final WorkerCoordinatorConfigProvider wccp;
     private final ESKafkaValidator validator;
     private final ESClient esClient;
     private final EnkiServer enkiServer;
@@ -99,6 +87,7 @@ public class WorkerCoordinator extends Component implements ThrottlePolicyChange
 
     @Inject
     public WorkerCoordinator(ThrottlePolicyProvider config,
+                             WorkerCoordinatorConfigProvider wccp,
                              TelemetryService ts,
                              ESKafkaValidator validator,
                              ESClient esClient,
@@ -107,6 +96,7 @@ public class WorkerCoordinator extends Component implements ThrottlePolicyChange
                              ElectedLeaderProvider elp,
                              Injector injector) {
         this.config = config;
+        this.wccp = wccp;
         this.validator = validator;
         this.esClient = esClient;
         this.enkiServer = enkiServer;
@@ -131,7 +121,7 @@ public class WorkerCoordinator extends Component implements ThrottlePolicyChange
         this.rebalanceThread = new Thread(() -> {
             while(!isShuttingDown.get()) {
                 try {
-                    Thread.sleep(REBALANCE_PERIOD);
+                    Thread.sleep(wccp.getRebalancePeriod());
 
                     try {
                         while(needsRebalance.get()) {
@@ -196,7 +186,7 @@ public class WorkerCoordinator extends Component implements ThrottlePolicyChange
         // todo: send unassigns to the Nabus as this node shuts down.
         this.isShuttingDown.set(true);
         try {
-            this.rebalanceThread.join(SHUTDOWN_REBALANCE_KILL_TIMEOUT);
+            this.rebalanceThread.join(wccp.getRebalanceKillTimeout());
             this.rebalanceThread.interrupt();
         } catch(InterruptedException e) {
            logger.error("InterruptedException in shutdown!");

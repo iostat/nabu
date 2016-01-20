@@ -29,7 +29,6 @@ class ZKThrottlePolicyValidator {
     ZKThrottlePolicyValidator(ZKClient zkClient,
                               DynamicComponent<ThrottlePolicyProvider> dTPP,
                               ZKThrottlePolicyProvider zkTPPToUse) {
-
         this.zkClient = zkClient;
         this.dTPP = dTPP;
         this.zkTPPToUse = zkTPPToUse;
@@ -61,7 +60,7 @@ class ZKThrottlePolicyValidator {
         AtomicBoolean hadInvalidData = new AtomicBoolean(false);
         Map<String, String> seedData = Maps.newHashMap();
         zkDefinedTPs.forEach(zkTPName -> {
-            String thisPolicyData = zkClient.get(zkTPPToUse.encodeTPPath(zkTPName));
+            String thisPolicyData = zkClient.get(ZKThrottlePolicyProvider.encodeTPPath(zkTPName));
             seedData.put(zkTPName, thisPolicyData);
 
             String[] thisPolicyRootBits = thisPolicyData.split(":");
@@ -79,7 +78,8 @@ class ZKThrottlePolicyValidator {
 
             int batchSize = 0;
             long tpWriteTime = 0;
-            if(thisPolicyThrottleBits.length != 2) {
+            long tpFlushTime = 0;
+            if(thisPolicyThrottleBits.length != 3) {
                 logger.error("{} does not make sense as TP data (in node {})", thisPolicyThrottleBits, zkTPName);
                 hadInvalidData.set(true);
             } else {
@@ -91,6 +91,7 @@ class ZKThrottlePolicyValidator {
                     return;
                 }
 
+                // todo: should I check against some sane minimum? 1 is valid but slow af
                 if(batchSize <= 0) {
                     logger.error("Batch size {} does not make sense for throttle policy {}", batchSize, zkTPName);
                     hadInvalidData.set(true);
@@ -107,6 +108,21 @@ class ZKThrottlePolicyValidator {
 
                 if(tpWriteTime <= 0) {
                     logger.error("Write target {} does not make sense for throttle policy {}", tpWriteTime, zkTPName);
+                    hadInvalidData.set(true);
+                    return;
+                }
+
+                try {
+                    tpFlushTime = Long.parseLong(thisPolicyThrottleBits[2]);
+                } catch(NumberFormatException e) {
+                    logger.error("Could not parse maximum flush time {} as a long. This is incorrect.", thisPolicyThrottleBits[1]);
+                    hadInvalidData.set(true);
+                    return;
+                }
+
+                // todo: should i have some same minimum and check against that?
+                if(tpFlushTime <= 0) {
+                    logger.error("Maximum flush period {} does not make sense for throttle policy {}", tpWriteTime, zkTPName);
                     hadInvalidData.set(true);
                     return;
                 }
@@ -145,12 +161,13 @@ class ZKThrottlePolicyValidator {
             String tpKafkaName = policy.getTopicName();
             int tpBatchSize = policy.getMaxBatchSize();
             long tpWriteTime = policy.getWriteTimeTarget();
+            long tpFlushTime = policy.getFlushTimeout();
 
             String nodePrefix = ZKThrottlePolicyProvider.TP_SUBNODE + "/" + tpName;
 
-            zkClient.create(nodePrefix, ZKThrottlePolicyProvider.ENCODE_ZKTP(tpKafkaName, tpBatchSize, tpWriteTime));
+            zkClient.create(nodePrefix, ZKThrottlePolicyProvider.ENCODE_ZKTP(tpKafkaName, tpBatchSize, tpWriteTime, tpFlushTime));
 
-            logger.info("Seeded TP index:{} with topic:{},  batch size:{} records and goal write:{} ms", tpName, tpKafkaName, tpBatchSize, tpWriteTime);
+            logger.info("Seeded TP index:{} with topic:{}, batch size:{} records, goal write:{}ms, flush timeout:{}ms", tpName, tpKafkaName, tpBatchSize, tpWriteTime);
         });
     }
 }

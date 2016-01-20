@@ -19,6 +19,7 @@ import io.stat.nabuproject.core.telemetry.TelemetryConfigProvider;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyChangeListener;
 import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
+import io.stat.nabuproject.enki.integration.WorkerCoordinatorConfigProvider;
 import io.stat.nabuproject.enki.zookeeper.ZKConfigProvider;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +42,9 @@ final class EnkiConfig extends AbstractConfig implements
         ZKConfigProvider,
         NetworkServerConfigProvider,
         ThrottlePolicyProvider,
-        TelemetryConfigProvider {
+        TelemetryConfigProvider,
+        WorkerCoordinatorConfigProvider,
+        LeaderElectionTuningProvider {
     /**
      * Mapped to the enki.env property
      */
@@ -120,6 +123,17 @@ final class EnkiConfig extends AbstractConfig implements
     private final @Getter String telemetryServer;
     private final @Getter int telemetryPort;
 
+    private final @Getter long rebalancePeriod;
+    private final @Getter long rebalanceKillTimeout;
+
+    private final @Getter long settleDelay;
+    private final @Getter long zKReconcileDelay;
+    private final @Getter long noLeaderRetryDelay;
+    private final @Getter long maxLeaderRetries;
+    private final @Getter long eSEventSyncDelay;
+    private final @Getter long eSEventSyncDelayGap;
+    private final @Getter long maxDemotionFailsafeTimeout;
+
     private final Injector injector;
 
     private final AtomicReference<Collection<ThrottlePolicyChangeListener>> tpcls;
@@ -174,6 +188,17 @@ final class EnkiConfig extends AbstractConfig implements
         this.telemetryPrefix = "enki";
         this.telemetryServer = getRequiredProperty(Keys.ENKI_TELEMETRY_SERVER, String.class);
         this.telemetryPort   = getRequiredProperty(Keys.ENKI_TELEMETRY_PORT, Integer.class);
+
+        this.rebalancePeriod = getOptionalProperty(Keys.ENKI_COORD_REBALANCE, Defaults.ENKI_COORD_REBALANCE, Long.class);
+        this.rebalanceKillTimeout = getOptionalProperty(Keys.ENKI_COORD_GRACE, Defaults.ENKI_COORD_GRACE, Long.class);
+
+        this.settleDelay = getOptionalProperty(Keys.ENKI_LEADER_SETTLE_DELAY, Defaults.ENKI_LEADER_SETTLE_DELAY, Long.class);
+        this.zKReconcileDelay = getOptionalProperty(Keys.ENKI_LEADER_RECONCILE_DELAY, Defaults.ENKI_LEADER_RECONCILE_DELAY, Long.class);
+        this.noLeaderRetryDelay = getOptionalProperty(Keys.ENKI_LEADER_RETRY_DELAY, Defaults.ENKI_LEADER_RETRY_DELAY, Long.class);
+        this.maxLeaderRetries = getOptionalProperty(Keys.ENKI_LEADER_MAX_RETRIES, Defaults.ENKI_LEADER_MAX_RETRIES, Long.class);
+        this.eSEventSyncDelay = getOptionalProperty(Keys.ENKI_LEADER_ES_SYNC_DELAY, Defaults.ENKI_LEADER_ES_SYNC_DELAY, Long.class);
+        this.eSEventSyncDelayGap = getOptionalProperty(Keys.ENKI_LEADER_ES_SYNC_GAP, Defaults.ENKI_LEADER_ES_SYNC_GAP, Long.class);
+        this.maxDemotionFailsafeTimeout = getOptionalProperty(Keys.ENKI_LEADER_MAX_DEMOTION_FAILSAFE_TIMEOUT, Defaults.ENKI_LEADER_MAX_DEMOTION_FAILSAFE_TIMEOUT, Long.class);
     }
 
     @Override
@@ -262,6 +287,17 @@ final class EnkiConfig extends AbstractConfig implements
 
         public static final String ENKI_TELEMETRY_SERVER = "enki.telemetry.server";
         public static final String ENKI_TELEMETRY_PORT   = "enki.telemetry.port";
+
+        public static final String ENKI_COORD_REBALANCE = "enki.coord.rebalance";
+        public static final String ENKI_COORD_GRACE     = "enki.coord.grace";
+
+        public static final String ENKI_LEADER_SETTLE_DELAY                  = "enki.leader.settle_delay";
+        public static final String ENKI_LEADER_RECONCILE_DELAY               = "enki.leader.reconcile_delay";
+        public static final String ENKI_LEADER_RETRY_DELAY                   = "enki.leader.retry_delay";
+        public static final String ENKI_LEADER_MAX_RETRIES                   = "enki.leader.max_retries";
+        public static final String ENKI_LEADER_ES_SYNC_DELAY                 = "enki.leader.es_sync_delay";
+        public static final String ENKI_LEADER_ES_SYNC_GAP                   = "enki.leader.es_sync_gap";
+        public static final String ENKI_LEADER_MAX_DEMOTION_FAILSAFE_TIMEOUT = "enki.leader.max_demotion_failsafe_timeout";
     }
 
     public static final class Defaults {
@@ -279,5 +315,16 @@ final class EnkiConfig extends AbstractConfig implements
         public static final int     ENKI_SERVER_THREADS_WORKER   = 50;
 
         public static final List<ThrottlePolicy> ENKI_THROTTLING_POLICIES = ImmutableList.of();
+
+        public static final long ENKI_COORD_REBALANCE = 5000;
+        public static final long ENKI_COORD_GRACE     = 2000;
+
+        public static final long ENKI_LEADER_SETTLE_DELAY                  = 1000;
+        public static final long ENKI_LEADER_RECONCILE_DELAY               = 500;
+        public static final long ENKI_LEADER_RETRY_DELAY                   = 2000;
+        public static final long ENKI_LEADER_MAX_RETRIES                   = 10;
+        public static final long ENKI_LEADER_ES_SYNC_DELAY                 = 750;
+        public static final long ENKI_LEADER_ES_SYNC_GAP                   = 30;
+        public static final long ENKI_LEADER_MAX_DEMOTION_FAILSAFE_TIMEOUT = 12000;
     }
 }

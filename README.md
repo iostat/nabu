@@ -105,6 +105,17 @@ that directory isn't a REAL elasticsearch home.
 ---
 
 
+## Known issues
+Sometimes, Ctrl-C'ing to gracefully shutdown at an inopportune time leaves open ThreadPools, and
+necessitates a SIGTERM/SIGKILL to close the server. Likewise, this can happen during failsafe shutdowns, leaving
+subsystems running that shouldn't be (which really makes it not that failsafe at all!). The Component/Runlevel system
+rewrite will resolve this, whenever that happens. Until then, Kubernetes should have a liveness probe attached to the Nabu/Enki ports
+to kill the pod whenever it starts acting funky.
+
+
+---
+
+
 ## Testing
  ¯\\(°_o)/¯
 

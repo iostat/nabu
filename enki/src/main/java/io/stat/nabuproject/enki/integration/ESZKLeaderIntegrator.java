@@ -18,6 +18,7 @@ import io.stat.nabuproject.core.util.Tuple;
 import io.stat.nabuproject.core.util.concurrent.NamedThreadFactory;
 import io.stat.nabuproject.core.util.concurrent.ResettableCountDownLatch;
 import io.stat.nabuproject.enki.Enki;
+import io.stat.nabuproject.enki.LeaderElectionTuningProvider;
 import io.stat.nabuproject.enki.leader.ElectedLeaderProvider;
 import io.stat.nabuproject.enki.leader.LeaderData;
 import io.stat.nabuproject.enki.leader.LeaderEventListener;
@@ -69,7 +70,7 @@ import static io.stat.nabuproject.core.util.functional.FunMath.lcmp;
  *
  * Also, there are a lot of delays that may be unecessary, and possibly even contribute to 5s+ delays for leader reelection
  * I don't really want to focus on fixing it at the moment, as that short moment with no elected leader isn't really THAT frightening.
- * Might even be a good thing, allowing Nabu's to settle down a bit before reconnecting.
+ * Might even be a good thing, allowing Nabus to settle down a bit before reconnecting.
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
@@ -99,49 +100,22 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
      */
     private static final Consumer<ESZKNode> SET_LEADER_FLAG = curry2c(ESZKNode::setLeader, true);
 
-    // todo: should these be tunable?
     /**
-     * Amount of time to sleep before and after each read to allow write operations to happen
-     * before data is returned.
-     * The idea being, this reduces the risk of a race condition leading to stale data wherein nothing has updated
-     * the integrated leader state prior to a read lock being obtained, or it was updated shortly after the read
-     * finished.
+     * A convenient predicate to grok our list of ES-discovered enki's, complete with ASCII art easter eggs.
+     * @param knownFromES a list of tuples containing identifiers and advertised addresses of all Enkis we're aware of.
+     * @return a Predicate that determines whether or not the candidate passed to the
+     *         predicate exists in the list of tuples passed to this function.
      */
-    public static final int SETTLE_DELAY = 1000;
-
-    /**
-     * How long to wait before retrying ZK reconciliation queue
-     * entries if there's no match yet.
-     */
-    public static final int ZK_RECONCILE_DELAY = 500;
-
-    /**
-     * How to long to wait before retrying finding
-     * a leader while one is not available.
-     */
-    public static final int NO_LEADER_RETRY_DELAY = 2000;
-
-    /**
-     * Maximum amount of times to retry getting a leader before giving up
-     */
-    public static final int MAX_LEADER_RETRIES = 10;
-
-    /**
-     * How long to hold any leader requests after a node departs from ES to allow ZK to try and catch up.
-     */
-    public static final int ES_EVENT_SYNC_DELAY = 750;
-
-    /**
-     * How long between when ES_EVENT_SYNC_DELAYs can be re-triggered. Used in order
-     * to prevent a flapping Enki from DoSing provisioning of leaders to Nabus
-     */
-    public static final int ES_EVENT_SYNC_DELAY_MINIMUM_GAP = 30;
-
-    /**
-     * How long to allow a cache-buster task to run when ZK says we've been demoted
-     * before considering it too big a risk of split-brain and killing the app.
-     */
-    public static final int MAX_DEMOTION_FAILSAFE_TIMEOUT = 12000;
+    private static Predicate<LeaderData> existsInES(List<Tuple<String, AddressPort>> knownFromES) {     /* **************************** */
+        // for the candidate that we are testing                                             gave u      *          oh noes!            *
+        return candidate -> knownFromES.stream() // see if                        the ES client    s     * theres a leak in the stream  *
+        /*              |  \        */.anyMatch(t -> // any of the    of the tuples     ___________  h   * and the bytes are all wonky! *
+        /*              |   \       **********/t.first() // first elements             // ____h c t\ a   * **************************** *
+        /*              |\   \  ~~ thanks   */.equals(candidate.getNodeIdentifier()));// /  i     \a\v   /
+        //    *****    *\*|   \     chesapeake energy co! ~~                         // /    n g   \me  /
+        // **************\|    \____________________________________________________// /   n a m e s\  /
+        // ***************\___________________________________________________________________________/
+    }
 
     private final ESClient esClient;
     private final ZKLeaderProvider zkLeaderProvider;
@@ -158,28 +132,20 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     private final AtomicBoolean wasSelfLeader;
 
+    private final LeaderElectionTuningProvider tunables;
+
     /**
      * When we get elected leader, this gets populated with a Guice'd instance
-     * of ZKTPP. Because its not otherwise started anywhere, this ESZKLeaderIntegrated
+     * of ZKTPP. Because its not otherwise started anywhere, this ESZKLeaderIntegrator
      * is responsible for stopping it if the need ever arises.
      */
     private final AtomicReference<ZKThrottlePolicyProvider> zktppRef;
 
-    private static Predicate<LeaderData> existsInES(List<Tuple<String, AddressPort>> knownFromES) {     /* **************************** */
-        // for the candidate that we are testing                                             gave u      *          oh noes!            *
-        return candidate -> knownFromES.stream() // see if                        the ES client    s     * theres a leak in the stream  *
-        /*              |  \        */.anyMatch(t -> // any of the    of the tuples     ___________  h   * and the bytes are all wonky! *
-        /*              |   \       **********/t.first() // first elements             // ____h c t\ a   * **************************** *
-        /*              |\   \  ~~ thanks   */.equals(candidate.getNodeIdentifier()));// /  i     \a\v   /
-        //    *****    *\*|   \     chesapeake energy co! ~~                         // /    n g   \me  /
-        // **************\|    \____________________________________________________// /   n a m e s\  /
-        // ***************\___________________________________________________________________________/
-    }
-
     @Inject
-    ESZKLeaderIntegrator(ESClient esClient, ZKLeaderProvider zkLeaderProvider, Injector injector) {
+    ESZKLeaderIntegrator(ESClient esClient, ZKLeaderProvider zkLeaderProvider, LeaderElectionTuningProvider tunables, Injector injector) {
         this.esClient = esClient;
         this.zkLeaderProvider = zkLeaderProvider;
+        this.tunables = tunables;
         this.injector = injector;
         this.$integratedDataLock = new StampedLock();
 
@@ -285,18 +251,18 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 //        logger.info("ESZKLeaderIntegrator#getElectedLeaderData()");
         LeaderData ret = getOwnLeaderData();
         int tries = 0;
-        while(tries < MAX_LEADER_RETRIES) {
+        while(tries < tunables.getMaxLeaderRetries()) {
             Optional<ESZKNode> maybe = validLeaderIfAvailable();
             if(maybe.isPresent()) {
                 return maybe.get().getLeaderData();
             }
-            Thread.sleep(NO_LEADER_RETRY_DELAY);
+            Thread.sleep(tunables.getNoLeaderRetryDelay());
             tries++;
         }
 
         List<String> copy = optimisticRead(() -> ImmutableList.copyOf(fmap(SHORTEN_ESZKNODE, integratedData).iterator()), $integratedDataLock);
         logger.error("Couldn't find a valid leader after {} tries... Sending self as leader, but this may be VERY wrong\n" +
-                "My most current data is: {}", MAX_LEADER_RETRIES, copy);
+                "My most current data is: {}", tunables.getMaxLeaderRetries(), copy);
 
         return ret;
     }
@@ -316,7 +282,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
         //
         // sleep a bit to allow ES events to reconcile
         if(reconcileQueue.size() > 0) {
-            try { Thread.sleep(ES_EVENT_SYNC_DELAY + ZK_RECONCILE_DELAY); } catch (Exception ignored) { }
+            try { Thread.sleep(tunables.getESEventSyncDelay() + tunables.getZKReconcileDelay()); } catch (Exception ignored) { }
         }
         return optimisticRead(() -> {
             List<Tuple<String, AddressPort>> knownEsNodes = esClient.getDiscoveredEnkis();
@@ -426,7 +392,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
         t.setName("Demotion-Cachebuster");
 
         try {
-            Thread.sleep(MAX_DEMOTION_FAILSAFE_TIMEOUT);
+            Thread.sleep(tunables.getMaxDemotionFailsafeTimeout());
         } catch(InterruptedException e) {
             logger.error("Caught an interrupt while waiting for the demotion failsafe to finish!", e);
         } finally {
@@ -485,7 +451,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     private void triggerEsEventSyncDelay() {
         synchronized(esEventSyncDelayLatch) {
-            if((System.currentTimeMillis() - lastESEventSyncDelayCompleted.get()) < ES_EVENT_SYNC_DELAY_MINIMUM_GAP) {
+            if((System.currentTimeMillis() - lastESEventSyncDelayCompleted.get()) < tunables.getESEventSyncDelayGap()) {
                 // flapping Enkis shouldn't lead to ridiculous DoSs by retriggering this latch.
                 return;
             }
@@ -493,7 +459,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
             this.esEventSyncDelayLatch.reset();
             Thread t = new Thread(() -> {
                 try {
-                    Thread.sleep(ES_EVENT_SYNC_DELAY);
+                    Thread.sleep(tunables.getESEventSyncDelay());
                 } catch (Exception e) {
                     logger.warn("ES event synchronization delay unlatch() was interrupted!", e);
                 } finally {
@@ -507,7 +473,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
     private void waitForEsSyncUnlatch() {
         try {
-            Thread.sleep(ES_EVENT_SYNC_DELAY);
+            Thread.sleep(tunables.getESEventSyncDelay());
         } catch (Exception e) {
             logger.warn("ES event synchronization delay wait() was interrupted!", e);
         }
@@ -626,7 +592,7 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
 
             if(!done.get()) {
                 try {
-                    Thread.sleep(ZK_RECONCILE_DELAY);
+                    Thread.sleep(tunables.getZKReconcileDelay());
                 } catch(InterruptedException e) {
                     logger.error("ZkReconciler was interrupted while sleeping!", e);
                 }
@@ -648,9 +614,9 @@ class ESZKLeaderIntegrator extends LeaderLivenessIntegrator implements LeaderEve
             boolean isValid;
             do {
                 long stamp = lock.tryOptimisticRead();
-                Thread.sleep(SETTLE_DELAY);
+                Thread.sleep(tunables.getSettleDelay());
                 ret = readOp.get();
-                Thread.sleep(SETTLE_DELAY);
+                Thread.sleep(tunables.getSettleDelay());
                 isValid = lock.validate(stamp);
             } while(!isValid);
             return ret;
