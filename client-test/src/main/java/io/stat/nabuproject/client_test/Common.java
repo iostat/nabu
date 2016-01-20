@@ -117,8 +117,8 @@ public final class Common {
 
     public static List<String> readDump(ForkJoinPool fjp, JsonFactory jf, TypeReference<Map<String, Object>> typeref, AtomicLong parseTime) throws InterruptedException, java.util.concurrent.ExecutionException {
         return fjp.submit(() ->
-                Files.walk(Paths.get("/dump"))
-                        .limit(30000)
+                Files.walk(Paths.get("/Users/io/sr/socialrank/setup-scripts/dump"))
+
                         .parallel()
                         .filter(Files::isRegularFile)
                         .map(path -> {
@@ -147,4 +147,5 @@ public final class Common {
     public static String randomUUID() {
         return uuidgen.getBase64UUID();
     }
+    public static final TypeReference<Map<String, Object>> typeref = new TypeReference<Map<String, Object>>() {};
 }

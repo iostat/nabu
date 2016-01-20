@@ -58,27 +58,7 @@ public class IndexTest extends ProfileOperation {
                                 .shouldRefresh(true)
                                 .execute();
 
-                        f.whenComplete((resp, thrown) -> {
-                            waitForAll.countDown();
-                            if(thrown != null) {
-                                futureExcs.incrementAndGet();
-                            } else {
-                                switch(resp.getType()) {
-                                    case OK:
-                                        oks.incrementAndGet();
-                                        break;
-                                    case RETRY:
-                                        retrs.incrementAndGet();
-                                        break;
-                                    case QUEUED:
-                                        qs.incrementAndGet();
-                                        break;
-                                    case FAIL:
-                                        fails.incrementAndGet();
-                                        break;
-                                }
-                            }
-                        });
+                        f.whenComplete(pma.invoke());
                     } catch (Exception e) {
                         submitExcs.incrementAndGet();
                         waitForAll.countDown();
@@ -91,91 +71,4 @@ public class IndexTest extends ProfileOperation {
 
         waitForAll.await();
     }
-
-    private static final String RANDO = "{\n" +
-            "    \"follows\": [\n" +
-            "      {\n" +
-            "        \"twitter_id\": \"36184220\",\n" +
-            "        \"refresh_id\": 0,\n" +
-            "        \"mef_score\": 0,\n" +
-            "        \"bf_score\": 0,\n" +
-            "        \"retweets_count\": 0,\n" +
-            "        \"mentions_count\": 0,\n" +
-            "        \"replies_count\": 0\n" +
-            "      },\n" +
-            "      {\n" +
-            "        \"twitter_id\": \"15066760\",\n" +
-            "        \"refresh_id\": 0,\n" +
-            "        \"mef_score\": 0,\n" +
-            "        \"bf_score\": 0,\n" +
-            "        \"retweets_count\": 0,\n" +
-            "        \"mentions_count\": 0,\n" +
-            "        \"replies_count\": 0\n" +
-            "      },\n" +
-            "      {\n" +
-            "        \"twitter_id\": \"8236062\",\n" +
-            "        \"refresh_id\": 41092,\n" +
-            "        \"mef_score\": 0,\n" +
-            "        \"bf_score\": 0,\n" +
-            "        \"retweets_count\": 0,\n" +
-            "        \"mentions_count\": 0,\n" +
-            "        \"replies_count\": 0\n" +
-            "      }\n" +
-            "    ],\n" +
-            "    \"handle\": {\n" +
-            "      \"tokens\": [\n" +
-            "        \"ans\",\n" +
-            "        \"sara\"\n" +
-            "      ],\n" +
-            "      \"raw\": \"SaraANS\"\n" +
-            "    },\n" +
-            "    \"others_lists\": 0,\n" +
-            "    \"last_tweet_date\": \"2014-08-06T14:15:05.000Z\",\n" +
-            "    \"favorites\": 0,\n" +
-            "    \"statuses\": 1,\n" +
-            "    \"lang\": \"en\",\n" +
-            "    \"photo\": \"https://abs.twimg.com/sticky/default_profile_images/default_profile_3_bigger.png\",\n" +
-            "    \"utc_offset\": -1,\n" +
-            "    \"twitter_id\": \"127803644\",\n" +
-            "    \"followers\": 9,\n" +
-            "    \"following\": 19,\n" +
-            "    \"member_since\": \"2010-03-30T08:23:52.000Z\",\n" +
-            "    \"ratio\": 0.4736842215061188,\n" +
-            "    \"verified\": false,\n" +
-            "    \"name\": {\n" +
-            "      \"metaphone\": \"SRNS\",\n" +
-            "      \"synonyms\": [\n" +
-            "        \"zara\",\n" +
-            "        \"zaria\",\n" +
-            "        \"sarrie\",\n" +
-            "        \"a\",\n" +
-            "        \"n\",\n" +
-            "        \"sary\",\n" +
-            "        \"sarina\",\n" +
-            "        \"sairne\",\n" +
-            "        \"zarah\",\n" +
-            "        \"sadie\",\n" +
-            "        \"sarine\",\n" +
-            "        \"sadey\",\n" +
-            "        \"sarri\",\n" +
-            "        \"sarita\",\n" +
-            "        \"s\",\n" +
-            "        \"sarett\",\n" +
-            "        \"sari\",\n" +
-            "        \"sarah\",\n" +
-            "        \"sarene\"\n" +
-            "      ],\n" +
-            "      \"tokens\": [\n" +
-            "        \"s\",\n" +
-            "        \"a\",\n" +
-            "        \"n\",\n" +
-            "        \"sara\"\n" +
-            "      ],\n" +
-            "      \"alphanum\": \"saraans\",\n" +
-            "      \"raw\": \"Sara A N S\"\n" +
-            "    },\n" +
-            "    \"mvf_score\": 2.473684310913086,\n" +
-            "    \"last_updated\": \"2015-03-03T07:25:43.501Z\",\n" +
-            "    \"_location\": \"\"\n" +
-            "  }\n";
 }

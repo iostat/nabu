@@ -7,6 +7,7 @@ import com.google.common.collect.Queues;
 import io.stat.nabuproject.core.Component;
 import io.stat.nabuproject.core.ComponentException;
 import io.stat.nabuproject.core.kafka.KafkaBrokerConfigProvider;
+import io.stat.nabuproject.core.telemetry.TelemetryCounterSink;
 import io.stat.nabuproject.core.telemetry.TelemetryGaugeSink;
 import io.stat.nabuproject.core.telemetry.TelemetryService;
 import io.stat.nabuproject.core.throttling.ThrottlePolicy;
@@ -39,13 +40,18 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Slf4j
 final class SingleTPConsumer extends Component {
-    private static final long FLUSH_INTERVAL = 5000; // todo: remember that whole tunable thing? Pepperidge Farms remembers!
+    private static final long FLUSH_INTERVAL = 30000; // todo: remember that whole tunable thing? Pepperidge Farms remembers!
     private static final String WAKEUP_INSIDE_UNSTOPPED_CONSUMER_WHILE_WRITING =
             "A WakeupException was thrown INSIDE the consumer loop. A replay scenario may occur the next time " +
             "this TopicPartition is consumed.";
     private static final String WAKEUP_INSIDE_UNSTOPPED_CONSUMER_NOT_WRITING =
             "A WakeupException was thrown INSIDE the consumer loop. However, the consumer was not in the process of writing " +
                     "and a replay scenario is unlikely.";
+    /**
+     * The absolute minimum we have to write unless we're paused for whatever reason
+     */
+    public static final int MIN_BATCH_SIZE = 15;
+
     /**
      * The NabuCommand ES Writer we will be using to execute our logic.
      */
@@ -115,6 +121,7 @@ final class SingleTPConsumer extends Component {
     private final TelemetryGaugeSink batchSizeGauge;
     private final TelemetryGaugeSink writeTimeGauge;
     private final TelemetryGaugeSink targetTimeGauge;
+    private final TelemetryCounterSink docsWrittenGauge;
 
 
     public SingleTPConsumer(NabuCommandESWriter esWriter,
@@ -126,7 +133,8 @@ final class SingleTPConsumer extends Component {
         this.throttlePolicy = throttlePolicy;
         this.targetTopicPartition = new TopicPartition(throttlePolicy.get().getTopicName(), partitionToSubscribe);
 
-        this.currentBatchSize = new AtomicInteger(throttlePolicy.get().getMaxBatchSize());
+        this.currentBatchSize = new AtomicInteger(MIN_BATCH_SIZE); // start off with reasonable minimums so as not to overwhelm a fresh index with a bazillion writes
+
         this.isStopped = new AtomicBoolean(false);
         this.nextFlushTime = new AtomicLong(System.currentTimeMillis());
 
@@ -157,14 +165,16 @@ final class SingleTPConsumer extends Component {
         this.consumerWakeupWait.setName(this.friendlyTPString + "-FinishConsumeWait");
 
         this.batchSizeGauge = telemetryService.createGauge("consumer.batchsize", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
-        this.writeTimeGauge = telemetryService.createGauge("consumer.writetime", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
+        this.writeTimeGauge = telemetryService.createExecTime("consumer.writetime", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
         this.targetTimeGauge = telemetryService.createGauge("consumer.target", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
+        this.docsWrittenGauge = telemetryService.createCounter("consumer.written", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
     }
 
     private void runConsumer() {
         boolean isInWriteAndFlush = false;
         try {
             consumer.assign(ImmutableList.of(targetTopicPartition));
+            consumer.seekToBeginning(targetTopicPartition); // lolz
             this.readyLatch.countDown();
             ArrayDeque<ConsumerRecord<String,NabuWriteCommand>> consumptionBacklog = Queues.newArrayDeque();
             ArrayDeque<NabuWriteCommand> immediateConsumptionQueue = new ArrayDeque<>(throttlePolicy.get().getMaxBatchSize() * 4);
@@ -191,7 +201,7 @@ final class SingleTPConsumer extends Component {
                         backlogConsumed++;
                     }
 
-                    logger.info("Had backlog, consumed {}, {} remaining in backlog.", backlogConsumed, consumptionBacklog.size());
+//                    logger.info("Had backlog, consumed {}, {} remaining in backlog.", backlogConsumed, consumptionBacklog.size());
                 }
 
                 consumed += backlogConsumed;
@@ -225,7 +235,7 @@ final class SingleTPConsumer extends Component {
                 }
 
                 if(consumed != 0) {
-                    logger.info("Consumed {} with {} of it backlog", consumed, backlogConsumed);
+//                    logger.info("Consumed {} with {} of it backlog", consumed, backlogConsumed);
                     isInWriteAndFlush = true;
                     writeCommitAndAdjust(immediateConsumptionQueue, startOffset, lastConsumedOffset);
                     immediateConsumptionQueue.clear();
@@ -256,14 +266,45 @@ final class SingleTPConsumer extends Component {
         int qsize = consumptionQueue.size();
         if(qsize != 0) {
             ESWriteResults res = esWriter.bulkWrite(consumptionQueue);
-            logger.debug("Bulk write: {}", res);
+//            logger.debug("Bulk write: {}", res);
             consumer.commitSync(ImmutableMap.of(targetTopicPartition, new OffsetAndMetadata(lastConsumedOffset)));
-            logger.info("{}=>{} ({} docs)", startedWithOffset, lastConsumedOffset, qsize);
+//            logger.info("{}=>{} ({} docs)", startedWithOffset, lastConsumedOffset, qsize);
 
-            // todo: adjust currentBatchSize here based on res
-            setCurrentBatchSize(throttlePolicy.get().getMaxBatchSize());
-            writeTimeGauge.set(res.getTime() / 1000000); // lol nanos
+            float writeTarget  = throttlePolicy.get().getWriteTimeTarget();
+            float lastBatchSize = currentBatchSize.get();
+            float thisWriteTime = res.getTime() / 1000000.0f;
+            int maxBatchSize = throttlePolicy.get().getMaxBatchSize();
+            float newBatchSize = lastBatchSize;
+            float targetError = Math.abs(thisWriteTime / writeTarget);
+
+            // todo: implement some kind of float epsilon for when overshoot isnt
+            // todo: really overshoot. Otherwise, you'll have "pseudo-ringing"
+            // todo: as due to float error the batch will always be adjusting
+
+            if(targetError > 1.0) {
+                newBatchSize = newBatchSize / targetError;
+            } else if(targetError < 1.0) {
+                float growBy = (1.0f - targetError) * lastBatchSize;
+                newBatchSize += growBy;
+            }
+
+            int newBatchSizeInt = ((int)newBatchSize);
+
+            // clamp to max, compensating for silly max batch sizes that are too small.
+            if(newBatchSizeInt > maxBatchSize) {
+                newBatchSizeInt = maxBatchSize;
+            }
+
+            if(newBatchSizeInt <= MIN_BATCH_SIZE) {
+                newBatchSizeInt = MIN_BATCH_SIZE;
+            }
+
+//            logger.info("old: {}  new: {}  time: {}/{}  overshoot: {}", lastBatchSize, newBatchSizeInt, thisWriteTime, writeTarget, Float.toString(targetError));
+
+            setCurrentBatchSize(newBatchSizeInt);
+            writeTimeGauge.set(((long)thisWriteTime)); // lol nanos
             targetTimeGauge.set(throttlePolicy.get().getWriteTimeTarget());
+            docsWrittenGauge.delta(qsize);
         }
     }
 

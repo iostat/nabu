@@ -46,6 +46,14 @@ class TelemetryImpl extends TelemetryService {
     }
 
     @Override
+    public TelemetryGaugeSink createExecTime(String aspectName, String... tags) {
+        NonBlockingStatsDClient cli = makeClient();
+        ExecTimeImpl ret = new ExecTimeImpl(config.getTelemetryPrefix(), aspectName, tags, cli);
+        allocatedClients.add(cli);
+        return ret;
+    }
+
+    @Override
     public void shutdown() throws ComponentException {
         allocatedClients.forEach(StatsDClient::stop);
     }
@@ -70,6 +78,11 @@ class TelemetryImpl extends TelemetryService {
         public void decrement() {
             client.decrement(aspect, tags);
         }
+
+        @Override
+        public void delta(long amt) {
+            client.count(aspect, amt, tags);
+        }
     }
 
     @RequiredArgsConstructor
@@ -82,6 +95,19 @@ class TelemetryImpl extends TelemetryService {
         @Override
         public void set(long value) {
             client.gauge(aspect, value, tags);
+        }
+    }
+
+    @RequiredArgsConstructor
+    private static final class ExecTimeImpl implements TelemetryGaugeSink {
+        private final @Getter String prefix;
+        private final @Getter String aspect;
+        private final @Getter String[] tags;
+        private final StatsDClient client;
+
+        @Override
+        public void set(long ms) {
+            client.time(aspect, ms, tags);
         }
     }
 }

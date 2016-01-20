@@ -31,6 +31,14 @@ interface HighLevelNabuClientBridge {
     void connectionLost(NabuClientIO src);
 
     /**
+     * Called when the connection has been lost in an unclean way, such as due
+     * to an IO exception
+     * @param src the NabuClientIO which has disconnected.
+     * @param t the throwable which interrupted the connection
+     */
+    void connectionInterrupted(NabuClientIO src, Throwable t);
+
+    /**
      * Called when a connection was established, but the identification request
      * failed or timed out.
      * @param src the NabuClientIO which received the incorrect IDResponse

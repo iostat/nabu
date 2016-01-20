@@ -9,4 +9,5 @@ import io.stat.nabuproject.core.Component;
 public abstract class TelemetryService extends Component {
     public abstract TelemetryCounterSink createCounter(String aspectName, String... tags);
     public abstract TelemetryGaugeSink createGauge(String aspectName, String... tags);
+    public abstract TelemetryGaugeSink createExecTime(String aspectName, String... tags);
 }

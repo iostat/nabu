@@ -55,6 +55,7 @@ final class NabuClientIO extends SimpleChannelInboundHandler<NabuResponse> {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         logger.error("Caught an unexpected exception", cause);
         // todo: bubble failure to bridge.
+        bridge.connectionInterrupted(this, cause);
         ctx.channel().close();
     }
 

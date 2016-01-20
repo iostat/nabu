@@ -3,7 +3,6 @@ package io.stat.nabuproject.enki.server;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.AttributeKey;
 import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
@@ -35,6 +34,7 @@ import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -111,7 +111,7 @@ class ConnectionImpl implements NabuConnection {
         this.wasLeaveServerInitiated = new AtomicBoolean(false);
         this.leaveAcknowledged   = new AtomicBoolean(false);
 
-        this.promises = Maps.newConcurrentMap();
+        this.promises = new ConcurrentSkipListMap<>();
 
         this.timerTaskThreadFactory = new NamedThreadFactory("NabuConnection" + prettyName());
         this.heartbeatSES = Executors.newSingleThreadScheduledExecutor(timerTaskThreadFactory.buildGroupedTFWithConstantName("Heartbeat"));

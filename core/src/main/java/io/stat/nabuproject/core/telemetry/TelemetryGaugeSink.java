@@ -7,4 +7,5 @@ package io.stat.nabuproject.core.telemetry;
  */
 public interface TelemetryGaugeSink extends TelemetrySink {
     void set(long value);
+
 }

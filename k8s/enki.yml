@@ -26,5 +26,6 @@ spec:
               value: "https://10.101.0.1"
           command:
             - java
+            - -server
             - -jar
             - /enki.jar
