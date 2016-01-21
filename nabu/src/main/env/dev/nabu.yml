@@ -7,7 +7,7 @@ nabu:
   # set in their JARs.
   #
   # Furthermore, this may affect certain aspects of Nabu's
-  # functionality in the future to make development/debugging
+  # functionality in the future  to make development/debugging
   # easier when running in dev/prod.
   #
   # REQUIRED

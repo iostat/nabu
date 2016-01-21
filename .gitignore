@@ -123,5 +123,8 @@ $RECYCLE.BIN/
 
 # Build-specific ignores
 .gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
 build/
 docs/

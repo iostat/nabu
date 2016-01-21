@@ -5,7 +5,6 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.stat.nabuproject.core.net.AddressPort;
-import io.stat.nabuproject.core.util.JVMHackery;
 import io.stat.nabuproject.core.util.concurrent.NamedThreadPoolExecutor;
 import io.stat.nabuproject.nabu.client.NabuClient;
 import io.stat.nabuproject.nabu.common.response.NabuResponse;
@@ -45,8 +44,6 @@ public class Main {
     public Main(int port) throws Exception {
         this.server = LOCALHOST;//new AddressPort("nabu.default.svc.srnk.int", port);
         this.client = new NabuClient("elasticsearch_michaelschonfeld", server);//new NabuClient("es.socialrank.azure", server);
-
-        JVMHackery.addJvmSignalHandler("INT", (sigint) -> { logger.info("sigint"); reallyStop.set(true); plzStop.set(true); client.disconnect(); });
     }
 
     private void start() throws Throwable {

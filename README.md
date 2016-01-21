@@ -86,6 +86,10 @@ you'll probably need to copy the contents of `/your/server/es/path/home/plugins/
 If you're using any other plugins that add custom cluster-wide metadata, you need to do the same for them as well.
 
 
+#### Wait, can't I just set nabu's `es.path.home` as my ElasticSearch's path.home?
+![hahahahahahaha no](http://i.imgur.com/dP4qCQ4.png)
+
+
 ---
 
 

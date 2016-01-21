@@ -122,7 +122,6 @@ public class WorkerCoordinator extends Component implements ThrottlePolicyChange
             while(!isShuttingDown.get()) {
                 try {
                     Thread.sleep(wccp.getRebalancePeriod());
-
                     try {
                         while(needsRebalance.get()) {
                             synchronized ($lock) {

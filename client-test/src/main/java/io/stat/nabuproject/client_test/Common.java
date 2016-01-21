@@ -5,11 +5,9 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.inject.Guice;
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.common.ESExtractorModule;
-import org.elasticsearch.common.ESTimeBasedUUIDGen;
+import org.elasticsearch.common.TimeBasedUUIDGenerator;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -27,7 +25,7 @@ import java.util.stream.Collectors;
  */
 @UtilityClass @Slf4j
 public final class Common {
-    private static final ESTimeBasedUUIDGen uuidgen = Guice.createInjector(new ESExtractorModule()).getInstance(ESTimeBasedUUIDGen.class);
+    private static final TimeBasedUUIDGenerator uuidgen = new TimeBasedUUIDGenerator();
     public static final String RANDO = "{\n" +
             "    \"follows\": [\n" +
             "      {\n" +

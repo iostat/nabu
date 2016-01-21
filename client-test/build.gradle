@@ -6,7 +6,7 @@ project(":client-test") {
     mainClassName = 'io.stat.nabuproject.client_test.Main'
 
     dependencies {
-        compile(project(':nabu'))
+        compile('io.stat.nabuproject:client:0.1-SNAPSHOT')
         compile('com.fasterxml.jackson.core:jackson-core:2.7.0')
         compile('com.fasterxml.jackson.core:jackson-databind:2.7.0')
     }

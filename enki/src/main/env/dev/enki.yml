@@ -55,7 +55,7 @@ enki:
       # Defaults to false
       #
       # OPTIONAL
-      # enabled: false
+      # enabled: true
 
       # What port to run the embedded HTTP server on
       # Defaults to 19216

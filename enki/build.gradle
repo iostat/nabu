@@ -1,8 +1,4 @@
-
 project(":enki") {
-    group 'io.stat.nabuproject'
-    version '0.1-SNAPSHOT'
-
     apply(plugin: 'application')
     applicationDefaultJvmArgs = ["-server"]
 

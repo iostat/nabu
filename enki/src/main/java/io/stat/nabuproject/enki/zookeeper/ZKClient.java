@@ -28,7 +28,6 @@ public abstract class ZKClient extends Component implements ZKEventSource {
      * Write data to a node in path. The node has to exist beforehand.
      * @param path the path to write to
      * @param data the data to write
-     * @return the name of the ephemeral+sequential node that was created.
      */
     public abstract void write(String path, String data);
 

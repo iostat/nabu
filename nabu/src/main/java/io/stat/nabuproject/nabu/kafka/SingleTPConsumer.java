@@ -52,6 +52,11 @@ final class SingleTPConsumer extends Component {
     public static final int MIN_BATCH_SIZE = 15;
 
     /**
+     * epsilon of determining whether ratio of timeTaken/targetTime is within tolerance
+     */
+    public static final float FLOAT_ERROR_MARGIN = 0.01f;
+
+    /**
      * The NabuCommand ES Writer we will be using to execute our logic.
      */
     private final NabuCommandESWriter esWriter;
@@ -281,11 +286,15 @@ final class SingleTPConsumer extends Component {
             // todo: really overshoot. Otherwise, you'll have "pseudo-ringing"
             // todo: as due to float error the batch will always be adjusting
 
-            if(targetError > 1.0) {
-                newBatchSize = newBatchSize / targetError;
-            } else if(targetError < 1.0) {
-                float growBy = (1.0f - targetError) * lastBatchSize;
-                newBatchSize += growBy;
+            // read: if targetError isn't within FLOAT_ERROR_MARGIN of 1.0
+            if(!(Math.abs(1.0f - targetError) < FLOAT_ERROR_MARGIN)) {
+                if(targetError > 1.0) {
+                    newBatchSize = newBatchSize / targetError;
+                } else if(targetError < 1.0) {
+                    float growBy = (1.0f - targetError) * lastBatchSize;
+                    newBatchSize += growBy;
+                }
+
             }
 
             int newBatchSizeInt = ((int)newBatchSize);

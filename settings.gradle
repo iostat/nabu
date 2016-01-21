@@ -3,4 +3,5 @@ include 'core'
 include 'enki'
 include 'nabu'
 include 'client-test'
+include 'client'
 

@@ -55,6 +55,7 @@ class TelemetryImpl extends TelemetryService {
 
     @Override
     public void shutdown() throws ComponentException {
+
         allocatedClients.forEach(StatsDClient::stop);
     }
 
