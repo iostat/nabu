@@ -1,0 +1,50 @@
+import java.util.stream.Collectors
+
+final class KEPT {
+    private static final char SEP = '/'; // #justgroovythingz
+    private static final ROOT_PACKAGE = "io/stat/nabuproject";
+    public static final PREFIXES = [
+            "nabu/client/",
+            "nabu/common/",
+            "nabu/common/command/",
+            "nabu/common/response/",
+            "nabu/protocol/",
+            "core/net/",
+            "core/net/channel/",
+            "core/util/concurrent/",
+            "core/util/CatastrophicException",
+            "core/util/Tuple"
+    ].stream()
+     .map({s -> ("**" + SEP + ROOT_PACKAGE + SEP + s + "*").replace(SEP, File.separatorChar) })
+     .collect(Collectors.toList());
+}
+
+project(":client") {
+    apply plugin: 'maven-publish'
+
+    task thinJar(dependsOn: [":core:compileJava", ":nabu:compileJava"], type: Jar) {
+        baseName = "nabu-client"
+        includeEmptyDirs = false
+
+        from project(":nabu").sourceSets.main.output.asFileTree.matching {
+            KEPT.PREFIXES.each { glob ->
+                include glob
+            }
+        }
+
+        from project(":core").sourceSets.main.output.asFileTree.matching {
+            KEPT.PREFIXES.each { glob ->
+                include glob
+            }
+        }
+    }
+
+    publishing {
+        publications {
+            nabuClient(MavenPublication) {
+                from components.java
+                artifacts = [thinJar]
+            }
+        }
+    }
+}

@@ -13,9 +13,9 @@ import java.util.concurrent.TimeUnit;
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
 public class NamedThreadPoolExecutor extends ThreadPoolExecutor {
-    public static final int MIN_SIZE = 120;
+    public static final int MIN_SIZE = 20;
     public static final int MAX_SIZE = 120;
-    public static final long TIMEOUT  = 60;
+    public static final long TIMEOUT = 60;
     public static final TimeUnit TIMEOUT_UNIT = TimeUnit.SECONDS;
 
 

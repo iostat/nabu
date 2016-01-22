@@ -111,6 +111,11 @@ final class SingleTPConsumer extends Component {
     private final AtomicLong nextFlushTime;
 
     /**
+     * How long to wait for new records from Kafka.
+     */
+    private final AtomicLong pollTimeout;
+
+    /**
      * Used to make starting this consumer synchronous
      */
     private final CountDownLatch readyLatch;
@@ -141,6 +146,7 @@ final class SingleTPConsumer extends Component {
 
         this.isStopped = new AtomicBoolean(false);
         this.nextFlushTime = new AtomicLong(System.currentTimeMillis());
+        this.pollTimeout   = new AtomicLong(1000); // todo: possibly figure out an actual algo to adjust this as well
 
         Properties consumerProps = new Properties();
         consumerProps.put("bootstrap.servers", Joiner.on(',').join(config.getKafkaBrokers()));
@@ -215,7 +221,7 @@ final class SingleTPConsumer extends Component {
                 // AND we're not stopping. this is important because if we ever want to reuse consumer objects,
                 // we still want the loop to run and flush the backlog, but not grow it..
                 while(consumed < currentBatchLimit && System.currentTimeMillis() < flushTimeout && !isStopped.get()) {
-                    long pollTimeout = 200; // todo: figure out the math behind this and how it relates to nextFlushTime and targetTime
+                    long pollTimeout = this.pollTimeout.get(); // todo: figure out the math behind this and how it relates to nextFlushTime and targetTime
                     ConsumerRecords<String, NabuWriteCommand> thisPass = consumer.poll(pollTimeout);
 
                     if(startOffset == Long.MIN_VALUE && thisPass.count() > 0) {
