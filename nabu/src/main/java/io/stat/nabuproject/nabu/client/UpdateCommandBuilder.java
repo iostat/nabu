@@ -23,6 +23,7 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
     String documentSource;
     String documentID;
     boolean shouldRefresh;
+    boolean shouldForceWrite;
     String updateScript;
     boolean isUpsert;
     Map<String, Serializable> scriptParams;
@@ -265,12 +266,22 @@ public class UpdateCommandBuilder implements WriteCommandBuilder {
     }
 
     /**
+     * Set whether or not the router should ignore existing throttle policies
+     * when routing this command.
+     * @param wellShouldIt whether or not throttle policies are ignored for this command.
+     */
+    public UpdateCommandBuilder shouldForceWrite(boolean wellShouldIt) {
+        shouldForceWrite = wellShouldIt;
+        return this;
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
     public UpdateCommand build(long sequence) {
         String newScript = updateScript == null ? "" : updateScript.trim();
-        return new UpdateCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh,
+        return new UpdateCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite,
                 newScript,
                 scriptParams, isUpsert,
                 newScript.isEmpty());

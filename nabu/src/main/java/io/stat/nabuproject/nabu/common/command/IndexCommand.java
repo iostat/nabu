@@ -12,8 +12,9 @@ public class IndexCommand extends NabuWriteCommand {
                         @NonNull String docType,
                         @NonNull String docID,
                         @NonNull String documentSource,
-                        boolean shouldRefresh) {
-        super(Type.INDEX, sequence, index, docType, docID, documentSource, shouldRefresh);
+                        boolean shouldRefresh,
+                        boolean shouldForceWrite) {
+        super(Type.INDEX, sequence, index, docType, docID, documentSource, shouldRefresh, shouldForceWrite);
     }
 
     @Override
@@ -30,6 +31,6 @@ public class IndexCommand extends NabuWriteCommand {
     public IndexCommand copyWithNewId(String newID) {
         return new IndexCommand(getSequence(), getIndex(),
                 getDocumentType(), newID, getDocumentSource(),
-                shouldRefresh());
+                shouldRefresh(), shouldForceWrite());
     }
 }

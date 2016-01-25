@@ -15,6 +15,7 @@ public abstract class NabuWriteCommand extends NabuCommand {
     private final @Getter String documentID;
     private final @Getter String documentSource;
     private final boolean shouldRefresh;
+    private final boolean shouldForceWrite;
 
     protected NabuWriteCommand(@NonNull NabuCommand.Type type,
                                long sequence,
@@ -22,28 +23,32 @@ public abstract class NabuWriteCommand extends NabuCommand {
                                @NonNull String documentType,
                                @NonNull String documentID,
                                @NonNull String documentSource,
-                               boolean shouldRefresh) {
+                               boolean shouldRefresh,
+                               boolean shouldForceWrite) {
         super(type, sequence);
         this.index = index;
         this.documentType = documentType;
         this.documentID = documentID;
         this.documentSource = documentSource;
         this.shouldRefresh = shouldRefresh;
+        this.shouldForceWrite = shouldForceWrite;
     }
 
     public boolean shouldRefresh() {
         return shouldRefresh;
     }
+    public boolean shouldForceWrite() { return shouldForceWrite; }
 
     public final void encode(ByteBuf out) throws Exception {
         // first write everything except MAGIC, Type, and length
-        // we can assume we'll have at least 17 bytes,
-        // 1 byte shouldRefresh, and 4 INT lengths for index doctype id and source
-        // so lets round it up to 32 for memory alignment magic
-        // (at least i think thats how it should work ¯\_(ツ)_/¯
+        // we can assume we'll have at least 18 bytes,
+        // 1 byte shouldRefresh, 1 byte shouldForceWrite, and 4 INT lengths for index doctype id and source
+        // so lets round it up to 32^H^H64 for memory alignment magic
+        // (at least i think thats how it should work) ¯\_(ツ)_/¯
         ByteBuf restOfPacket = ProtocolHelper.POOLED_BYTEBUF_ALLOCATOR.buffer(64);
 
         restOfPacket.writeBoolean(shouldRefresh);
+        restOfPacket.writeBoolean(shouldForceWrite);
         ProtocolHelper.writeStringToByteBuf(getIndex(), restOfPacket);
         ProtocolHelper.writeStringToByteBuf(getDocumentType(), restOfPacket);
         ProtocolHelper.writeStringToByteBuf(getDocumentID(), restOfPacket);

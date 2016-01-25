@@ -31,11 +31,12 @@ public class UpdateCommand extends NabuWriteCommand {
                          @NonNull String documentID,
                          @NonNull String documentSource,
                          boolean shouldRefresh,
+                         boolean shouldForceWrite,
                          @NonNull String updateScript,
                          @NonNull Map<String, Serializable> scriptParams,
                          boolean hasUpsert,
                          boolean hasUpdateScript) {
-        super(NabuCommand.Type.UPDATE, sequence, index, documentType, documentID, documentSource, shouldRefresh);
+        super(NabuCommand.Type.UPDATE, sequence, index, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite);
         this.updateScript = updateScript;
         this.scriptParams = ImmutableMap.copyOf(scriptParams);
         this.hasUpsert = hasUpsert;
@@ -58,6 +59,6 @@ public class UpdateCommand extends NabuWriteCommand {
     @Override
     public UpdateCommand copyWithNewId(String newID) {
         return new UpdateCommand(getSequence(), getIndex(), getDocumentType(), newID, getDocumentSource(), shouldRefresh(),
-                getUpdateScript(), getScriptParams(), hasUpsert(), hasUpdateScript());
+                shouldForceWrite(), getUpdateScript(), getScriptParams(), hasUpsert(), hasUpdateScript());
     }
 }

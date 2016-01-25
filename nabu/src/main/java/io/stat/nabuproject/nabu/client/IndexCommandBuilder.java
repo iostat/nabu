@@ -19,6 +19,7 @@ public class IndexCommandBuilder implements WriteCommandBuilder {
     String documentSource;
     String documentID;
     boolean shouldRefresh;
+    boolean shouldForceWrite;
 
     /**
      * Create an IndexCommandBuilder WITHOUT an executor (set to null). This means
@@ -148,13 +149,22 @@ public class IndexCommandBuilder implements WriteCommandBuilder {
         return this;
     }
 
+    /**
+     * Set whether or not the router should ignore existing throttle policies
+     * when routing this command.
+     * @param wellShouldIt whether or not throttle policies are ignored for this command.
+     */
+    public IndexCommandBuilder shouldForceWrite(boolean wellShouldIt) {
+        shouldForceWrite = wellShouldIt;
+        return this;
+    }
 
     /**
      * {@inheritDoc}
      */
     @Override
     public IndexCommand build(long sequence) {
-        return new IndexCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh);
+        return new IndexCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite);
     }
 
     /**

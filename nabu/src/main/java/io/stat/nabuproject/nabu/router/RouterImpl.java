@@ -94,7 +94,7 @@ class RouterImpl extends CommandRouter {
     private void routeCommand(NabuCommandSource src, NabuWriteCommand command) {
         ThrottlePolicy maybeTP = throttlePolicyProvider.getTPForIndex(command.getIndex()).get();
 
-        if(maybeTP == null) {
+        if(maybeTP == null || command.shouldForceWrite()) {
             routedDirects.increment();
             try {
                 ESWriteResults res = esWriter.singleWrite(command);

@@ -66,13 +66,14 @@ public class CommandDecoder extends ByteToMessageDecoder {
             }
 
             boolean shouldRefresh = in.readBoolean();
+            boolean shouldForceWrite = in.readBoolean();
             String indexName = ProtocolHelper.readStringFromByteBuf(in);
             String documentType = ProtocolHelper.readStringFromByteBuf(in);
             String documentID = ProtocolHelper.readStringFromByteBuf(in);
             String documentSource = ProtocolHelper.readStringFromByteBuf(in);
 
             if(commandType == NabuCommand.Type.INDEX) {
-                out.add(new IndexCommand(sequence, indexName, documentType, documentID, documentSource, shouldRefresh));
+                out.add(new IndexCommand(sequence, indexName, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite));
                 return;
             } else if(commandType == NabuCommand.Type.UPDATE) {
                 boolean hasUpsert = in.readBoolean();
@@ -81,7 +82,7 @@ public class CommandDecoder extends ByteToMessageDecoder {
                 Map<String, Serializable> scriptParams = ProtocolHelper.readSerializableFromByteBuf(in);
 
                 out.add(new UpdateCommand(sequence, indexName, documentType, documentID, documentSource,
-                        shouldRefresh, updateScript, scriptParams, hasUpsert, hasUpdateScript));
+                        shouldRefresh, shouldForceWrite, updateScript, scriptParams, hasUpsert, hasUpdateScript));
                 return;
             } else {
                 throw new UnsupportedOperationException("Don't know how to decode NabuWriteCommand of type " + commandType.toString() + "!");
