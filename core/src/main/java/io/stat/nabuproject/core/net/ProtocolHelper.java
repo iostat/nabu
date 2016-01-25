@@ -3,8 +3,7 @@ package io.stat.nabuproject.core.net;
 import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
-import io.netty.buffer.Unpooled;
-import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.DecoderException;
 import lombok.experimental.UtilityClass;
 
@@ -26,13 +25,19 @@ public class ProtocolHelper {
     public static final String READ_STRING_TOO_SHORT = "Don't have enough data to read the whole string";
 
     /**
+     * Keep our own pooled ByteBuf allocator, to prevent GC thrashing when making thousands of
+     * writeStringToByteBuf calls per sec.
+     */
+    public static final PooledByteBufAllocator POOLED_BYTEBUF_ALLOCATOR = new PooledByteBufAllocator(false);
+
+    /**
      * Converts a {@link String} into a series of bytes that can be reconstructed
      * {@link ProtocolHelper#readStringFromByteBuf(ByteBuf)}
      * @param s the string to encode
      * @param out the {@link ByteBuf} to write to
      */
     public static void writeStringToByteBuf(String s, ByteBuf out) {
-        ByteBuf encodedString = ByteBufUtil.encodeString(UnpooledByteBufAllocator.DEFAULT, CharBuffer.wrap(s), UTF_8);
+        ByteBuf encodedString = ByteBufUtil.encodeString(POOLED_BYTEBUF_ALLOCATOR, CharBuffer.wrap(s), UTF_8);
         int size = encodedString.readableBytes();
 
         out.writeInt(size);
@@ -59,7 +64,7 @@ public class ProtocolHelper {
             throw new DecoderException(READ_STRING_TOO_SHORT);
         }
 
-        ByteBuf stringBuf = Unpooled.buffer(size);
+        ByteBuf stringBuf = POOLED_BYTEBUF_ALLOCATOR.buffer(size);
         in.readBytes(stringBuf, size);
 
         String ret = stringBuf.toString(UTF_8);

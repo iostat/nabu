@@ -3,7 +3,7 @@ package io.stat.nabuproject.core.enkiprotocol.packet;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.CorruptedFrameException;
@@ -77,7 +77,7 @@ public abstract class EnkiPacket {
             }
 
             // Everything else brings us pain and suffering.
-            ByteBuf restOfPacket = Unpooled.buffer();
+            ByteBuf restOfPacket = PooledByteBufAllocator.DEFAULT.buffer();
             switch(packetType) {
                 case ASSIGN:
                 case UNASSIGN:

@@ -167,7 +167,7 @@ class ZKThrottlePolicyValidator {
 
             zkClient.create(nodePrefix, ZKThrottlePolicyProvider.ENCODE_ZKTP(tpKafkaName, tpBatchSize, tpWriteTime, tpFlushTime));
 
-            logger.info("Seeded TP index:{} with topic:{}, batch size:{} records, goal write:{}ms, flush timeout:{}ms", tpName, tpKafkaName, tpBatchSize, tpWriteTime);
+            logger.info("Seeded TP index:{} with topic:{}, batch size:{} records, goal write:{}ms, flush timeout:{}ms", tpName, tpKafkaName, tpBatchSize, tpWriteTime, tpFlushTime);
         });
     }
 }

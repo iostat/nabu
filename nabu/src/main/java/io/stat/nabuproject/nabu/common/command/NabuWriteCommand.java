@@ -1,7 +1,6 @@
 package io.stat.nabuproject.nabu.common.command;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.stat.nabuproject.core.net.ProtocolHelper;
 import lombok.Getter;
 import lombok.NonNull;
@@ -38,7 +37,11 @@ public abstract class NabuWriteCommand extends NabuCommand {
 
     public final void encode(ByteBuf out) throws Exception {
         // first write everything except MAGIC, Type, and length
-        ByteBuf restOfPacket = Unpooled.buffer();
+        // we can assume we'll have at least 17 bytes,
+        // 1 byte shouldRefresh, and 4 INT lengths for index doctype id and source
+        // so lets round it up to 32 for memory alignment magic
+        // (at least i think thats how it should work ¯\_(ツ)_/¯
+        ByteBuf restOfPacket = ProtocolHelper.POOLED_BYTEBUF_ALLOCATOR.buffer(64);
 
         restOfPacket.writeBoolean(shouldRefresh);
         ProtocolHelper.writeStringToByteBuf(getIndex(), restOfPacket);

@@ -170,4 +170,5 @@ enki:
     #
     # OPTIONAL
     policies:
-    - index: "test-20-shards"
+#    - index: "test-20-shards"
+    - index: "enron-v1"

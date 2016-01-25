@@ -50,7 +50,7 @@ public interface ThrottlePolicyProvider {
      */
     default AtomicReference<ThrottlePolicy> getTPForIndex(String indexName) {
         return getTPReferences()
-                .stream().filter(tp -> tp.get().getIndexName().equals(indexName)).findFirst().orElse(null);
+                .stream().filter(tp -> tp.get().getIndexName().equals(indexName)).findFirst().orElse(new AtomicReference<>(null));
     }
 
     /**

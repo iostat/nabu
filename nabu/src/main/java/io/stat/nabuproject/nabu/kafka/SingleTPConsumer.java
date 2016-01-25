@@ -184,7 +184,7 @@ final class SingleTPConsumer extends Component {
         boolean isInWriteAndFlush = false;
         try {
             consumer.assign(ImmutableList.of(targetTopicPartition));
-            consumer.seekToBeginning(targetTopicPartition); // lolz
+            consumer.seekToBeginning(targetTopicPartition); // lolz todo: TURN ME THE FUCK OFF IN PROD LOL
             this.readyLatch.countDown();
             ArrayDeque<ConsumerRecord<String,NabuWriteCommand>> consumptionBacklog = Queues.newArrayDeque();
             ArrayDeque<NabuWriteCommand> immediateConsumptionQueue = new ArrayDeque<>(throttlePolicy.get().getMaxBatchSize() * 4);

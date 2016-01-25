@@ -1,12 +1,12 @@
 package io.stat.nabuproject.nabu.client;
 
-import com.google.common.collect.Maps;
 import io.netty.channel.Channel;
 import io.stat.nabuproject.core.util.concurrent.ResettableCountDownLatch;
 import io.stat.nabuproject.nabu.common.response.FailResponse;
 import io.stat.nabuproject.nabu.common.response.NabuResponse;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import net.openhft.koloboke.collect.map.hash.HashLongObjMaps;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -36,7 +36,7 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
         this.startupSynchronizer = new ResettableCountDownLatch(1);
         this.failureReason = new AtomicReference<>(null);
         this.clientChannel = new AtomicReference<>(null);
-        this.promises = Maps.newTreeMap();
+        this.promises = HashLongObjMaps.newMutableMap(2000);
     }
 
     Thread getConnectorThread() {

@@ -112,6 +112,10 @@ subprojects {
 
         // slf4j logging.
         compile(group: 'org.slf4j', name: 'slf4j-api', version:'1.7.13')
+
+        // Koloboke Collections (used by client currently, and eventually by everything else)
+        compile(group: 'net.openhft', name: 'koloboke-api-jdk8', version:'0.6.8')
+        runtime(group: 'net.openhft', name: 'koloboke-impl-jdk8', version:'0.6.8')
     }
 
     sourceSets {

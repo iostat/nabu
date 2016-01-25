@@ -55,7 +55,7 @@ final class ZKLeaderData extends LeaderData {
     }
 
     public String toBase64() {
-        ByteBuf buffer = Unpooled.buffer(10);
+        ByteBuf buffer = ProtocolHelper.POOLED_BYTEBUF_ALLOCATOR.buffer(10);
 
         buffer.writeBytes(MAGIC);
         ProtocolHelper.writeStringToByteBuf(getVersion(), buffer);
@@ -77,6 +77,9 @@ final class ZKLeaderData extends LeaderData {
             }
         }
 
+
+        // unfortunately no way to create a wrapped buffer from a pool allocator
+        // however, this method is seldom called anyway so its nbd
         ByteBuf buffer = Unpooled.wrappedBuffer(bytes);
         buffer.skipBytes(MAGIC.length);
 

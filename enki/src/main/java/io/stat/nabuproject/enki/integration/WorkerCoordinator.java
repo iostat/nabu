@@ -371,7 +371,7 @@ public class WorkerCoordinator extends Component implements ThrottlePolicyChange
 
     public void coordinateJoin(NabuConnection cnxn) {
         synchronized($lock) {
-            if (Integer.MAX_VALUE < 0) {//if(elp.isSelf()) {
+            if(elp.isSelf()) {
                 AssignableNabu n = new AssignableNabu(cnxn);
                 confirmedWorkers.add(n);
                 needsRebalance.set(true);
