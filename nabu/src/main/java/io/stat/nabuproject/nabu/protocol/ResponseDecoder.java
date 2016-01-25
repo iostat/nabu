@@ -44,43 +44,52 @@ public class ResponseDecoder extends ByteToMessageDecoder {
 
         try {
             NabuResponse.Type type = NabuResponse.Type.ofCode(respCode);
-            switch(type) {
-                case OK:
-                    out.add(new OKResponse(sequence));
+            String id;
+            try {
+                id = ProtocolHelper.readStringFromByteBuf(in);
+            } catch(DecoderException de) {
+                if(de.getMessage().equals(ProtocolHelper.READ_STRING_NO_SIZE)
+                        || de.getMessage().equals(ProtocolHelper.READ_STRING_TOO_SHORT)) {
+                    // thrown inside ProtocolHelper when there's not enough data to read the String.
+                    in.resetReaderIndex();
                     return;
-                case QUEUED:
-                    out.add(new QueuedResponse(sequence));
-                    return;
-                case RETRY:
-                    out.add(new RetryResponse(sequence));
-                    return;
-                case FAIL:
-                case ID:
-                    String attachedString;
+                } else {
+                    throw de;
+                }
+            }
 
-                    try {
-                        attachedString = ProtocolHelper.readStringFromByteBuf(in);
-                    } catch(DecoderException de) {
-                        if(de.getMessage().equals(ProtocolHelper.READ_STRING_NO_SIZE)
-                                || de.getMessage().equals(ProtocolHelper.READ_STRING_TOO_SHORT)) {
-                            // thrown inside ProtocolHelper when there's not enough data to read the String.
-                            in.resetReaderIndex();
-                            return;
-                        } else {
-                            throw de;
-                        }
-                    }
-                    if(type == NabuResponse.Type.FAIL) {
-                        out.add(new FailResponse(sequence, attachedString));
-                    } else if(type == NabuResponse.Type.ID) {
-                        out.add(new IDResponse(sequence, attachedString));
+            if(type == NabuResponse.Type.FAIL) {
+                try {
+                    String reason = ProtocolHelper.readStringFromByteBuf(in);
+                    out.add(new FailResponse(sequence, id, reason));
+                    return;
+                } catch(DecoderException de) {
+                    if(de.getMessage().equals(ProtocolHelper.READ_STRING_NO_SIZE)
+                            || de.getMessage().equals(ProtocolHelper.READ_STRING_TOO_SHORT)) {
+                        // thrown inside ProtocolHelper when there's not enough data to read the String.
+                        in.resetReaderIndex();
+                        return;
                     } else {
-                        throw new RuntimeException("This is literally impossible :O");
+                        throw de;
                     }
-
-                    return;
-                default:
-                    throw new IllegalArgumentException("Cannot handle NabuResponse of type " + type.toString());
+                }
+            } else {
+                switch(type) {
+                    case OK:
+                        out.add(new OKResponse(sequence, id));
+                        return;
+                    case QUEUED:
+                        out.add(new QueuedResponse(sequence, id));
+                        return;
+                    case RETRY:
+                        out.add(new RetryResponse(sequence, id));
+                        return;
+                    case ID:
+                        out.add(new IDResponse(sequence, id));
+                        return;
+                    default:
+                        throw new IllegalArgumentException("Cannot handle NabuResponse of type " + type.toString());
+                }
             }
         } catch(IllegalArgumentException iae) {
             in.resetReaderIndex();

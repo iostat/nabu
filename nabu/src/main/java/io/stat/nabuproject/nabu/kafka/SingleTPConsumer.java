@@ -14,6 +14,7 @@ import io.stat.nabuproject.core.throttling.ThrottlePolicy;
 import io.stat.nabuproject.nabu.common.command.NabuWriteCommand;
 import io.stat.nabuproject.nabu.elasticsearch.ESWriteResults;
 import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -136,6 +137,11 @@ final class SingleTPConsumer extends Component {
      */
     private final CountDownLatch wakeupLatch;
 
+    /**
+     * Whether or not throttling is paused on this TP.
+     */
+    private final @Getter AtomicBoolean isPaused;
+
     private final TelemetryGaugeSink batchSizeGauge;
     private final TelemetryGaugeSink writeTimeGauge;
     private final TelemetryGaugeSink targetTimeGauge;
@@ -186,6 +192,8 @@ final class SingleTPConsumer extends Component {
         this.writeTimeGauge = telemetryService.createExecTime("consumer.writetime", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
         this.targetTimeGauge = telemetryService.createGauge("consumer.target", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
         this.docsWrittenGauge = telemetryService.createCounter("consumer.written", "topic:"+throttlePolicy.get().getTopicName(), "partition:"+partitionToSubscribe);
+
+        this.isPaused = new AtomicBoolean(false);
     }
 
     private void runConsumer() {
@@ -211,6 +219,21 @@ final class SingleTPConsumer extends Component {
             long lastConsumedOffset, flushTimeout, flushInterval, startOffset;
             int consumed, currentBatchLimit, backlogConsumed;
             while(!isStopped.get() || !consumptionBacklog.isEmpty()) { // items in the backlog can preempt stopping the consumer, see explanation below
+                if(isPaused.get() && consumptionBacklog.isEmpty()) { // todo: could be problematic if we have a huuuuuuuuge backlog....
+                    try {
+                        Thread.sleep(1000); // todo: heuristic af
+                    } catch(InterruptedException e) {
+                        if(isStopped.get()) {
+                            break;
+                        } else {
+                            logger.error("Unexpected InterruptedException in {}[{}]", this, throttlePolicy.get()); // todo: i honestly have no idea how a singletpconsumer could get interrupted at this point
+                                                                                                                   // todo: notify enki somehow?
+                            break;
+                        }
+                    }
+                    continue;
+                }
+
                 consumed = 0;
                 currentBatchLimit = currentBatchSize.get();
                 flushTimeout = nextFlushTime.get();

@@ -5,6 +5,9 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.elasticsearch.ESClient;
+import io.stat.nabuproject.core.elasticsearch.event.NabuESEvent;
+import io.stat.nabuproject.core.elasticsearch.event.NabuESEventListener;
 import io.stat.nabuproject.core.enkiprotocol.EnkiSourcedConfigKeys;
 import io.stat.nabuproject.core.enkiprotocol.client.EnkiConnection;
 import io.stat.nabuproject.core.enkiprotocol.dispatch.EnkiClientEventSource;
@@ -19,6 +22,7 @@ import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 
 import java.io.Serializable;
 import java.util.List;
@@ -26,13 +30,15 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+
 /**
  * Listens for assignments by Enki to start consuming Kafka topics, and
  * creates instances of Consumers to do just that.
  */
 @Slf4j
-class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
+class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator implements NabuESEventListener {
     private final EnkiClientEventSource eces;
+    private final ESClient esc;
     private final TelemetryService telemetryService;
     private final NabuCommandESWriter esWriter;
     private final Map<TopicPartition, SingleTPConsumer> consumerMap;
@@ -56,9 +62,11 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
     @Inject
     ConsumerCoordinatorImpl(NabuCommandESWriter esWriter,
                             EnkiClientEventSource eces,
+                            ESClient esc,
                             TelemetryService telemetryService) {
         this.esWriter = esWriter;
         this.eces = eces;
+        this.esc = esc;
         this.telemetryService = telemetryService;
 
         this.throttlePolicies = new AtomicReference<>(Lists.newArrayList());
@@ -73,6 +81,8 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
         this.isShuttingDown = new AtomicBoolean(false);
 
         this.sskbcp = this.new SessionSourcedKafkaBrokerCP();
+
+        esc.addNabuESEventListener(this);
 
         this.startedConsumerCounter = telemetryService.createCounter("consumers.started");
         this.stoppedConsumerCounter = telemetryService.createCounter("consumers.stopped");
@@ -220,6 +230,23 @@ class ConsumerCoordinatorImpl extends AssignedConsumptionCoordinator {
         }
 
         logger.info("Stopped ConsumerCoordinatorImpl");
+    }
+
+    @Override
+    public boolean onNabuESEvent(NabuESEvent event) {
+        // this event is ignored.
+        return true;
+    }
+
+    @Override
+    public boolean onClusterColorChange(ClusterHealthStatus color) {
+        synchronized ($consumerMapLock) {
+            boolean isPaused = !(color.equals(ClusterHealthStatus.GREEN));
+            consumerMap.forEach((k, v) -> v.getIsPaused().set(isPaused));
+            logger.info("Cluster health changed to {}, and the consumers have been {} accordingly.", color, isPaused ? "paused" : "unpaused");
+        }
+
+        return true;
     }
 
     // todo: probably extract this out to its own general sourcedconfigprovider.

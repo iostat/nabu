@@ -126,7 +126,7 @@ class CommandWriterImpl implements NabuCommandESWriter {
         for(BulkItemResponse bir : response.getItems()) {
             if(bir.isFailed()) {
                 // todo: disabling for performance. stdout is SLOW
-                logger.warn("[ES BULK WRITE FAILURE] {}/{}/{}",
+                logger.warn("[ES BULK WRITE FAILURE] {}/{}/{}\n{}",
                         bir.getIndex(),
                         bir.getType(),
                         bir.getId(),

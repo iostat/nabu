@@ -28,7 +28,7 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
     private final AtomicReference<NabuClientIO> ncio;
 
     public static final String CONN_LOST_FAIL_RESPONSE = "The connection was lost while awaiting a response.";
-    private static final LongObjConsumer<NabuClientFuture> COMPLETE_WITH_FAIL_LOC = (k, v) -> v.complete(new FailResponse(k, CONN_LOST_FAIL_RESPONSE));
+    private static final LongObjConsumer<NabuClientFuture> COMPLETE_WITH_FAIL_LOC = (k, v) -> v.complete(new FailResponse(k, null, CONN_LOST_FAIL_RESPONSE));
 
     NabuClientConnectionState(NabuClient highLevelClient) {
         this.highLevelClient = highLevelClient;
@@ -186,7 +186,7 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
             NabuClientFuture futureForCommand = new NabuClientFuture(sequence);
             synchronized (this.promises) {
                 if(getConnectionState() != NCCState.RUNNING) {
-                    futureForCommand.complete(new FailResponse(sequence, CONN_LOST_FAIL_RESPONSE));
+                    futureForCommand.complete(new FailResponse(sequence, null, CONN_LOST_FAIL_RESPONSE));
                     return futureForCommand;
                 } else {
                     ncio.dispatchCommand(wcb.build(sequence));

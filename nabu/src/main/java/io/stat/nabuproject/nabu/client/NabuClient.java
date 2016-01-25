@@ -18,6 +18,7 @@ import io.stat.nabuproject.nabu.protocol.CommandEncoder;
 import io.stat.nabuproject.nabu.protocol.Limits;
 import io.stat.nabuproject.nabu.protocol.ResponseDecoder;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
@@ -68,6 +69,8 @@ public class NabuClient {
      * Used internally to keep track of the state of the connection loop.
      */
     private final NabuClientConnectionState nccs;
+
+    private @Getter @Setter DisconnectionHook disconnectionHook;
 
     /**
      * Create a new NabuClient that will only try to connect to the specified address and port.
@@ -181,6 +184,9 @@ public class NabuClient {
      * todo: this is probably not everything necessary for a graceful shutdown...
      */
     private void gracefulShutdown() {
+        if(disconnectionHook != null) {
+            disconnectionHook.onDisconnected(this);
+        }
         this.nioEventGroup.shutdownGracefully();
     }
 

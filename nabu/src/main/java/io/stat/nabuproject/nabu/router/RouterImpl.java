@@ -70,7 +70,7 @@ class RouterImpl extends CommandRouter {
             routeUpdate(src, (UpdateCommand) command);
         } else {
             routingFails.increment();
-            src.respond(command.failResponse(String.format("[CommandRouter] Don't know how to route command of type %s", command.getType())));
+            src.respond(command.failResponse("", String.format("[CommandRouter] Don't know how to route command of type %s", command.getType())));
         }
     }
 
@@ -98,10 +98,10 @@ class RouterImpl extends CommandRouter {
             routedDirects.increment();
             try {
                 ESWriteResults res = esWriter.singleWrite(command);
-                src.respond(res.success() ? command.okResponse() : command.failResponse(res.getMessage()));
+                src.respond(res.success() ? command.okResponse(command.getDocumentID()) : command.failResponse(command.getDocumentID(), res.getMessage()));
             } catch(Exception e) {
                 logger.error("ElasticSearch spit out an error", e);
-                src.respond(command.retryResponse());
+                src.respond(command.retryResponse(command.getDocumentID()));
             }
         } else {
             routedQueues.increment();

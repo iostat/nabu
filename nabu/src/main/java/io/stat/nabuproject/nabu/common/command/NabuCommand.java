@@ -37,20 +37,20 @@ public abstract class NabuCommand {
         out.writeLong(getSequence());
     }
 
-    public final OKResponse okResponse() {
-        return new OKResponse(getSequence());
+    public final OKResponse okResponse(String id) {
+        return new OKResponse(getSequence(), id);
     }
 
-    public final RetryResponse retryResponse() {
-        return new RetryResponse(getSequence());
+    public final RetryResponse retryResponse(String id) {
+        return new RetryResponse(getSequence(), id);
     }
 
-    public final QueuedResponse queuedResponse() {
-        return new QueuedResponse(getSequence());
+    public final QueuedResponse queuedResponse(String id) {
+        return new QueuedResponse(getSequence(), id);
     }
 
-    public final FailResponse failResponse(String reason) {
-        return new FailResponse(getSequence(), reason);
+    public final FailResponse failResponse(String id, String reason) {
+        return new FailResponse(getSequence(), id, reason);
     }
 
     /**

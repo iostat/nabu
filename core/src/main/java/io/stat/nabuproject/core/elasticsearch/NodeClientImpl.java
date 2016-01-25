@@ -16,12 +16,14 @@ import lombok.Getter;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.util.Strings;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.node.DiscoveryNode;
+import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
@@ -238,6 +240,11 @@ class NodeClientImpl extends ESClient {
                 new ShutdownOnFailureCRC(this, "NabuESEventCallbackFailedCRC"));
     }
 
+    private void dispatchClusterHealthChange(ClusterHealthStatus color) {
+        dispatcher.dispatchListenerCallbacks(curry2p(NabuESEventListener::onClusterColorChange, color),
+                new ShutdownOnFailureCRC(this, "NabuESEventCallbackFailedCRC"));
+    }
+
     /**
      * Here so we can register with the node's cluster state listener API
      * and dispatch our own events.
@@ -298,6 +305,18 @@ class NodeClientImpl extends ESClient {
                     logger.info("Non Enki/Nabu node...: {}", node);
                 }
             });
+
+            ClusterHealthStatus theColor = ClusterHealthStatus.GREEN;
+            for(ShardRouting shardRouting : event.state().getRoutingTable().allShards()) {
+                if(!shardRouting.started()) {
+                    theColor = ClusterHealthStatus.YELLOW;
+                    if(shardRouting.primary()) {
+                        theColor = ClusterHealthStatus.RED;
+                        break;
+                    }
+                }
+            }
+            NodeClientImpl.this.dispatchClusterHealthChange(theColor);
         }
     }
 }
