@@ -336,11 +336,12 @@ class ConnectionImpl implements NabuConnection {
         connectionListener.onPacketReceived(this, packet);
         long sequence = packet.getSequenceNumber();
         CompletableFuture<EnkiPacket> f = promises.getOrDefault(sequence, null);
+        long nextExpectedIncomingSequence = lastIncomingSequence.get() + 1L;
         if(f != null) {
             promises.remove(sequence);
             f.complete(packet);
         } else {
-            if (sequence == lastIncomingSequence.get() + 1L) {
+            if (sequence == nextExpectedIncomingSequence) {
                 logger.debug("Wow! received a fantastic packet: {}", packet);
 
                 if(packet.getType() == EnkiPacket.Type.LEAVE) {
@@ -350,12 +351,14 @@ class ConnectionImpl implements NabuConnection {
                     if(packet.getType() != EnkiPacket.Type.ACK && packet.getType() != EnkiPacket.Type.NAK) {
                         // todo: client shouldn't be sending anything else. what to do?
                         logger.error("RECEIVED A PACKET THAT CLIENTS SHOULDNT BE SENDING :: {}", packet);
-                        // todo: dispatch that motherfucker.
+                        // todo: dispatch that motherfucker. or dont?
                     }
                 }
             } else {
-                logger.error("RECEIVED AN UNEXPECTED PACKET (sequence out of order) :: {}", packet);
+                logger.warn("RECEIVED AN OUT-OF-SEQUENCE PACKET ({}:{}) :: {}", sequence, nextExpectedIncomingSequence, packet);
                 // todo: leaveGracefully the client?
+                // todo: actually not an issue since config updates could be sent and heartbeats after them, with the config
+                // todo: update only acknowledged after the heartbeats. but there should be a more graceful system for this anyway
             }
         }
     }

@@ -8,8 +8,6 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.MessageToByteEncoder;
-import io.stat.nabuproject.core.net.ObjectDecoderExposer;
-import io.stat.nabuproject.core.net.ObjectEncoderExposer;
 import io.stat.nabuproject.core.net.ProtocolHelper;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -48,13 +46,6 @@ public abstract class EnkiPacket {
 
     @Slf4j
     public static final class Encoder extends MessageToByteEncoder<EnkiPacket> {
-
-        private final ObjectEncoderExposer exposer;
-
-        public Encoder() {
-            this.exposer = new ObjectEncoderExposer();
-        }
-
         @Override
         protected void encode(ChannelHandlerContext ctx, EnkiPacket msg, ByteBuf out) throws Exception {
             Type packetType = msg.getType();
@@ -111,14 +102,6 @@ public abstract class EnkiPacket {
 
     @Slf4j
     public static final class Decoder extends ByteToMessageDecoder {
-
-        private final ObjectDecoderExposer exposer;
-
-        public Decoder() {
-            this.exposer = new ObjectDecoderExposer();
-        }
-
-
         // for EnkiConfigures it has to decode what should be a Map<String, Serializable>
         // but alas ObjectEncoder isn't exactly generic.
         @SuppressWarnings("unchecked")

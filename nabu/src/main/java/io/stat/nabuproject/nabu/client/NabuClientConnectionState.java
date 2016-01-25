@@ -64,6 +64,7 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
     }
 
     void setFailureReason(NabuConnectionFailedException reason) {
+        //noinspection ThrowableResultOfMethodCallIgnored cause we don't need to throw it just yet
         if(failureReason.get() == null) {
             failureReason.set(reason);
         } else {

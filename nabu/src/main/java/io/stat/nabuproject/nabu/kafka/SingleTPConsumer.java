@@ -142,7 +142,6 @@ final class SingleTPConsumer extends Component {
     private final TelemetryGaugeSink targetTimeGauge;
     private final TelemetryCounterSink docsWrittenGauge;
 
-
     public SingleTPConsumer(NabuCommandESWriter esWriter,
                             AtomicReference<ThrottlePolicy> throttlePolicy,
                             int partitionToSubscribe,
@@ -303,12 +302,12 @@ final class SingleTPConsumer extends Component {
             consumer.commitSync(ImmutableMap.of(targetTopicPartition, new OffsetAndMetadata(lastConsumedOffset)));
 //            logger.info("{}=>{} ({} docs)", startedWithOffset, lastConsumedOffset, qsize);
 
-            float writeTarget  = throttlePolicy.get().getWriteTimeTarget();
+            int   maxBatchSize  = throttlePolicy.get().getMaxBatchSize();
+            float writeTarget   = throttlePolicy.get().getWriteTimeTarget();
             float lastBatchSize = currentBatchSize.get();
             float thisWriteTime = res.getTime() / 1000000.0f;
-            int maxBatchSize = throttlePolicy.get().getMaxBatchSize();
-            float newBatchSize = lastBatchSize;
-            float targetError = Math.abs(thisWriteTime / writeTarget);
+            float newBatchSize  = lastBatchSize;
+            float targetError   = Math.abs(thisWriteTime / writeTarget);
 
             // todo: implement some kind of float epsilon for when overshoot isnt
             // todo: really overshoot. Otherwise, you'll have "pseudo-ringing"
@@ -331,12 +330,13 @@ final class SingleTPConsumer extends Component {
 
             int newBatchSizeInt = ((int)newBatchSize);
 
-            // clamp to max, compensating for silly max batch sizes that are too small.
+            // clamp to max to prevent ridiculous mathematical voodoo.
             if(newBatchSizeInt > maxBatchSize) {
                 newBatchSizeInt = maxBatchSize;
             }
 
-            if(newBatchSizeInt <= MIN_BATCH_SIZE) {
+            // likewise, prevent microscopic batch sizes.
+            if(newBatchSizeInt < MIN_BATCH_SIZE) {
                 newBatchSizeInt = MIN_BATCH_SIZE;
             }
 

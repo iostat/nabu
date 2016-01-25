@@ -22,8 +22,6 @@ final class ZKLeaderData extends LeaderData {
     private static final long serialVersionUID = -6197344956374201028L;
 
     private static final byte[] MAGIC = { 0x45, 0x5A, 0x4B, 0x4C, 0x45, 0x44 };
-    private static final short ZKLD_MAGIC = 0x01;
-    private static final short ZKAP_MAGIC = 0x02;
 
     private final @Getter String path;
     private final @Getter String version;
