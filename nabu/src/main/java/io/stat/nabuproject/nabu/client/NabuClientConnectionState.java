@@ -6,9 +6,10 @@ import io.stat.nabuproject.nabu.common.response.FailResponse;
 import io.stat.nabuproject.nabu.common.response.NabuResponse;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import net.openhft.koloboke.collect.map.hash.HashLongObjMap;
 import net.openhft.koloboke.collect.map.hash.HashLongObjMaps;
+import net.openhft.koloboke.function.LongObjConsumer;
 
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -22,10 +23,11 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
     private final @Getter ResettableCountDownLatch startupSynchronizer;
     private final AtomicReference<NabuConnectionFailedException> failureReason;
     private final AtomicReference<Channel> clientChannel;
-    private final Map<Long, NabuClientFuture> promises;
+    private final HashLongObjMap<NabuClientFuture> promises; // concrete type to prevent invokeinterface calls and allow hard ASM hotspot JIT
     private final NabuClient highLevelClient;
     private final AtomicReference<NabuClientIO> ncio;
 
+    private static final LongObjConsumer<NabuClientFuture> COMPLETE_WITH_FAIL_LOC = (k, v) -> v.complete(new FailResponse(k));
 
     NabuClientConnectionState(NabuClient highLevelClient) {
         this.highLevelClient = highLevelClient;
@@ -138,7 +140,7 @@ final class NabuClientConnectionState implements HighLevelNabuClientBridge {
     private void clearPromises() {
         synchronized (this.promises) {
             if(!this.promises.isEmpty()) {
-                promises.forEach((k, v) -> v.complete(new FailResponse(k)));
+                promises.forEach(COMPLETE_WITH_FAIL_LOC);
             }
 
             this.promises.clear();

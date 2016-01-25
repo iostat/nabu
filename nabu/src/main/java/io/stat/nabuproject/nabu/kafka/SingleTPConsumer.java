@@ -40,6 +40,14 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Slf4j
 final class SingleTPConsumer extends Component {
+    /**
+     * If true, a consumer will seek to the beginning of the assigned partition and
+     * replay all entries within it.
+     * The name is scientifically formulated to be a huge alarm bell.
+     * todo: TURN ME THE FUCK OFF IN PROD LOL
+     */
+    private static final boolean SERIOUSLY_WHY_AM_I_NOT_FALSE = true;
+
     private static final String WAKEUP_INSIDE_UNSTOPPED_CONSUMER_WHILE_WRITING =
             "A WakeupException was thrown INSIDE the consumer loop. A replay scenario may occur the next time " +
             "this TopicPartition is consumed.";
@@ -48,11 +56,13 @@ final class SingleTPConsumer extends Component {
                     "and a replay scenario is unlikely.";
     /**
      * The absolute minimum we have to write unless we're paused for whatever reason
+     * todo: should this be a tunable? or a throttle policy parameter?
      */
     public static final int MIN_BATCH_SIZE = 15;
 
     /**
      * epsilon of determining whether ratio of timeTaken/targetTime is within tolerance
+     * todo: see comments in {@link SingleTPConsumer#writeCommitAndAdjust(ArrayDeque, long, long)}
      */
     public static final float FLOAT_ERROR_MARGIN = 0.01f;
 
@@ -184,22 +194,34 @@ final class SingleTPConsumer extends Component {
         boolean isInWriteAndFlush = false;
         try {
             consumer.assign(ImmutableList.of(targetTopicPartition));
-            consumer.seekToBeginning(targetTopicPartition); // lolz todo: TURN ME THE FUCK OFF IN PROD LOL
+
+            if(SERIOUSLY_WHY_AM_I_NOT_FALSE) {
+                logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                logger.error("!!!!!! KAFKA CONSUMER WILL SEEK TO BEGINNING WHEN STARTED !!!!!!");
+                logger.error("!!!!!!     I SERIOUSLY HOPE YOU KNOW WHAT YOURE DOING     !!!!!!");
+                logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                consumer.seekToBeginning(targetTopicPartition);
+            }
             this.readyLatch.countDown();
             ArrayDeque<ConsumerRecord<String,NabuWriteCommand>> consumptionBacklog = Queues.newArrayDeque();
             ArrayDeque<NabuWriteCommand> immediateConsumptionQueue = new ArrayDeque<>(throttlePolicy.get().getMaxBatchSize() * 4);
-            long lastConsumedOffset;
+
+            // preallocate these, not sure how smart hotspot is with
+            // loop-scoped stack allocs
+            long lastConsumedOffset, flushTimeout, flushInterval, startOffset;
+            int consumed, currentBatchLimit, backlogConsumed;
             while(!isStopped.get() || !consumptionBacklog.isEmpty()) { // items in the backlog can preempt stopping the consumer, see explanation below
-                int consumed = 0;
-                int currentBatchLimit = currentBatchSize.get();
-                long now = System.currentTimeMillis();
-                long flushTimeout = nextFlushTime.get();
-                long flushInterval = throttlePolicy.get().getFlushTimeout();
-                long startOffset = Long.MIN_VALUE;   // todo: does Kafka reserve this for anything/should i use a bool?
+                consumed = 0;
+                currentBatchLimit = currentBatchSize.get();
+                flushTimeout = nextFlushTime.get();
+                flushInterval = throttlePolicy.get().getFlushTimeout();
+                startOffset = Long.MIN_VALUE;   // todo: does Kafka reserve this for anything/should i use a bool?
                 lastConsumedOffset = Long.MIN_VALUE; // todo: ditto
 
                 boolean hadBacklog = !consumptionBacklog.isEmpty();
-                int backlogConsumed = 0;
+                backlogConsumed = 0;
 
                 if(hadBacklog) {
                     startOffset = consumptionBacklog.peek().offset();
@@ -291,6 +313,10 @@ final class SingleTPConsumer extends Component {
             // todo: implement some kind of float epsilon for when overshoot isnt
             // todo: really overshoot. Otherwise, you'll have "pseudo-ringing"
             // todo: as due to float error the batch will always be adjusting
+            // ------------------
+            // todo: should that epsilon be a factor of <batch size>/<flush timeout>
+            // todo: or something similar, a hardcoded value, or just be a straight up
+            // todo: tunable in the throttlePolicy?
 
             // read: if targetError isn't within FLOAT_ERROR_MARGIN of 1.0
             if(!(Math.abs(1.0f - targetError) < FLOAT_ERROR_MARGIN)) {
