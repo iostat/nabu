@@ -55,13 +55,11 @@ public class ResponseDecoder extends ByteToMessageDecoder {
                     out.add(new RetryResponse(sequence));
                     return;
                 case FAIL:
-                    out.add(new FailResponse(sequence));
-                    return;
                 case ID:
-                    String idString;
+                    String attachedString;
 
                     try {
-                        idString = ProtocolHelper.readStringFromByteBuf(in);
+                        attachedString = ProtocolHelper.readStringFromByteBuf(in);
                     } catch(DecoderException de) {
                         if(de.getMessage().equals(ProtocolHelper.READ_STRING_NO_SIZE)
                                 || de.getMessage().equals(ProtocolHelper.READ_STRING_TOO_SHORT)) {
@@ -72,8 +70,14 @@ public class ResponseDecoder extends ByteToMessageDecoder {
                             throw de;
                         }
                     }
+                    if(type == NabuResponse.Type.FAIL) {
+                        out.add(new FailResponse(sequence, attachedString));
+                    } else if(type == NabuResponse.Type.ID) {
+                        out.add(new IDResponse(sequence, attachedString));
+                    } else {
+                        throw new RuntimeException("This is literally impossible :O");
+                    }
 
-                    out.add(new IDResponse(sequence, idString));
                     return;
                 default:
                     throw new IllegalArgumentException("Cannot handle NabuResponse of type " + type.toString());

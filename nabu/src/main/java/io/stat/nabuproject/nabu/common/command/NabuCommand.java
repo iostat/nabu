@@ -49,8 +49,8 @@ public abstract class NabuCommand {
         return new QueuedResponse(getSequence());
     }
 
-    public final FailResponse failResponse() {
-        return new FailResponse(getSequence());
+    public final FailResponse failResponse(String reason) {
+        return new FailResponse(getSequence(), reason);
     }
 
     /**

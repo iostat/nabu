@@ -70,7 +70,7 @@ class RouterImpl extends CommandRouter {
             routeUpdate(src, (UpdateCommand) command);
         } else {
             routingFails.increment();
-            src.respond(command.failResponse());
+            src.respond(command.failResponse(String.format("[CommandRouter] Don't know how to route command of type %s", command.getType())));
         }
     }
 
@@ -98,7 +98,7 @@ class RouterImpl extends CommandRouter {
             routedDirects.increment();
             try {
                 ESWriteResults res = esWriter.singleWrite(command);
-                src.respond(res.success() ? command.okResponse() : command.failResponse());
+                src.respond(res.success() ? command.okResponse() : command.failResponse(res.getMessage()));
             } catch(Exception e) {
                 logger.error("ElasticSearch spit out an error", e);
                 src.respond(command.retryResponse());

@@ -1,6 +1,7 @@
 package io.stat.nabuproject.nabu.elasticsearch;
 
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 
@@ -15,6 +16,13 @@ import lombok.ToString;
 public final class ESWriteResults {
     final boolean wasSuccess;
     final long timeTook;
+    final @Getter String message;
+    public static final String DEFAULT_WRITER_MESSAGE = "<no message specified>";
+
+    public ESWriteResults(boolean wasSuccess, long timeTook) {
+        this(wasSuccess, timeTook, DEFAULT_WRITER_MESSAGE);
+    }
+
 
     /**
      * How long the operation took.

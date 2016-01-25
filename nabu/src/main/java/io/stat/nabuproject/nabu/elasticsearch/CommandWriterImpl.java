@@ -46,6 +46,17 @@ class CommandWriterImpl implements NabuCommandESWriter {
     private final TelemetryGaugeSink updateNsGauge;
     private final TelemetryGaugeSink bulkNsGauge;
 
+    private static String FORMAT_INDEX_RESPONSE(IndexResponse resp) { return _formatResp(resp.getIndex(), resp.getType(), resp.getId()); }
+    private static String FORMAT_UPDATE_RESPONSE(UpdateResponse resp) { return _formatResp(resp.getIndex(), resp.getType(), resp.getId()); }
+
+    private static final String _formatResp(String idx, String typ, String id) {
+        if(idx == null) idx = "<null>";
+        if(typ == null) typ = "<null>";
+        if(id  == null) id  = "<null>";
+
+        return String.format("%s/%s/%s", idx, typ, id);
+    }
+
     @Inject
     public CommandWriterImpl(ESClient esClient, TelemetryService telemetryService) {
         this.esClient = esClient;
@@ -69,14 +80,13 @@ class CommandWriterImpl implements NabuCommandESWriter {
         Client realClient = esClient.getESClient();
         if(nwc instanceof IndexCommand) {
             IndexRequestBuilder irb = ic2irb(realClient, (IndexCommand) nwc);
-
             // todo: error checking. profiling.
             long start = System.nanoTime();
             IndexResponse done = irb.execute().actionGet();
             long end = System.nanoTime() - start;
             indexCommandsWritten.increment();
             indexNsGauge.set(end);
-            return new ESWriteResults(done.isCreated(), end);
+            return new ESWriteResults(done.isCreated(), end, FORMAT_INDEX_RESPONSE(done));
         } else if (nwc instanceof UpdateCommand) {
             UpdateRequestBuilder urb = uc2urb(realClient, (UpdateCommand) nwc);
 
@@ -86,7 +96,7 @@ class CommandWriterImpl implements NabuCommandESWriter {
             long end = System.nanoTime() - start;
             updateCommandsWritten.increment();
             updateNsGauge.set(end);
-            return new ESWriteResults(done.isCreated(), end);
+            return new ESWriteResults(done.isCreated(), end, FORMAT_UPDATE_RESPONSE(done));
         }
         return GENERIC_FAIL;
     }
@@ -116,11 +126,11 @@ class CommandWriterImpl implements NabuCommandESWriter {
         for(BulkItemResponse bir : response.getItems()) {
             if(bir.isFailed()) {
                 // todo: disabling for performance. stdout is SLOW
-//                logger.warn("[ES BULK WRITE FAILURE] {}/{}/{}",
-//                        bir.getIndex(),
-//                        bir.getType(),
-//                        bir.getId(),
-//                        bir.getFailureMessage());
+                logger.warn("[ES BULK WRITE FAILURE] {}/{}/{}",
+                        bir.getIndex(),
+                        bir.getType(),
+                        bir.getId(),
+                        bir.getFailureMessage());
                 failures++;
             }
         }

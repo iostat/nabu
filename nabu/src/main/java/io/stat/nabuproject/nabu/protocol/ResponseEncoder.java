@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.stat.nabuproject.core.net.ProtocolHelper;
+import io.stat.nabuproject.nabu.common.response.FailResponse;
 import io.stat.nabuproject.nabu.common.response.IDResponse;
 import io.stat.nabuproject.nabu.common.response.NabuResponse;
 
@@ -21,6 +22,12 @@ public class ResponseEncoder extends MessageToByteEncoder<NabuResponse> {
         if(msg.getType() == NabuResponse.Type.ID) {
             if(msg instanceof IDResponse) {
                 ProtocolHelper.writeStringToByteBuf(((IDResponse)msg).getData(), out);
+            } else {
+                throw new IllegalArgumentException("Packet type is ID but packet not an instance of IDResponse!");
+            }
+        } else if(msg.getType() == NabuResponse.Type.FAIL) {
+            if(msg instanceof FailResponse) {
+                ProtocolHelper.writeStringToByteBuf(((FailResponse)msg).getReason(), out);
             } else {
                 throw new IllegalArgumentException("Packet type is ID but packet not an instance of IDResponse!");
             }

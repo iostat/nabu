@@ -76,7 +76,7 @@ class KafkaProducerImpl extends NabuKafkaProducer {
                 (metadata, exception) -> {
                     if(exception != null) {
                         logger.error("Exception thrown when trying to write command to Kafka", exception);
-                        src.respond(command.failResponse());
+                        src.respond(command.failResponse(String.format("[KAFKA] Could not queue into Kafka: %s :: %s", exception.getClass().getCanonicalName(), exception.getMessage())));
                     } else {
                         src.respond(command.queuedResponse());
                     }

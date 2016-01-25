@@ -18,6 +18,7 @@ import io.stat.nabuproject.nabu.protocol.CommandEncoder;
 import io.stat.nabuproject.nabu.protocol.Limits;
 import io.stat.nabuproject.nabu.protocol.ResponseDecoder;
 import lombok.Getter;
+import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
@@ -309,6 +310,11 @@ public class NabuClient {
                 logger.debug("Received an InterruptException and I am shutting down...", e);
             }
         }
+    }
+
+    @Synchronized
+    public boolean isRunning() {
+        return nccs.getConnectionState().equals(NCCState.RUNNING);
     }
 
     /**
