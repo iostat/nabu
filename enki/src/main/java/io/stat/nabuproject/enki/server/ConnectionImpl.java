@@ -242,10 +242,14 @@ class ConnectionImpl implements NabuConnection {
         leaveEnforcerSES.schedule(leaveEnforcerTask, 5, TimeUnit.SECONDS);
 
         dispatchKick().whenCompleteAsync((packet, exception) -> {
-            if(exception != null && !(exception instanceof ConnectionLostException)) {
-                logger.error("Dispatch leaveGracefully promise fulfilled with unexpected exception: ", exception);
-            } else if (exception != null && exception instanceof ConnectionLostException) {
-                logger.info("The connection to Nabu was terminated while waiting for a response to a LEAVE.");
+            if(exception != null) {
+                if(!((exception instanceof ConnectionLostException) || (exception instanceof NodeLeavingException))) {
+                    logger.error("Dispatch leaveGracefully promise fulfilled with unexpected exception: ", exception);
+                } else {
+                    logger.info("The connection to Nabu was terminated while waiting for a response to a LEAVE. ({}/{})",
+                            exception.getClass().getSimpleName(),
+                            exception.getMessage());
+                }
             } else {
                 this.leaveAcknowledged.set(true);
                 killConnection(true);
