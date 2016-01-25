@@ -44,9 +44,8 @@ final class SingleTPConsumer extends Component {
      * If true, a consumer will seek to the beginning of the assigned partition and
      * replay all entries within it.
      * The name is scientifically formulated to be a huge alarm bell.
-     * todo: TURN ME THE FUCK OFF IN PROD LOL
      */
-    private static final boolean SERIOUSLY_WHY_AM_I_NOT_FALSE = true;
+    private static final boolean SERIOUSLY_WHY_AM_I_NOT_FALSE = false;
 
     private static final String WAKEUP_INSIDE_UNSTOPPED_CONSUMER_WHILE_WRITING =
             "A WakeupException was thrown INSIDE the consumer loop. A replay scenario may occur the next time " +
