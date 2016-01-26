@@ -6,6 +6,7 @@ import com.google.inject.grapher.graphviz.GraphvizGrapher;
 import com.google.inject.grapher.graphviz.GraphvizModule;
 import io.stat.nabuproject.Version;
 import io.stat.nabuproject.core.ComponentException;
+import io.stat.nabuproject.core.StarterModule;
 import io.stat.nabuproject.core.config.ConfigModule;
 import io.stat.nabuproject.core.elasticsearch.ESModule;
 import io.stat.nabuproject.core.kafka.KafkaModule;
@@ -44,6 +45,7 @@ public class Main {
         logger.info("$PWD: {}", System.getenv("PWD"));
 
         this.injector = Guice.createInjector(
+                new StarterModule(),
                 new EnkiModule(),
                 new ConfigModule(),
                 new TelemetryModule(),

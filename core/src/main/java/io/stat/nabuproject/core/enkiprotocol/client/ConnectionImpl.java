@@ -22,9 +22,11 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The implementation of the high-level Enki client.
@@ -72,6 +74,8 @@ class ConnectionImpl implements EnkiConnection {
     private final ScheduledExecutorService heartbeatEnforcerExecutor;
     private final ScheduledExecutorService heartbeatLeaveEnforcer;
 
+    private final AtomicReference<ScheduledFuture<?>> heartbeatEnforcerFuture;
+
     private final long createdOn;
 
     public ConnectionImpl(ChannelHandlerContext ctx,
@@ -100,6 +104,7 @@ class ConnectionImpl implements EnkiConnection {
 
         heartbeatEnforcerExecutor = Executors.newSingleThreadScheduledExecutor(HEARTBEAT_ENFORCER_TASK_FACTORY);
         heartbeatLeaveEnforcer = Executors.newSingleThreadScheduledExecutor(LEAVE_ENFORCER_TASK_FACTORY);
+        heartbeatEnforcerFuture = new AtomicReference<>(null);
 
         createdOn = System.nanoTime();
 
@@ -146,9 +151,14 @@ class ConnectionImpl implements EnkiConnection {
                 break;
             case CONFIGURE:
                 // pre-seed the heartbeat monitor so as not to horrify it as soon as it starts
+                long valueOfLastConfigTimestamp = lastConfigTimestamp.get();
                 lastHeartbeatUpdatedAt.set(System.currentTimeMillis());
                 lastConfigTimestamp.set(System.currentTimeMillis());
-                heartbeatEnforcerExecutor.scheduleAtFixedRate(this::heartbeatEnforcerTask, 1, 3, TimeUnit.SECONDS);
+
+                if(valueOfLastConfigTimestamp == 0) { // only schedule at the very beginning
+                    heartbeatEnforcerFuture.set(heartbeatEnforcerExecutor.scheduleAtFixedRate(this::heartbeatEnforcerTask, 1, 3, TimeUnit.SECONDS));
+                }
+
                 toNotify.onConfigurationReceived(this, ((EnkiConfigure)p));
                 dispatchPacket(new EnkiAck(p.getSequenceNumber()));
                 break;
@@ -197,6 +207,7 @@ class ConnectionImpl implements EnkiConnection {
 
         if(Math.abs(discrepancy) >= MAX_HEARTBEAT_DISCREPANCY) {
             logger.error("Have not received a heartbeat in {} ms (max is {}). Disconnecting for safety.", discrepancy, MAX_HEARTBEAT_DISCREPANCY);
+            heartbeatEnforcerFuture.get().cancel(false); // cancel this task from every running again.
             leaveGracefully();
             heartbeatLeaveEnforcer.schedule(() -> {
                 if(!wasLeaveAcknowledged.get()) {

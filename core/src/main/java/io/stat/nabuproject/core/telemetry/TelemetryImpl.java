@@ -7,6 +7,7 @@ import com.timgroup.statsd.StatsDClient;
 import io.stat.nabuproject.core.ComponentException;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
@@ -15,6 +16,7 @@ import java.util.List;
  *
  * @author Ilya Ostrovskiy (https://github.com/iostat/)
  */
+@Slf4j
 class TelemetryImpl extends TelemetryService {
     private final TelemetryConfigProvider config;
     private final List<StatsDClient> allocatedClients;
@@ -28,6 +30,7 @@ class TelemetryImpl extends TelemetryService {
     @Override
     public TelemetryCounterSink createCounter(String aspectName, String... tags) {
         synchronized(allocatedClients) {
+            logger.info("Creating telemetry backend for counter:{}({})", aspectName, tags);
             NonBlockingStatsDClient cli = makeClient();
             CounterImpl ret = new CounterImpl(config.getTelemetryPrefix(), aspectName, tags, cli);
             allocatedClients.add(cli);
@@ -38,6 +41,7 @@ class TelemetryImpl extends TelemetryService {
     @Override
     public TelemetryGaugeSink createGauge(String aspectName, String... tags) {
         synchronized(allocatedClients) {
+            logger.info("Creating telemetry backend for gauge:{}({})", aspectName, tags);
             NonBlockingStatsDClient cli = makeClient();
             GaugeImpl ret = new GaugeImpl(config.getTelemetryPrefix(), aspectName, tags, cli);
             allocatedClients.add(cli);
@@ -47,6 +51,7 @@ class TelemetryImpl extends TelemetryService {
 
     @Override
     public TelemetryGaugeSink createExecTime(String aspectName, String... tags) {
+        logger.info("Creating telemetry backend for execTime:{}({})", aspectName, tags);
         NonBlockingStatsDClient cli = makeClient();
         ExecTimeImpl ret = new ExecTimeImpl(config.getTelemetryPrefix(), aspectName, tags, cli);
         allocatedClients.add(cli);
@@ -55,8 +60,15 @@ class TelemetryImpl extends TelemetryService {
 
     @Override
     public void shutdown() throws ComponentException {
-
-        allocatedClients.forEach(StatsDClient::stop);
+        logger.info("Shutting down telemetry backends...");
+        int total = allocatedClients.size();
+        int thisOne = 1;
+        for(StatsDClient client : allocatedClients) {
+            logger.info("Stopping telemetry backend: {}/{}", thisOne, total);
+            client.stop();
+            thisOne++;
+        }
+        logger.info("Stopped all telemetry backends");
     }
 
     private NonBlockingStatsDClient makeClient() {
