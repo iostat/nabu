@@ -181,7 +181,7 @@ public class IndexCommandBuilder implements WriteCommandBuilder {
      */
     @Override
     public IndexCommand build(long sequence) {
-        return new IndexCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite);
+        return new IndexCommand(sequence, index, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite, opType);
     }
 
     /**
