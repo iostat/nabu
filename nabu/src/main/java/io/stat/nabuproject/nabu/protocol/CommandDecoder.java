@@ -73,7 +73,8 @@ public class CommandDecoder extends ByteToMessageDecoder {
             String documentSource = ProtocolHelper.readStringFromByteBuf(in);
 
             if(commandType == NabuCommand.Type.INDEX) {
-                out.add(new IndexCommand(sequence, indexName, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite));
+                String opType = ProtocolHelper.readStringFromByteBuf(in);
+                out.add(new IndexCommand(sequence, indexName, documentType, documentID, documentSource, shouldRefresh, shouldForceWrite, opType));
                 return;
             } else if(commandType == NabuCommand.Type.UPDATE) {
                 boolean hasUpsert = in.readBoolean();

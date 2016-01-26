@@ -12,6 +12,7 @@ import lombok.ToString;
  */
 @EqualsAndHashCode @ToString
 public class IndexCommandBuilder implements WriteCommandBuilder {
+    public static final String OP_TYPE_REASON = "opType must be one of \"index\' or \"create\".";
     final NabuClient executor;
 
     String index;
@@ -20,6 +21,7 @@ public class IndexCommandBuilder implements WriteCommandBuilder {
     String documentID;
     boolean shouldRefresh;
     boolean shouldForceWrite;
+    String opType;
 
     /**
      * Create an IndexCommandBuilder WITHOUT an executor (set to null). This means
@@ -102,6 +104,7 @@ public class IndexCommandBuilder implements WriteCommandBuilder {
         this.documentID = documentID;
         this.documentSource = documentSource;
         this.shouldRefresh = shouldRefresh;
+        this.opType = IndexCommand.INDEX_OP_TYPE;
     }
 
     /**
@@ -156,6 +159,20 @@ public class IndexCommandBuilder implements WriteCommandBuilder {
      */
     public IndexCommandBuilder shouldForceWrite(boolean wellShouldIt) {
         shouldForceWrite = wellShouldIt;
+        return this;
+    }
+
+    /**
+     * Equivalent to ElasticSearch's .setOpType(String).
+     * Defaults to "index"
+     * @param opType the OpType to use. Must be one of "index" or "create"
+     */
+    public IndexCommandBuilder withOpType(String opType) {
+        if(!(opType.equals(IndexCommand.INDEX_OP_TYPE) || (opType.equals(IndexCommand.CREATE_OP_TYPE)))) {
+            throw new IllegalArgumentException(OP_TYPE_REASON);
+        } else {
+            this.opType = opType;
+        }
         return this;
     }
 

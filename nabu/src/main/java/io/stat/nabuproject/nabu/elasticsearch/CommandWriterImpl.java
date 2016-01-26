@@ -156,7 +156,8 @@ class CommandWriterImpl implements NabuCommandESWriter {
                 .setType(ic.getDocumentType())
                 .setId(ic.getDocumentID())
                 .setSource(ic.getDocumentSource())
-                .setRefresh(ic.shouldRefresh());
+                .setRefresh(ic.shouldRefresh())
+                .setOpType(ic.getOpType());
 
         return irb;
     }
