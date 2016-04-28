@@ -1,6 +1,6 @@
 package io.stat.nabuproject.core.elasticsearch.event;
 
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
 
 /**
  * Something which listens for any events specified in {@link NabuESEvent.Type}

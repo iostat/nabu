@@ -22,7 +22,7 @@ import io.stat.nabuproject.core.throttling.ThrottlePolicyProvider;
 import io.stat.nabuproject.nabu.elasticsearch.NabuCommandESWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
 
 import java.io.Serializable;
 import java.util.List;

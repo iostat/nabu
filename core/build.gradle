@@ -32,7 +32,7 @@ project(":core") {
         compile(group: 'org.yaml', name: 'snakeyaml', version: '1.16')
 
         // duh
-        compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.1.0') {
+        compile(group: 'org.elasticsearch', name: 'elasticsearch', version: '2.3.1') {
             // ElasticSearch has a vendored version of Guice, which, like the one we're using, also has
             // a dependency on Guava.
             exclude group: 'com.google.guava', module: 'guava'
@@ -43,8 +43,8 @@ project(":core") {
         compile(group: 'net.java.dev.jna', name: 'jna', version: '4.2.1')
 
         // also duh
-        compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.9.0.0')
-        compile(group: 'org.apache.kafka', name: 'kafka_2.10', version: '0.9.0.0')
+        compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.9.0.1')
+        compile(group: 'org.apache.kafka', name: 'kafka_2.11', version: '0.9.0.1')
 
         // statsd telemetry
         compile(group: 'com.datadoghq', name: 'java-dogstatsd-client', version: '2.1.1')
