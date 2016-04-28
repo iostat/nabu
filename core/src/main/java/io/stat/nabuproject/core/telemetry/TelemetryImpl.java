@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The canonical implementation of {@link TelemetryService}
@@ -30,7 +31,7 @@ class TelemetryImpl extends TelemetryService {
     @Override
     public TelemetryCounterSink createCounter(String aspectName, String... tags) {
         synchronized(allocatedClients) {
-            logger.info("Creating telemetry backend for counter:{}({})", aspectName, tags);
+            logger.info("Creating telemetry backend for counter:{}.{}({})", config.getTelemetryPrefix(), aspectName, tags);
             NonBlockingStatsDClient cli = makeClient();
             CounterImpl ret = new CounterImpl(config.getTelemetryPrefix(), aspectName, tags, cli);
             allocatedClients.add(cli);
@@ -41,7 +42,7 @@ class TelemetryImpl extends TelemetryService {
     @Override
     public TelemetryGaugeSink createGauge(String aspectName, String... tags) {
         synchronized(allocatedClients) {
-            logger.info("Creating telemetry backend for gauge:{}({})", aspectName, tags);
+            logger.info("Creating telemetry backend for gauge:{}.{}({})", config.getTelemetryPrefix(), aspectName, tags);
             NonBlockingStatsDClient cli = makeClient();
             GaugeImpl ret = new GaugeImpl(config.getTelemetryPrefix(), aspectName, tags, cli);
             allocatedClients.add(cli);
@@ -51,7 +52,7 @@ class TelemetryImpl extends TelemetryService {
 
     @Override
     public TelemetryGaugeSink createExecTime(String aspectName, String... tags) {
-        logger.info("Creating telemetry backend for execTime:{}({})", aspectName, tags);
+        logger.info("Creating telemetry backend for execTime:{}.{}({})", config.getTelemetryPrefix(), aspectName, tags);
         NonBlockingStatsDClient cli = makeClient();
         ExecTimeImpl ret = new ExecTimeImpl(config.getTelemetryPrefix(), aspectName, tags, cli);
         allocatedClients.add(cli);
@@ -62,12 +63,11 @@ class TelemetryImpl extends TelemetryService {
     public void shutdown() throws ComponentException {
         logger.info("Shutting down telemetry backends...");
         int total = allocatedClients.size();
-        int thisOne = 1;
-        for(StatsDClient client : allocatedClients) {
-            logger.info("Stopping telemetry backend: {}/{}", thisOne, total);
+        AtomicInteger thisOne = new AtomicInteger(0);
+        allocatedClients.parallelStream().forEach((client) -> {
+            logger.info("Stopping telemetry backend: {}/{}", thisOne.incrementAndGet(), total);
             client.stop();
-            thisOne++;
-        }
+        });
         logger.info("Stopped all telemetry backends");
     }
 
